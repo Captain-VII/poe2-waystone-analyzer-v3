@@ -1,0 +1,107 @@
+import type { AnalysisResult, TierClass, Verdict } from "./types";
+
+export const TIER_ORDER: TierClass[] = ["trash", "low", "good", "splus", "god"];
+
+const TABLETS: AnalysisResult["tablets"] = [
+  {
+    name: "Expedition Tablet",
+    delta: 6.0,
+    reason: "Matches Expedition (82/100)",
+    rating: "A",
+    rewards: [
+      { label: "Expedition", value: 8 },
+      { label: "Logbook", value: 6 },
+    ],
+  },
+  { name: "Standard Precursor Tablet", delta: 3.5, reason: "Matches General (68/100)", rating: "B" },
+];
+
+const MODIFIERS: AnalysisResult["modifiers"] = [
+  { text: "Monsters reflect 18% of Elemental Damage", kind: "danger" },
+  { text: "+38% Rarity of Items found in this Area", kind: "positive" },
+  { text: "+22% Monster Rarity", kind: "positive" },
+  { text: "2 additional Rare Monster packs", kind: "positive" },
+  { text: "+25% Monster Pack Size", kind: "positive" },
+  { text: "+18% Monster Effectiveness", kind: "positive" },
+  { text: "Area has patches of Chilled Ground", kind: "neutral" },
+  { text: "+14% Monster Movement Speed", kind: "neutral" },
+];
+
+const MECHANIC_SCORES: AnalysisResult["mechanicScores"] = [
+  { mechanic: "Expedition", score: 82 },
+  { mechanic: "General", score: 68 },
+  { mechanic: "Blight", score: 55 },
+];
+
+function fixture(
+  overrides: Pick<AnalysisResult["heat"], "score" | "tierClass" | "tierLabel" | "verdict" | "rating">,
+  br: [number, number, number, number, number],
+  warning: string | null,
+  insight: string,
+  keyFactors: string[] = [],
+): AnalysisResult {
+  return {
+    waystone: { tier: 15, name: "Waystone of the Sovereign", corrupted: false, modCount: 6 },
+    heat: {
+      ...overrides,
+      breakdown: [
+        { key: "itemRarity", label: "Item Rarity", value: br[0] },
+        { key: "monsterRarity", label: "Monster Rarity", value: br[1] },
+        { key: "packSize", label: "Pack Size", value: br[2] },
+        { key: "monsterEffectiveness", label: "Monster Effectiveness", value: br[3] },
+        { key: "penalty", label: "Penalty", value: br[4] },
+      ],
+    },
+    modifiers: MODIFIERS,
+    tablets: TABLETS,
+    warning,
+    insights: [insight, "Safe to corrupt — modifier ceiling reached"],
+    mechanicScores: MECHANIC_SCORES,
+    recommendedMechanic: "Expedition",
+    keyFactors,
+  };
+}
+
+const VERDICT: Record<TierClass, Verdict> = {
+  trash: "SKIP",
+  low: "RUN",
+  good: "RUN",
+  splus: "GARDER",
+  god: "GARDER",
+};
+
+export const MOCK_RESULTS: Record<TierClass, AnalysisResult> = {
+  trash: fixture(
+    { score: 12.6, tierClass: "trash", tierLabel: "Faible", verdict: VERDICT.trash, rating: "D" },
+    [3.0, 2.0, 4.0, 3.6, -3.6],
+    "Not worth a Waystone slot",
+    "Re-roll or vendor this Waystone",
+  ),
+  low: fixture(
+    { score: 32.2, tierClass: "low", tierLabel: "Moyen", verdict: VERDICT.low, rating: "C" },
+    [8.0, 6.0, 9.0, 9.2, -2.0],
+    null,
+    "Run only to sustain Waystones",
+  ),
+  good: fixture(
+    { score: 52.5, tierClass: "good", tierLabel: "Bon", verdict: VERDICT.good, rating: "B" },
+    [12.0, 10.0, 14.0, 16.5, -3.7],
+    null,
+    "Worth a mid-tier tablet slot",
+    ["High Monster Effectiveness"],
+  ),
+  splus: fixture(
+    { score: 76.7, tierClass: "splus", tierLabel: "Excellent", verdict: VERDICT.splus, rating: "A" },
+    [16.0, 15.0, 19.0, 22.7, -3.7],
+    "Elemental reflect present",
+    "Pairs well with Expedition tablets",
+    ["High Monster Effectiveness", "High Pack Size", "Strong Expedition match"],
+  ),
+  god: fixture(
+    { score: 94.2, tierClass: "god", tierLabel: "Legendaire", verdict: VERDICT.god, rating: "S" },
+    [20.0, 19.0, 21.0, 25.0, -4.0],
+    "Avoid elemental-reflect builds",
+    "Pairs well with Expedition tablets",
+    ["High Monster Effectiveness", "Strong Expedition match", "Expedition rewards"],
+  ),
+};

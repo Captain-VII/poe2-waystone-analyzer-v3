@@ -1,0 +1,181 @@
+/* Compact mode — vertical quick-decision card, docs/overlay-ui-spec.md §4 */
+
+/* §2/panel.css: at 292px, the header's fixed-width controls (glyph, badge,
+ * toggle, settings) plus a worst-case badge label ("LEGENDA...") no longer
+ * fit `.p-head`'s content width alongside the new settings-btn — it was
+ * pushed ~17px past the panel's right edge (measured via Playwright
+ * bounding-box, same class of bug as the badge max-width comment in
+ * panel.css). Trim padding/gap and the badge's worst-case width, Compact
+ * only — Full's 580px header has ample room and is untouched. */
+.mode-compact .p-head { gap: 4px; padding-right: 6px; }
+.mode-compact .badge { max-width: 76px; }
+
+.hero-v {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 10px 16px 13px;
+  position: relative;
+}
+
+.heat-label {
+  font-size: 9px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--grey);
+}
+
+.body-compact .score-num { font-size: 48px; }
+
+.tier-name {
+  font-family: var(--serif);
+  font-size: 15px;
+  color: var(--tier, var(--ivory));
+  transition: color 0.3s;
+  margin-top: 2px;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.action-chip {
+  margin-top: 9px;
+  padding: 4px 16px;
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 3px;
+  border: 1px solid var(--tier);
+  color: var(--tier);
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.25);
+  transition: color 0.3s, border-color 0.3s;
+}
+.action-chip::before { content: "◆"; font-size: 8px; opacity: 0.55; margin-right: 9px; vertical-align: 2px; }
+.action-chip::after { content: "◆"; font-size: 8px; opacity: 0.55; margin-left: 9px; vertical-align: 2px; }
+.tier-god .action-chip { box-shadow: 0 0 10px rgba(255, 211, 106, 0.25); }
+
+.tabs-v {
+  flex: none;
+  padding: 8px 16px 0;
+}
+
+.tab-row { padding: 3px 0; }
+
+.tab-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.rec-rank {
+  flex: none;
+  width: 16px;
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--gold-hi);
+  text-align: center;
+}
+
+.rec-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rec-delta {
+  flex: none;
+  color: var(--gold-hi);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+
+.tab-reason {
+  font-size: 11px;
+  color: var(--grey);
+  padding-left: 24px;
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.warn-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 9px 14px 0;
+  padding: 5px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--danger);
+  background: rgba(181, 74, 58, 0.12);
+  border-left: 2px solid var(--danger);
+  border-radius: 2px;
+  transform-origin: left center;
+}
+.warn-strip .w-ic { flex: none; }
+.warn-strip [data-warntext] {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.warn-strip[hidden] { display: none; }
+
+/* §7 warning reveal: single fade + left-edge sweep, no flashing */
+.warn-strip.reveal { animation: warn-reveal 0.25s ease; }
+@keyframes warn-reveal {
+  from { opacity: 0; transform: scaleX(0.85); }
+  to { opacity: 1; transform: scaleX(1); }
+}
+
+.p-foot {
+  margin: auto 14px 10px;
+  padding: 6px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--sans);
+  font-size: 10.5px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--grey);
+  cursor: pointer;
+  background: rgba(42, 33, 24, 0.35);
+  border: 1px solid rgba(184, 135, 53, 0.25);
+  border-radius: 3px;
+}
+.p-foot:hover { color: var(--gold-hi); border-color: rgba(240, 184, 74, 0.5); }
+.p-foot:focus-visible { outline: 2px solid var(--gold-hi); outline-offset: 2px; }
+.p-foot kbd {
+  font-family: var(--sans);
+  font-size: 10px;
+  padding: 1px 6px;
+  letter-spacing: 0;
+  border: 1px solid rgba(184, 135, 53, 0.35);
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--gold);
+}
+
+/* §2 height contingency: 392px → ~359px, trimming air only (never the
+   score, verdict chip, or any of the three tablets). Behind a config flag
+   (loadCompactCompressed()/saveCompactCompressed() in settings.ts) since
+   no game HUD overlap has been confirmed yet — off by default. */
+.mode-compact.compact-compressed .panel { height: 359px; }
+.compact-compressed .hero-v { padding: 6px 16px 9px; }
+.compact-compressed .body-compact .score-num { font-size: 42px; }
+.compact-compressed .action-chip { margin-top: 6px; padding: 3px 16px; }
+.compact-compressed .tabs-v { padding-top: 6px; }
+.compact-compressed .tab-row { padding: 2px 0; }
+.compact-compressed .warn-strip { margin-top: 6px; }
+.compact-compressed .p-foot { padding: 4px 0; margin-bottom: 8px; }

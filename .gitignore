@@ -1,0 +1,28 @@
+# Node
+node_modules/
+dist/
+*.local
+
+# Env / secrets — never commit real values, only .env.example
+.env
+.env.*
+!.env.example
+
+# Tauri / Rust
+src-tauri/target/
+src-tauri/gen/
+
+# Build helpers
+scripts/.adapter-bundle.mjs
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Local tool state (Claude Code) — not project source
+.claude/

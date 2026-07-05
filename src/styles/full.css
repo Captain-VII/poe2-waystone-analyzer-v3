@@ -1,0 +1,182 @@
+/* Full mode — three-column analysis panel, docs/overlay-ui-spec.md §5 */
+
+.cols {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 30fr 34fr 36fr;
+  gap: 0 16px;
+  padding: 14px 18px 16px;
+}
+
+/* min-height:0 lets a grid item shrink to its track's real size instead of
+   stretching to content (a `.mods{flex:1}` child can't actually engage its
+   own overflow-y:auto scroll without this — pre-existing gap, found while
+   verifying the rewards/rating additions below didn't overflow the fixed
+   panel). overflow-y:auto on every column (not just col1's `.mods`, which
+   already had its own) is the same established pattern applied uniformly —
+   excess content scrolls instead of silently clipping or spilling past the
+   card's bottom edge on the transparent overlay. */
+.col { min-width: 0; min-height: 0; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; }
+/* Same thin gold scrollbar as `.mods` below — without this, a column that
+   overflows (col 3 can, on some DPI/font-metric combos) falls back to the
+   default fat WebView2 scrollbar, visually clashing with col 1's. */
+.col {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(184, 135, 53, 0.35) transparent;
+}
+.col::-webkit-scrollbar { width: 3px; }
+.col::-webkit-scrollbar-thumb { background: rgba(184, 135, 53, 0.35); }
+.col + .col {
+  border-left: 1px solid rgba(184, 135, 53, 0.3);
+  padding-left: 16px;
+}
+
+.body-full .sec-h {
+  padding-bottom: 4px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(184, 135, 53, 0.18);
+}
+
+.body-full .score-num { font-size: 29px; }
+.body-full .halo { width: 100px; height: 100px; }
+
+/* ---- column 1: detected modifiers ---- */
+.mods {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+  mask-image: linear-gradient(#000 calc(100% - 16px), transparent);
+  -webkit-mask-image: linear-gradient(#000 calc(100% - 16px), transparent);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(184, 135, 53, 0.35) transparent;
+}
+.mods::-webkit-scrollbar { width: 3px; }
+.mods::-webkit-scrollbar-thumb { background: rgba(184, 135, 53, 0.35); }
+
+.mod {
+  display: flex;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.45;
+  padding: 2px 0;
+  color: var(--grey);
+}
+.mod b { color: var(--ivory); font-weight: 600; }
+.mod .m-ic { flex: none; width: 12px; color: var(--gold-hi); font-size: 11px; }
+.mod.danger { color: var(--danger); font-weight: 600; }
+.mod.danger b { color: inherit; }
+.mod.danger .m-ic { color: var(--danger); }
+.mod.neutral { color: rgba(184, 169, 138, 0.7); }
+.mod.neutral .m-ic { visibility: hidden; }
+
+/* ---- column 2: heat breakdown ---- */
+.score-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 2px 0 12px;
+  position: relative;
+}
+
+.brow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 22px;
+  font-size: 12px;
+}
+.brow .b-lab { flex: none; width: 58px; color: var(--grey); }
+
+.bar {
+  flex: 1;
+  height: 5px;
+  background: var(--track);
+  border-radius: 2px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.5);
+}
+.bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, var(--gold), var(--gold-hi));
+  border-radius: 2px;
+  transition: width 0.45s ease-out;
+}
+.brow.neg .bar i { background: var(--danger); }
+
+.brow .b-val {
+  flex: none;
+  width: 44px;
+  text-align: right;
+  color: var(--ivory);
+  font-variant-numeric: tabular-nums;
+}
+.brow.neg .b-val { color: var(--danger); }
+
+.total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid rgba(184, 135, 53, 0.35);
+  font-family: var(--serif);
+  font-weight: 700;
+}
+.total-row .t-lab {
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--grey);
+}
+.total-row .t-right { display: flex; align-items: baseline; gap: 6px; }
+.total-row .t-val {
+  font-size: 16px;
+  color: var(--tier);
+  font-variant-numeric: tabular-nums;
+  transition: color 0.3s;
+}
+.tier-god .total-row .t-val { text-shadow: 0 0 10px rgba(255, 211, 106, 0.3); }
+
+/* ---- column 3: tablets (dense) + insights ---- */
+.body-full .rec-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  height: 23px;
+  font-size: 13px;
+}
+
+.col3-sep {
+  height: 1px;
+  /* Tightened from 8px (2026-07-04): column 3 stacks 3 sections plus the
+     new tab-rewards line under the top tablet in a fixed-height column with
+     no scroll of its own — every pixel here is now load-bearing for
+     keeping the warning row from clipping in worst-case (long-wrapping
+     warning text + a tablet with rewards). Purely spacing, no information
+     lost. */
+  margin: 5px 0;
+  background: linear-gradient(90deg, rgba(184, 135, 53, 0.3), transparent);
+}
+
+.insights { display: flex; flex-direction: column; gap: 2px; }
+.ins-row {
+  display: flex;
+  gap: 7px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--grey);
+}
+.ins-row .i-ic { flex: none; color: var(--gold); font-size: 10px; line-height: 1.8; }
+.ins-row.danger { color: var(--danger); font-weight: 600; }
+.ins-row.danger .i-ic { color: var(--danger); }
+/* Key Factors (folded into Insights, not a separate titled section — see
+   docs/implementation-plan.md) and categorized insight rows (§4 ask):
+   same row shape, just a distinguishing icon/color per bucket. */
+.ins-row.factor { color: var(--ivory); font-weight: 600; }
+.ins-row.factor .i-ic { color: var(--gold-hi); font-weight: 700; }
+.ins-row.value .i-ic { font-size: 11px; }
+.ins-row.safe .i-ic { font-size: 11px; }

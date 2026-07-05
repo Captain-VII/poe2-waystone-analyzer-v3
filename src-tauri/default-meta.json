@@ -1,0 +1,28 @@
+{
+  "metas": {
+    "blight": {
+      "priority_stat": "Monster Effectiveness",
+      "secondary_stats": ["Item Rarity", "Pack Size"],
+      "recommended_tablets": ["Expedition Tablet", "Standard Precursor Tablet"],
+      "skip_if_below": 35
+    },
+    "delirium": {
+      "priority_stat": "Pack Size",
+      "secondary_stats": ["Item Rarity", "Monster Rarity"],
+      "recommended_tablets": ["Delirium Tablet", "Standard Precursor Tablet"],
+      "skip_if_below": 40
+    },
+    "expedition": {
+      "priority_stat": "Monster Effectiveness",
+      "secondary_stats": ["Pack Size", "Waystone Drop Chance"],
+      "recommended_tablets": ["Expedition Tablet", "Standard Precursor Tablet"],
+      "skip_if_below": 35
+    },
+    "general": {
+      "priority_stat": "Item Rarity",
+      "secondary_stats": ["Monster Rarity", "Pack Size"],
+      "recommended_tablets": ["Standard Precursor Tablet", "Overseer Precursor Tablet"],
+      "skip_if_below": 30
+    }
+  }
+}

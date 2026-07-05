@@ -1,0 +1,33 @@
+/* Design tokens — docs/overlay-ui-spec.md §1 */
+:root {
+  --panel-a: #12100d;
+  --panel-b: #18130f;
+  --header-a: #241a10;
+  --header-b: #1d140c;
+  --gold-dim: #8a6526;
+  --gold: #b88735;
+  --gold-hi: #f0b84a;
+  --god: #ffd36a;
+  --ivory: #f1e6c8;
+  --grey: #b8a98a;
+  --danger: #b54a3a;
+  --track: #2a2118;
+  --serif: "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --sans: "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html,
+body {
+  margin: 0;
+  background: transparent;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--sans);
+  color: var(--ivory);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}

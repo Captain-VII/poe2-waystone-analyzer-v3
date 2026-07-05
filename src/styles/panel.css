@@ -1,0 +1,643 @@
+/* RelicPanel frame, header, tier states, fx — docs/overlay-ui-spec.md §1.2, §6, §7 */
+
+/* Anchored top-right inside the fixed window envelope, with 12px bleed for
+   ornament/glow overflow (§2). The envelope is sized for both modes, so the
+   window itself never resizes — the morph is pure CSS. */
+.overlay {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  transition: transform 0.22s ease-in-out;
+}
+.overlay.mode-full { transform: translate(-16px, 16px); } /* §2 micro-shift */
+
+.panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 292px;
+  height: 392px;
+  /* opacity/transform: 120ms so the Settings opacity/scale sliders feel
+   * immediate, not floaty — width/height stay on the slower mode-morph
+   * timing, unrelated to user-driven opacity/scale. */
+  transition:
+    width 0.22s ease-in-out,
+    height 0.22s ease-in-out,
+    opacity 120ms ease-out,
+    transform 120ms ease-out;
+  will-change: transform, opacity; /* scoped to .panel only — hints the compositor for the scale/opacity sliders */
+  background:
+    radial-gradient(230px 140px at 80% 15%, rgba(0, 0, 0, 0.3), transparent 70%),
+    radial-gradient(260px 170px at 15% 88%, rgba(40, 28, 15, 0.45), transparent 70%),
+    linear-gradient(var(--panel-a), var(--panel-b));
+  border: 1px solid var(--gold-dim);
+  border-radius: 4px;
+  box-shadow:
+    0 8px 28px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(241, 230, 200, 0.05),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.45);
+  opacity: var(--user-opacity, 0.96);
+  transform: scale(var(--user-scale, 1));
+  transform-origin: top right;
+}
+.mode-full .panel {
+  width: 580px;
+  height: 332px;
+}
+/* §2 Mini Compact fallback: single merged header row, no body */
+.mode-mini .panel {
+  width: 240px;
+  height: 84px;
+}
+
+/* stone grain */
+.panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.09;
+  border-radius: 4px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* inner relic stroke */
+.panel::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  pointer-events: none;
+  border: 1px solid rgba(184, 135, 53, 0.2);
+  border-radius: 2px;
+}
+
+/* ---- ornaments ---- */
+.corner {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  z-index: 3;
+  color: var(--gold);
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.8));
+  transition: color 0.3s;
+  pointer-events: none; /* decorative — the .corner-tr box overlaps .settings-btn's
+                            top corner and would otherwise swallow its clicks */
+}
+.corner.tl { top: -5px; left: -5px; }
+.corner.tr { top: -5px; right: -5px; transform: rotate(90deg); }
+.corner.br { bottom: -5px; right: -5px; transform: rotate(180deg); }
+.corner.bl { bottom: -5px; left: -5px; transform: rotate(270deg); }
+
+.clasp {
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  width: 22px;
+  height: 11px;
+  transform: translateX(-50%);
+  z-index: 3;
+  color: var(--gold);
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.8));
+  transition: color 0.3s;
+  pointer-events: none; /* decorative */
+}
+
+.tier-god .corner,
+.tier-god .clasp { color: var(--god); }
+
+/* ---- header ---- */
+.p-head {
+  flex: none;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 0 14px;
+  background: linear-gradient(var(--header-a), var(--header-b));
+  border-bottom: 1px solid rgba(184, 135, 53, 0.3);
+  box-shadow:
+    inset 0 1px 0 rgba(241, 230, 200, 0.04),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.5);
+  border-radius: 3px 3px 0 0;
+  position: relative;
+  z-index: 2;
+  transition: height 0.22s ease-in-out;
+}
+.mode-full .p-head { height: 44px; }
+.mode-mini .p-head { height: 84px; border-radius: 4px; }
+
+.glyph {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--gold-hi);
+}
+
+.p-title {
+  flex: none;
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--ivory);
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+
+.p-sub {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--grey);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.mode-full .p-sub { opacity: 1; }
+.mode-mini .p-title,
+.mode-mini .p-sub { display: none; }
+
+.mini-score {
+  display: none;
+  flex: none;
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 26px;
+  color: var(--tier, var(--gold-hi));
+  font-variant-numeric: tabular-nums;
+  transition: color 0.3s;
+}
+.mode-mini .mini-score { display: inline-block; }
+.tier-god .mini-score { text-shadow: 0 0 10px rgba(255, 211, 106, 0.35); }
+
+.mini-warn {
+  display: none;
+  flex: none;
+  color: var(--danger);
+  font-size: 14px;
+  cursor: default;
+}
+.mode-mini .mini-warn:not([hidden]) { display: inline-block; }
+.mini-warn.reveal { animation: warn-reveal-fade 0.25s ease; }
+@keyframes warn-reveal-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.mode-mini .badge { margin-left: auto; }
+
+.mode-mini .bodies { display: none; }
+
+.badge {
+  flex: none;
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  padding: 3px 7px 2px;
+  border-radius: 11px;
+  border: 1px solid var(--tier, var(--gold));
+  color: var(--tier, var(--gold));
+  transition: all 0.3s;
+  white-space: nowrap;
+  cursor: default;
+  background: none;
+  /* Longest label ("LEGENDAIRE ✦") could otherwise overflow `.p-head`'s
+   * flex row far enough to push `.toggle-btn` past the panel's right edge
+   * — invisible off-screen, not just visually hidden (real bug found
+   * 2026-07-04: verified via headless-browser bounding-box check, not
+   * caught by CSS review alone since `.toggle-btn` itself was never
+   * hidden by any rule, just shoved outside the viewport). Caps the
+   * worst-case label instead of trusting every current/future label to
+   * fit — `.p-sub` already yields all its space first (flex:1,
+   * min-width:0), so this is the last line of defense, not the everyday
+   * behavior for the four shorter labels. */
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.badge.dev-clickable { cursor: pointer; } /* dev-only: cycles mock fixtures, see main.ts */
+
+.badge-sm { font-size: 11px; cursor: default; }
+
+/* ---- letter rating (supplementary to tierClass/badge, §3 "Rating: S (94.2)") ---- */
+.rating-pill {
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  cursor: default;
+}
+.rating-pill::before { content: "· "; opacity: 0.5; }
+
+/* Shared by the global-score rating pill and each tablet row's rec-rating. */
+.rec-rating-S { color: var(--god); text-shadow: 0 0 6px rgba(255, 211, 106, 0.4); }
+.rec-rating-A { color: var(--gold-hi); }
+.rec-rating-B { color: var(--ivory); opacity: 0.85; }
+.rec-rating-C { color: var(--grey); }
+.rec-rating-D { color: #8a5a4a; }
+
+.rec-rating {
+  flex: none;
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 10px;
+  width: 12px;
+  text-align: center;
+}
+
+/* cross-fading mode layouts inside the morphing panel (§7 mode morph) */
+.bodies {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.body {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  transform: scale(0.97);
+  transition: opacity 0.18s ease, transform 0.2s ease;
+  pointer-events: none;
+}
+.mode-compact .body-compact,
+.mode-full .body-full {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+}
+
+/* §12 Compare mode: overlays whichever body was active, doesn't touch
+ * mode-compact/mode-full/effective — closing it reveals that body again. */
+.compare-active .body-compact,
+.compare-active .body-full {
+  opacity: 0;
+  pointer-events: none;
+}
+.compare-active .body-compare {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+}
+
+/* Settings panel: a fourth `.body` sharing `.bodies`' region, so opening it
+ * never changes panel width/height (the window itself never resizes). Rule
+ * order after `.compare-active` lets `.settings-open` win if both are ever
+ * toggled in the same tick (toggleSettings() also closes Compare first). */
+.settings-open .body-compact,
+.settings-open .body-full,
+.settings-open .body-compare {
+  opacity: 0;
+  pointer-events: none;
+}
+/* Settings fades in/out on opacity alone — no scale-in like the other
+ * bodies, so it never reads as sliding/growing over the layout, and no
+ * layout dimension moves. Overrides `.body`'s shared scale(0.97)/0.2s. */
+.body-settings {
+  transform: none;
+  transition: opacity 120ms ease-out;
+}
+.settings-open .body-settings {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.settings-scroll {
+  height: 100%;
+  overflow-y: auto;
+  padding: 10px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.set-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.set-row.set-col { flex-direction: column; align-items: stretch; gap: 4px; }
+
+.set-lab {
+  font-size: 12px;
+  color: var(--ivory);
+  white-space: nowrap;
+}
+
+.set-val {
+  font-size: 11px;
+  color: var(--grey);
+  font-variant-numeric: tabular-nums;
+  min-width: 32px; /* "60%".."100%" / "0.80x".."1.20x" — no width jitter as digits change */
+  text-align: right;
+}
+
+.set-btn {
+  flex: none;
+  font-family: var(--sans);
+  font-size: 11px;
+  color: var(--gold-hi);
+  background: none;
+  border: 1px solid rgba(184, 135, 53, 0.4);
+  border-radius: 3px;
+  padding: 5px 9px;
+  cursor: pointer;
+}
+.set-btn {
+  transition: color 120ms ease-out, border-color 120ms ease-out, transform 120ms ease-out;
+}
+.set-btn:hover:not(:disabled) { color: var(--ivory); border-color: var(--gold-hi); }
+.set-btn:active:not(:disabled) { transform: scale(0.97); }
+.set-btn:disabled { color: var(--grey); cursor: not-allowed; opacity: 0.6; }
+.set-btn-sm { padding: 3px 7px; }
+
+.set-sep {
+  height: 1px;
+  margin: 2px 0;
+  background: linear-gradient(90deg, transparent, rgba(184, 135, 53, 0.3) 15%, rgba(184, 135, 53, 0.3) 85%, transparent);
+}
+
+.set-hotkey kbd {
+  font-family: var(--sans);
+  font-size: 11px;
+  color: var(--ivory);
+  background: rgba(184, 135, 53, 0.15);
+  border: 1px solid rgba(184, 135, 53, 0.4);
+  border-radius: 3px;
+  padding: 2px 6px;
+}
+
+.set-slider {
+  width: 100%;
+  accent-color: var(--gold-hi);
+  cursor: pointer;
+  transition: filter 120ms ease-out;
+}
+.set-slider:hover,
+.set-slider:focus-visible { filter: brightness(1.15); }
+.set-slider:active { filter: brightness(1.1); } /* slightly dimmer than hover — keeps active drag grounded, not over-bright */
+
+.set-switch {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 18px;
+  display: inline-block;
+}
+.set-switch input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
+}
+.set-switch-track {
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(184, 135, 53, 0.4);
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.3);
+  transition: background-color 120ms ease-out, border-color 120ms ease-out;
+}
+.set-switch:hover .set-switch-track { border-color: var(--gold-hi); }
+.set-switch-track::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--grey);
+  transition: transform 120ms ease-out, background-color 120ms ease-out;
+}
+.set-switch input:checked + .set-switch-track { background: rgba(240, 184, 74, 0.25); }
+.set-switch input:checked + .set-switch-track::after {
+  transform: translateX(16px);
+  background: var(--gold-hi);
+}
+.set-switch input:focus-visible + .set-switch-track { outline: 2px solid var(--gold-hi); outline-offset: 2px; }
+
+/* §: Insights visibility toggle hides both the section title and its rows
+ * as one unit — no orphaned "Insights" header with nothing under it. */
+.hide-insights .insights-block { display: none; }
+
+.compare-cols {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 8px;
+}
+.cmp-card {
+  border: 1px solid rgba(184, 135, 53, 0.35);
+  border-radius: 4px;
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: center;
+  min-width: 0;
+}
+.cmp-card.best {
+  border-color: var(--tier, #ffd36a);
+  box-shadow: 0 0 12px rgba(255, 211, 106, 0.35);
+  background: rgba(255, 211, 106, 0.06);
+}
+.cmp-name {
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cmp-sub { font-size: 10px; opacity: 0.7; }
+.cmp-score { font-size: 22px; font-weight: 700; margin: 4px 0; }
+.cmp-verdict { font-size: 11px; letter-spacing: 0.05em; opacity: 0.85; }
+
+.toggle-btn,
+.settings-btn {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  background: none;
+  border: 1px solid rgba(184, 135, 53, 0.4);
+  border-radius: 3px;
+  color: var(--gold);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  transition: background-color 120ms ease-out, color 120ms ease-out,
+    border-color 120ms ease-out, transform 120ms ease-out;
+}
+.toggle-btn:hover,
+.settings-btn:hover {
+  color: var(--gold-hi);
+  border-color: var(--gold-hi);
+  background: rgba(240, 184, 74, 0.08);
+}
+.toggle-btn:active,
+.settings-btn:active { transform: scale(0.97); }
+.toggle-btn:focus-visible,
+.settings-btn:focus-visible { outline: 2px solid var(--gold-hi); outline-offset: 2px; }
+.settings-btn.active {
+  color: var(--gold-hi);
+  border-color: var(--gold-hi);
+  background: rgba(240, 184, 74, 0.12);
+}
+/* Mini fallback (240×84, §2) has no room for a settings affordance. */
+.mode-mini .settings-btn { display: none; }
+
+/* ---- tier states (§6) ---- */
+.tier-trash { --tier: #8a5a4a; --tier-glow: transparent; }
+.tier-low   { --tier: #8c93a0; --tier-glow: transparent; }
+.tier-good  { --tier: #d9b45f; --tier-glow: rgba(240, 184, 74, 0.25); }
+.tier-splus { --tier: #f0b84a; --tier-glow: rgba(240, 184, 74, 0.45); }
+.tier-god   { --tier: #ffd36a; --tier-glow: rgba(255, 211, 106, 0.6); }
+
+.tier-good .badge { box-shadow: 0 0 8px var(--tier-glow); }
+.tier-splus .badge {
+  box-shadow: 0 0 12px var(--tier-glow);
+  background: rgba(240, 184, 74, 0.08);
+}
+.tier-god .badge {
+  box-shadow:
+    0 0 8px rgba(255, 211, 106, 0.7),
+    0 0 18px rgba(255, 211, 106, 0.25);
+  background: linear-gradient(rgba(255, 211, 106, 0.22), rgba(255, 211, 106, 0.08));
+  color: var(--ivory);
+  border-color: var(--god);
+}
+
+/* ---- shared score / fx (§6, §7) ---- */
+.score-wrap { position: relative; display: inline-block; }
+
+.score-num {
+  display: inline-block;
+  font-family: var(--serif);
+  font-weight: 700;
+  color: var(--tier, var(--gold-hi));
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  transition: color 0.3s;
+  position: relative;
+  z-index: 1;
+}
+
+.halo {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 132px;
+  height: 132px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(
+    circle,
+    rgba(255, 211, 106, 0.22),
+    rgba(255, 211, 106, 0.08) 45%,
+    transparent 68%
+  );
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+.tier-god .halo { opacity: 1; }
+.tier-god .score-num { text-shadow: 0 0 14px rgba(255, 211, 106, 0.35); }
+
+.score-num.pulse { animation: pulse 0.38s cubic-bezier(0.2, 0.9, 0.3, 1.2); }
+@keyframes pulse { 50% { transform: scale(1.12); } }
+
+.badge.flare,
+.action-chip.flare { animation: flare 0.4s ease-out; }
+@keyframes flare {
+  30% { box-shadow: 0 0 22px var(--tier), 0 0 40px var(--tier-glow); }
+}
+
+.spark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  height: 3px;
+  z-index: 2;
+  background: var(--god);
+  border-radius: 50%;
+  box-shadow: 0 0 5px var(--god);
+  pointer-events: none;
+  animation: spark 0.9s ease-out forwards;
+}
+@keyframes spark {
+  from { transform: translate(-2px, -2px); opacity: 1; }
+  to { transform: translate(var(--dx), var(--dy)) scale(0.2); opacity: 0; }
+}
+
+/* ---- shared chrome ---- */
+.sep {
+  height: 1px;
+  flex: none;
+  margin: 0 12px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(184, 135, 53, 0.35) 15%,
+    rgba(184, 135, 53, 0.35) 85%,
+    transparent
+  );
+}
+
+/* ---- top tablet's reward breakdown (rewards.ts), one compact line under
+   the #1 ranked tablet only — never a separate titled section, see
+   docs/implementation-plan.md's UI-rewards entry ---- */
+.rec-wrap { display: block; }
+.tab-rewards {
+  font-size: 10.5px;
+  color: var(--grey);
+  padding-left: 24px;
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tab-rewards .rw-ic { color: var(--gold); font-size: 8px; margin: 0 2px 0 8px; }
+.tab-rewards .rw-ic:first-child { margin-left: 0; }
+.tab-rewards b { color: var(--gold-hi); font-weight: 600; }
+
+.sec-h {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--grey);
+  margin: 0 0 6px;
+}
+
+/* ---- reduced motion (§10): OS pref OR the user's reduceEffects setting.
+   The media query only ever sees the OS side; `.overlay.reduced` (applied
+   in JS from isReduced(), which already ORs both) covers the setting too,
+   so every CSS-only transition (mode morph, halo, body cross-fade, ...)
+   respects it, not just the JS-triggered pulse/flare/sparks. ---- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+.overlay.reduced *,
+.overlay.reduced *::before,
+.overlay.reduced *::after {
+  animation-duration: 0.01ms !important;
+  transition-duration: 0.01ms !important;
+}
