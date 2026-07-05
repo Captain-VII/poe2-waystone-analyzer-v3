@@ -10,7 +10,7 @@
  *  `EvaluationResult`, so scoring.ts stays the single source of truth. */
 
 import type { ModStats } from "./mod-parser";
-import { computeDangerLevel, dangerHitsToWarnings, evaluateMap, type DangerLevel } from "./scoring";
+import { computeDangerLevel, dangerHitsToWarnings, type DangerLevel, type EvaluationResult } from "./scoring";
 
 export type ScoreLabel = "Bad" | "Average" | "Good" | "Excellent";
 
@@ -32,6 +32,7 @@ export interface DisplayData {
     itemRarity: string;
     packSize: string;
     monsterRarity: string;
+    monsterEffectiveness: string;
     dropChance: string;
   };
   /** SECONDARY information: the Juice Score, for context only. */
@@ -54,16 +55,20 @@ export interface DisplayData {
   };
 }
 
-function formatPercent(value: number): string {
+/** Single source of truth for "raw stat number" -> "real, on-item-matching
+ *  percentage string" — reused by adapter.ts's `heat.breakdown` so the real
+ *  overlay panel shows the same real percentages this module was built to
+ *  surface, instead of re-deriving its own formatting. */
+export function formatPercent(value: number): string {
   return `+${Math.round(value)}%`;
 }
 
-/** Builds the player-facing view of a waystone: real stat percentages first,
- *  the Juice Score and its breakdown second. `stats` is the same parsed
- *  `ModStats` passed to `evaluateMap` elsewhere in the pipeline (adapter.ts);
- *  `text` is the raw mod text, needed for mechanic/danger detection. */
-export function buildDisplayData(stats: ModStats, text = ""): DisplayData {
-  const evaluation = evaluateMap(stats, text);
+/** Builds the player-facing view of a waystone: real stat percentages
+ *  first, the Juice Score and its breakdown second. Takes the already-
+ *  computed `EvaluationResult` (rather than re-running `evaluateMap`
+ *  itself) so callers that need both the raw evaluation and this display
+ *  view (adapter.ts) don't pay for the analysis twice. */
+export function buildDisplayData(stats: ModStats, evaluation: EvaluationResult): DisplayData {
   const dangerLevel = computeDangerLevel(evaluation.dangerHits);
   const warnings = dangerHitsToWarnings(evaluation.dangerHits);
 
@@ -72,6 +77,7 @@ export function buildDisplayData(stats: ModStats, text = ""): DisplayData {
       itemRarity: formatPercent(stats.itemRarity),
       packSize: formatPercent(stats.packSize),
       monsterRarity: formatPercent(stats.monsterRarity),
+      monsterEffectiveness: formatPercent(stats.monsterEffectiveness),
       dropChance: formatPercent(stats.waystoneDropChance),
     },
     score: {

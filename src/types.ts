@@ -33,6 +33,12 @@ export interface DangerHitView {
  *  `tierClass`/`verdict`). */
 export type Rating = "S" | "A" | "B" | "C" | "D";
 
+/** Plain-language read of a 0-100 score (src/analyzer/displayAdapter.ts's
+ *  `getScoreLabel`) — declared independently here (same convention as
+ *  `DangerLevel`/`TierClass`) so this file never imports analyzer
+ *  internals; adapter.ts is the only place the two are kept in sync. */
+export type ScoreLabel = "Bad" | "Average" | "Good" | "Excellent";
+
 export interface BreakdownEntry {
   key:
     | "itemRarity"
@@ -43,8 +49,23 @@ export interface BreakdownEntry {
     | "quantity"
     | (string & {});
   label: string;
-  /** Signed, display-final (1 decimal). Negative renders in danger styling. */
+  /** Signed, display-final (1 decimal). Negative renders in danger styling.
+   *  For the 5 core stat rows (2026-07-06): the REAL raw parsed stat value
+   *  (e.g. 39 for "+39% Item Rarity"), not a weighted/derived point delta —
+   *  see `display` below for the exact string to render. The "bonus" row
+   *  (extra-content detection, not a %-based stat) is the one exception and
+   *  has no `display`/`max`. */
   value: number;
+  /** Pre-formatted, real-stat string to render instead of `value` when
+   *  present (e.g. "+39%") — matches the wording on the item itself. Falls
+   *  back to the old `fmtDelta(value)` rendering when absent (the "bonus"
+   *  row). */
+  display?: string;
+  /** Reference ceiling for this row's bar width (`|value| / max`), e.g. the
+   *  stat's own cap (scoring.ts's `CAPS`) rather than a flat constant shared
+   *  across unrelated stat scales. Absent for rows without a natural cap
+   *  (the "bonus" row), which fall back to the UI's flat default. */
+  max?: number;
 }
 
 /** Per-mechanic Mechanic Match Score (§7), 0-100. */
@@ -89,11 +110,13 @@ export interface AnalysisResult {
     /** Letter view of `score`, e.g. for "Rating: S (94.2)" — supplementary
      *  to tierClass/tierLabel, not a replacement. */
     rating: Rating;
-    /** Display order. Legacy per-field/bonus breakdown (2026-07-06):
-     *  no longer sums to `score` — `score` is now the normalized-model
-     *  effectiveScore (scoring.ts), while this stays the old flat-weighted
-     *  view for the existing chip UI. See src/analyzer/displayAdapter.ts
-     *  for a real-stat-percentage view intended to replace it. */
+    /** Plain-language read of `score` (src/analyzer/displayAdapter.ts's
+     *  `getScoreLabel`) — "Bad"/"Average"/"Good"/"Excellent". Supplementary,
+     *  same as `rating`; not currently rendered by the overlay. */
+    scoreLabel: ScoreLabel;
+    /** Display order. The 5 core stat rows now carry real parsed percentages
+     *  (`display`, e.g. "+39%") rather than a derived point delta — see
+     *  `BreakdownEntry`. */
     breakdown: BreakdownEntry[];
   };
   /** Pre-sorted: danger > positive > neutral.

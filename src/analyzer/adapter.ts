@@ -11,6 +11,7 @@ import {
   dangerHitsToWarnings,
   detectDangerHits,
   evaluateMap,
+  CAPS,
   DEFAULT_THRESHOLD,
   DANGER_SEVERITY_ORDER,
   type DangerHit,
@@ -19,6 +20,7 @@ import {
   type FieldContribution,
   type Weights,
 } from "./scoring";
+import { buildDisplayData, formatPercent } from "./displayAdapter";
 import { getActiveMechanics, scoreMechanicFit, NORMALIZE_CAP, type MechanicDef, type StatKey } from "./mechanics";
 import { getActiveTablets, getConfidenceMultiplier, type TabletDef } from "./tablets";
 import { describeReward } from "./rewards";
@@ -127,6 +129,11 @@ const FIELD_LABELS: Record<keyof Weights, string> = {
   waystoneDropChance: "Waystone Drop Chance",
 };
 
+// UX fix (2026-07-06): each stat row shows the REAL parsed value (e.g. "+39%
+// Item Rarity") instead of a weighted point delta a player can't cross-check
+// against the item — see displayAdapter.ts's file-level comment. `max` is
+// the stat's own cap (not a flat constant), so the UI's bar width stays
+// meaningful across stats with very different natural scales.
 function buildBreakdown(
   fields: Record<keyof Weights, FieldContribution>,
   bonusTotal: number,
@@ -134,8 +141,12 @@ function buildBreakdown(
   const rows: AnalysisResult["heat"]["breakdown"] = (Object.keys(fields) as (keyof Weights)[]).map((key) => ({
     key,
     label: FIELD_LABELS[key],
-    value: fields[key].contribution,
+    value: fields[key].rawValue,
+    display: formatPercent(fields[key].rawValue),
+    max: CAPS[key],
   }));
+  // The "bonus" row (extra-content detection, e.g. "ritual present") isn't a
+  // %-based stat, so it keeps the old point-delta rendering (no `display`).
   if (bonusTotal > 0) rows.push({ key: "bonus", label: "Bonus", value: Math.round(bonusTotal * 10) / 10 });
   return rows;
 }
@@ -302,6 +313,7 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
   const verdict = classifyVerdict(evaluation.effectiveScore, parsed.tier);
   const warnings = dangerHitsToWarnings(evaluation.dangerHits);
   const dangerLevel = computeDangerLevel(evaluation.dangerHits);
+  const display = buildDisplayData(stats, evaluation);
 
   const mechanicScores = computeMechanicScores(stats, text);
   // Trust fix: only a mechanic with a real PoE2 tablet (see tablets.ts's
@@ -347,6 +359,7 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
       tierLabel: TIER_LABELS[tierClass],
       verdict,
       rating: scoreToRating(evaluation.effectiveScore),
+      scoreLabel: display.score.label,
       breakdown: buildBreakdown(evaluation.breakdown, evaluation.bonusDetails.reduce((sum, b) => sum + b.bonus, 0)),
     },
     modifiers: buildModifiers(parsed.modifiers),

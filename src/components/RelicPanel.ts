@@ -58,7 +58,9 @@ const BADGE_LABEL: Record<TierClass, string> = {
 
 const RANKS = ["I", "II", "III", "IV"];
 
-/** §5: expected max single breakdown contribution; bar width = |value| / BR_MAX. */
+/** Fallback bar-width divisor for breakdown rows without their own `max`
+ *  (2026-07-06: only the "bonus" row now — the 5 core stat rows carry a
+ *  real per-stat cap, see BreakdownEntry.max). */
 const BR_MAX = 35;
 
 const CORNER_PATHS = `
@@ -321,7 +323,7 @@ export function mountOverlay(
         <div class="brow">
           <span class="b-lab">${esc(b.label)}</span>
           <div class="bar"><i></i></div>
-          <span class="b-val">${fmtDelta(b.value)}</span>
+          <span class="b-val">${b.display ?? fmtDelta(b.value)}</span>
         </div>`,
       )
       .join("");
@@ -377,8 +379,13 @@ export function mountOverlay(
     const rows = panel.querySelectorAll<HTMLElement>("[data-breakdown] .brow");
     rows.forEach((row, i) => {
       const fill = row.querySelector(".bar i") as HTMLElement;
-      const value = current.heat.breakdown[i]?.value ?? 0;
-      const width = `${Math.min((Math.abs(value) / BR_MAX) * 100, 100)}%`;
+      const entry = current.heat.breakdown[i];
+      const value = entry?.value ?? 0;
+      // Real stat rows scale against their own cap (e.g. Item Rarity's 200%
+      // vs. Pack Size's 150%) rather than one flat constant shared across
+      // very different stat scales — see BreakdownEntry.max.
+      const max = entry?.max ?? BR_MAX;
+      const width = `${Math.min((Math.abs(value) / max) * 100, 100)}%`;
       if (opts.isReduced()) {
         fill.style.width = width; // §10: bars set instantly
         return;

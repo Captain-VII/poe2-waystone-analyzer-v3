@@ -1,5 +1,6 @@
-import { computeDangerLevel, dangerHitsToWarnings, type DangerHit } from "./analyzer/scoring";
+import { CAPS, computeDangerLevel, dangerHitsToWarnings, type DangerHit } from "./analyzer/scoring";
 import { DANGER_LABELS, describeDangerHits } from "./analyzer/adapter";
+import { formatPercent, getScoreLabel } from "./analyzer/displayAdapter";
 import type { AnalysisResult, TierClass, Verdict } from "./types";
 
 export const TIER_ORDER: TierClass[] = ["trash", "low", "good", "splus", "god"];
@@ -48,11 +49,27 @@ function fixture(
     waystone: { tier: 15, name: "Waystone of the Sovereign", corrupted: false, modCount: 6 },
     heat: {
       ...overrides,
+      scoreLabel: getScoreLabel(overrides.score),
+      // `br` doubles as the real stat % here (2026-07-06: matches the real
+      // adapter's contract — display/max — so this dev fixture demonstrates
+      // the same real-percentage rendering production data does).
       breakdown: [
-        { key: "itemRarity", label: "Item Rarity", value: br[0] },
-        { key: "monsterRarity", label: "Monster Rarity", value: br[1] },
-        { key: "packSize", label: "Pack Size", value: br[2] },
-        { key: "monsterEffectiveness", label: "Monster Effectiveness", value: br[3] },
+        { key: "itemRarity", label: "Item Rarity", value: br[0], display: formatPercent(br[0]), max: CAPS.itemRarity },
+        {
+          key: "monsterRarity",
+          label: "Monster Rarity",
+          value: br[1],
+          display: formatPercent(br[1]),
+          max: CAPS.monsterRarity,
+        },
+        { key: "packSize", label: "Pack Size", value: br[2], display: formatPercent(br[2]), max: CAPS.packSize },
+        {
+          key: "monsterEffectiveness",
+          label: "Monster Effectiveness",
+          value: br[3],
+          display: formatPercent(br[3]),
+          max: CAPS.monsterEffectiveness,
+        },
       ],
     },
     modifiers: MODIFIERS,
