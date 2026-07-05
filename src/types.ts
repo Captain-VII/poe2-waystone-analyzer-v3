@@ -9,6 +9,24 @@ export type TierClass = "trash" | "low" | "good" | "splus" | "god";
 /** §9 verdict logic: Skip / Run / Garder. */
 export type Verdict = "SKIP" | "RUN" | "GARDER";
 
+/** At-a-glance danger signal, derived ONLY from `warnings` — never from
+ *  `score`. Fully independent of the Juice Score: a "high" danger map can
+ *  still carry a 94+ score, and vice versa. See `warnings` below. */
+export type DangerLevel = "none" | "low" | "medium" | "high";
+
+/** One detected danger mod, display-ready: `label` is the UI text (resolved
+ *  adapter-side from the stable internal `id`), `severity` is already
+ *  collapsed to the UI's 3-tier scale (adapter.ts maps scoring.ts's
+ *  internal reflect/strong/moderate/minor down to this — the overlay never
+ *  sees or computes that internal vocabulary, same pure-renderer rule as
+ *  tierClass/verdict). Sorted most-severe-first; `.map(h => h.label)`
+ *  equals `warnings`. */
+export interface DangerHitView {
+  id: string;
+  label: string;
+  severity: "high" | "medium" | "low";
+}
+
 /** Letter-grade view of a 0-100 score (tablet stat+reward fit, or the Juice
  *  Score itself) — supplementary to `tierClass`/`tierLabel`, not a
  *  replacement. Computed in adapter.ts (never in the overlay, same rule as
@@ -23,7 +41,6 @@ export interface BreakdownEntry {
     | "monsterEffectiveness"
     | "waystoneDropChance"
     | "quantity"
-    | "penalty"
     | (string & {});
   label: string;
   /** Signed, display-final (1 decimal). Negative renders in danger styling. */
@@ -82,8 +99,37 @@ export interface AnalysisResult {
   modifiers: Modifier[];
   /** Sorted by delta desc; Compact and Full both take up to 3. */
   tablets: Tablet[];
-  /** At most one line, ≤ ~34 chars, or null. */
+  /**
+   * warning:
+   * - The single most severe danger/annoyance mod on this waystone (if any),
+   *   sized for the space-constrained Compact card / mini-badge tooltip.
+   * - Equal to `warnings[0] ?? null`.
+   * - Danger/annoyance mods (reflect, no leech/regen, fast monsters,
+   *   elemental penetration, ...) NEVER affect `score`/`verdict`/`tierClass`
+   *   — the Juice Score measures loot potential only. Danger is communicated
+   *   exclusively through `warning`/`warnings`.
+   * - Do NOT change wording of pinned-regression warnings without updating
+   *   tests (scripts/verify-adapter.mjs).
+   *
+   * At most one line, ≤ ~34 chars, or null.
+   */
   warning: string | null;
+  /** Every detected danger/annoyance mod, most-severe-first. Full mode
+   *  renders the whole list; Compact/mini use `warning` (the first entry)
+   *  only, per the Compact card's single-line warning strip. Same
+   *  never-affects-score guarantee as `warning` above. */
+  warnings: string[];
+  /** Structured view of the same detected danger mods as `warnings`
+   *  (1:1, same order) with per-hit severity for visual grouping. Full
+   *  mode's danger list renders from this; `warnings` stays for the
+   *  Compact strip and any consumer that only needs text. */
+  dangerHits: DangerHitView[];
+  /** Derived purely from `warnings` (see `DangerLevel`) — never from
+   *  `score`. UI-only signal, independent of tier/verdict/score. */
+  dangerLevel: DangerLevel;
+  /** Human-readable label for `dangerLevel` ("Safe"/"Manageable"/
+   *  "Dangerous"/"Very Dangerous"), for UI display only. */
+  dangerLabel: string;
   /** 0–3 short lines, Full mode only. */
   insights: string[];
   /** Mechanic Match Score per detected/candidate mechanic (§7), desc sorted.

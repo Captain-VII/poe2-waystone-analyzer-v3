@@ -172,6 +172,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.warn-strip .w-level { flex: none; opacity: 0.8; }
 .warn-strip[hidden] { display: none; }
 
 /* §7 warning reveal: single fade + left-edge sweep, no flashing */

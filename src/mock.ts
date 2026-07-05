@@ -1,3 +1,5 @@
+import { computeDangerLevel, dangerHitsToWarnings, type DangerHit } from "./analyzer/scoring";
+import { DANGER_LABELS, describeDangerHits } from "./analyzer/adapter";
 import type { AnalysisResult, TierClass, Verdict } from "./types";
 
 export const TIER_ORDER: TierClass[] = ["trash", "low", "good", "splus", "god"];
@@ -35,11 +37,13 @@ const MECHANIC_SCORES: AnalysisResult["mechanicScores"] = [
 
 function fixture(
   overrides: Pick<AnalysisResult["heat"], "score" | "tierClass" | "tierLabel" | "verdict" | "rating">,
-  br: [number, number, number, number, number],
-  warning: string | null,
+  br: [number, number, number, number],
+  dangerHits: DangerHit[],
   insight: string,
   keyFactors: string[] = [],
 ): AnalysisResult {
+  const warnings = dangerHitsToWarnings(dangerHits);
+  const dangerLevel = computeDangerLevel(dangerHits);
   return {
     waystone: { tier: 15, name: "Waystone of the Sovereign", corrupted: false, modCount: 6 },
     heat: {
@@ -49,12 +53,15 @@ function fixture(
         { key: "monsterRarity", label: "Monster Rarity", value: br[1] },
         { key: "packSize", label: "Pack Size", value: br[2] },
         { key: "monsterEffectiveness", label: "Monster Effectiveness", value: br[3] },
-        { key: "penalty", label: "Penalty", value: br[4] },
       ],
     },
     modifiers: MODIFIERS,
     tablets: TABLETS,
-    warning,
+    warning: warnings[0] ?? null,
+    warnings,
+    dangerHits: describeDangerHits(dangerHits),
+    dangerLevel,
+    dangerLabel: DANGER_LABELS[dangerLevel],
     insights: [insight, "Safe to corrupt — modifier ceiling reached"],
     mechanicScores: MECHANIC_SCORES,
     recommendedMechanic: "Expedition",
@@ -73,34 +80,40 @@ const VERDICT: Record<TierClass, Verdict> = {
 export const MOCK_RESULTS: Record<TierClass, AnalysisResult> = {
   trash: fixture(
     { score: 12.6, tierClass: "trash", tierLabel: "Faible", verdict: VERDICT.trash, rating: "D" },
-    [3.0, 2.0, 4.0, 3.6, -3.6],
-    "Not worth a Waystone slot",
+    [3.0, 2.0, 4.0, 3.6],
+    [],
     "Re-roll or vendor this Waystone",
   ),
   low: fixture(
     { score: 32.2, tierClass: "low", tierLabel: "Moyen", verdict: VERDICT.low, rating: "C" },
-    [8.0, 6.0, 9.0, 9.2, -2.0],
-    null,
+    [8.0, 6.0, 9.0, 9.2],
+    [],
     "Run only to sustain Waystones",
   ),
   good: fixture(
     { score: 52.5, tierClass: "good", tierLabel: "Bon", verdict: VERDICT.good, rating: "B" },
-    [12.0, 10.0, 14.0, 16.5, -3.7],
-    null,
+    [12.0, 10.0, 14.0, 16.5],
+    [],
     "Worth a mid-tier tablet slot",
     ["High Monster Effectiveness"],
   ),
   splus: fixture(
     { score: 76.7, tierClass: "splus", tierLabel: "Excellent", verdict: VERDICT.splus, rating: "A" },
-    [16.0, 15.0, 19.0, 22.7, -3.7],
-    "Elemental reflect present",
+    [16.0, 15.0, 19.0, 22.7],
+    [{ id: "reflect-damage", severity: "reflect" }],
     "Pairs well with Expedition tablets",
     ["High Monster Effectiveness", "High Pack Size", "Strong Expedition match"],
   ),
+  // Demonstrates the Juice Detector contract: score/tier/verdict stay top-end
+  // even with multiple simultaneous danger mods — danger only ever shows up
+  // via warnings, never by pulling the score down.
   god: fixture(
     { score: 94.2, tierClass: "god", tierLabel: "Legendaire", verdict: VERDICT.god, rating: "S" },
-    [20.0, 19.0, 21.0, 25.0, -4.0],
-    "Avoid elemental-reflect builds",
+    [20.0, 19.0, 21.0, 25.0],
+    [
+      { id: "reflect-damage", severity: "reflect" },
+      { id: "fast-monsters", severity: "strong" },
+    ],
     "Pairs well with Expedition tablets",
     ["High Monster Effectiveness", "Strong Expedition match", "Expedition rewards"],
   ),

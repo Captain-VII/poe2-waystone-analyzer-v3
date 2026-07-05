@@ -6,7 +6,14 @@
 //
 // SAMPLE is inlined directly (no external/sibling-repo file) so this script
 // runs deterministically and offline on a fresh clone.
-import { analyzeWaystoneText, TABLET_LINKED_MECHANICS } from "./.adapter-bundle.mjs";
+import {
+  analyzeWaystoneText,
+  TABLET_LINKED_MECHANICS,
+  computeDangerLevel,
+  dangerHitsToWarnings,
+  describeDangerHits,
+  detectDangerHits,
+} from "./.adapter-bundle.mjs";
 
 const SAMPLE = `Item Class: Waystones
 Rarity: Rare
@@ -58,6 +65,42 @@ check("score is within 0-100 (§6 Juice Score)", result.heat.score >= 0 && resul
 
 check("insights has at most 3 entries", result.insights.length <= 3);
 check("warning is a string or null", result.warning === null || typeof result.warning === "string");
+check("warnings is an array of strings", Array.isArray(result.warnings) && result.warnings.every((w) => typeof w === "string"));
+check("warning equals warnings[0] or null", result.warning === (result.warnings[0] ?? null));
+check("dangerLevel is one of the four valid values",
+  ["none", "low", "medium", "high"].includes(result.dangerLevel));
+check("dangerLabel is a non-empty string", typeof result.dangerLabel === "string" && result.dangerLabel.length > 0);
+check("dangerLevel is consistent with warnings (empty warnings <=> 'none')",
+  (result.warnings.length === 0) === (result.dangerLevel === "none"));
+const UI_SEVERITIES = ["high", "medium", "low"];
+check("dangerHits is an array of {id, label, severity} views (UI 3-tier scale)",
+  Array.isArray(result.dangerHits) &&
+  result.dangerHits.every((h) => typeof h.id === "string" && typeof h.label === "string" && UI_SEVERITIES.includes(h.severity)));
+check("dangerHits labels equal warnings (1:1, same order)",
+  result.dangerHits.length === result.warnings.length &&
+  result.dangerHits.every((h, i) => h.label === result.warnings[i]));
+
+// Final integration assertion (adapter.ts's describeDangerHits, the
+// boundary-layer function that replaced scoring.ts's removed
+// describeDangerHits): one mixed-severity input exercising all three UI
+// tiers at once — sorted high→low, labels 1:1 with dangerHitsToWarnings,
+// and both "reflect" and "strong" domain severities landing in the HIGH
+// group (the collapse this function exists to do).
+const mixedHits = [
+  { id: "reduced-curse-effect", severity: "minor" },
+  { id: "fast-monsters", severity: "strong" },
+  { id: "reduced-recovery", severity: "moderate" },
+  { id: "reflect-damage", severity: "reflect" },
+];
+const mixedView = describeDangerHits(mixedHits);
+const mixedLabels = dangerHitsToWarnings(mixedHits);
+check("describeDangerHits: sorted high -> medium -> low across all tiers",
+  mixedView.map((h) => h.severity).join(",") === "high,high,medium,low");
+check("describeDangerHits: labels 1:1 with dangerHitsToWarnings",
+  mixedView.every((h, i) => h.label === mixedLabels[i]));
+check("describeDangerHits: both reflect and strong hits land in HIGH",
+  mixedView[0].id === "reflect-damage" && mixedView[0].severity === "high" &&
+  mixedView[1].id === "fast-monsters" && mixedView[1].severity === "high");
 
 // §7/§8: Mechanic Match Score
 check("mechanicScores is a non-empty array", Array.isArray(result.mechanicScores) && result.mechanicScores.length > 0);
@@ -108,15 +151,13 @@ check("score in [0,100]", result.heat.score >= 0 && result.heat.score <= 100);
 
 check("breakdown sums to score", diff < 0.05);
 
-// AnalysisResult.heat has no `hardBlock` boolean (internal to scoring.ts's
-// EvaluationResult only) — `warning` starting with "Hard block:" is the
-// exact public-contract proxy: formatWarning() only ever produces that
-// prefix when hardBlockReasons is non-empty, which is exactly when
-// hardBlock fired. (Checking a nonexistent `result.heat.hardBlock` here
-// would make this assertion a silent no-op — always true, never testing
-// anything — which is worse than not having it at all.)
-check("hard-block warning implies score 0 and SKIP",
-  !result.warning?.startsWith("Hard block:") || (result.heat.score === 0 && result.heat.verdict === "SKIP"));
+// Juice Detector rework: `score`/`verdict`/`tierClass` measure loot
+// potential ONLY. Danger/annoyance mods (reflect, no leech/regen, fast
+// monsters, elemental penetration, ...) are surfaced exclusively through
+// `warning`/`warnings` and must never reduce or gate the score — so there is
+// deliberately NO invariant here coupling `warning` presence to score/verdict
+// (a maxed-out, dangerous map is expected to hit 100 with a warning attached;
+// see the "dangerous-but-juicy" regression below).
 
 check("recommendedMechanic valid",
   result.recommendedMechanic === null ||
@@ -127,6 +168,92 @@ check("recommendedMechanic valid",
 
 check("deterministic scoring",
   analyzeWaystoneText(SAMPLE).heat.score === analyzeWaystoneText(SAMPLE).heat.score);
+
+// ============================================================
+// DANGER LOGIC — unit-level checks on the structured DangerHit[] model
+// (scoring.ts), independent of the AnalysisResult pipeline above. Proves
+// dangerLevel is a pure function of `severity`, with zero coupling to any
+// `id`/label string — renaming or relocalizing a warning cannot silently
+// change danger logic.
+// ============================================================
+
+check("computeDangerLevel([]) is 'none'", computeDangerLevel([]) === "none");
+
+check("computeDangerLevel: any reflect hit is always 'high'",
+  computeDangerLevel([{ id: "reflect-damage", severity: "reflect" }]) === "high");
+
+check("computeDangerLevel: 3+ hits incl. one strong is 'high'",
+  computeDangerLevel([
+    { id: "a", severity: "strong" },
+    { id: "b", severity: "moderate" },
+    { id: "c", severity: "moderate" },
+  ]) === "high");
+
+check("computeDangerLevel: a single strong hit is 'medium'",
+  computeDangerLevel([{ id: "a", severity: "strong" }]) === "medium");
+
+check("computeDangerLevel: 2+ moderate hits is 'medium'",
+  computeDangerLevel([{ id: "a", severity: "moderate" }, { id: "b", severity: "moderate" }]) === "medium");
+
+check("computeDangerLevel: a single minor hit is 'low'",
+  computeDangerLevel([{ id: "a", severity: "minor" }]) === "low");
+
+// The core anti-coupling guarantee: renaming/relocalizing `id` must never
+// change the computed level, since computeDangerLevel only ever reads
+// `severity`. Two hit sets differing ONLY in `id` strings must agree.
+const hitsWithOriginalIds = [{ id: "reflect-damage", severity: "reflect" }, { id: "fast-monsters", severity: "strong" }];
+const hitsWithRenamedIds = [{ id: "some-renamed-warning-xyz", severity: "reflect" }, { id: "translated-libellé", severity: "strong" }];
+check("changing a warning's id/label does NOT affect dangerLevel",
+  computeDangerLevel(hitsWithOriginalIds) === computeDangerLevel(hitsWithRenamedIds));
+
+// dangerHitsToWarnings must sort most-severe-first regardless of input order.
+const scrambledHits = [
+  { id: "reduced-curse-effect", severity: "minor" },
+  { id: "reduced-recovery", severity: "moderate" },
+  { id: "reflect-damage", severity: "reflect" },
+  { id: "high-crit-monsters", severity: "strong" },
+];
+const orderedWarnings = dangerHitsToWarnings(scrambledHits);
+check("dangerHitsToWarnings sorts reflect > strong > moderate > minor",
+  orderedWarnings[0] === "Reflect Damage" &&
+  orderedWarnings[1] === "High Crit Monsters" &&
+  orderedWarnings[2] === "Reduced Recovery" &&
+  orderedWarnings[3] === "Reduced Curse Effect");
+
+// ============================================================
+// DANGER DETECTION — per-category unit tests on detectDangerHits
+// (real PoE2-style mod wording). Each pins detection + severity for one
+// pattern-table category, so a fat-fingered severity or regex edit can't
+// drift silently.
+// ============================================================
+
+check("detectDangerHits: crit monsters (strong)",
+  detectDangerHits("Monsters have +50% Critical Hit Chance")
+    .some((h) => h.id === "high-crit-monsters" && h.severity === "strong"));
+
+check("detectDangerHits: fast monsters (strong)",
+  detectDangerHits("Monsters have 40% increased Attack, Cast, and Movement Speed")
+    .some((h) => h.id === "fast-monsters" && h.severity === "strong"));
+
+check("detectDangerHits: reduced curse effect (minor)",
+  detectDangerHits("50% reduced Effect of Curses on Monsters")
+    .some((h) => h.id === "reduced-curse-effect" && h.severity === "minor"));
+
+check("detectDangerHits: elemental penetration, monster wording (strong)",
+  detectDangerHits("Monster Damage Penetrates 15% Elemental Resistances")
+    .some((h) => h.id === "elemental-penetration" && h.severity === "strong"));
+
+// REQUIRED negative cases — the penetration pattern must be scoped to
+// monster modifiers. A plain resistance line has no danger content at all,
+// and a player-side "Damage Penetrates ..." line (gear/passive wording, no
+// "Monster" prefix) must NOT fire elemental-penetration. The second case is
+// the pinned regression for the unscoped-regex false-positive bug.
+check("detectDangerHits: resistance line produces no hits",
+  detectDangerHits("+10% to Fire Resistance").length === 0);
+
+check("detectDangerHits: non-monster penetration text does NOT match",
+  !detectDangerHits("Damage Penetrates 10% of Enemy Elemental Resistances")
+    .some((h) => h.id === "elemental-penetration"));
 
 // NOT asserted: "no single breakdown component exceeds the total score."
 // Verified empirically false — scoring.ts's speed-penalty multipliers
@@ -158,13 +285,70 @@ Monsters reflect 18% of Elemental Damage
 Monsters have 20% increased Accuracy Rating
 --------`;
 const reflect = analyzeWaystoneText(SAMPLE_REFLECT);
-// AnalysisResult.heat has no `hardBlock` boolean (that's internal to
-// scoring.ts's EvaluationResult, never surfaced past adapter.ts) — the
-// public contract's hard-block signal is score 0 + tierClass "trash" +
-// verdict "SKIP", which is exactly what the UI keys off of.
-check("reflect hard-blocks",
-  reflect.heat.score === 0 && reflect.heat.tierClass === "trash" && reflect.heat.verdict === "SKIP");
-check("reflect warning present", reflect.warning?.includes("reflect") ?? false);
+// Juice Detector rework: reflect is a pure warning signal now, not a score
+// gate. SAMPLE_REFLECT scores 0 here because it carries no rarity/pack/etc
+// stats at all — NOT because reflect forces it. The dangerous-but-juicy
+// regression below is what pins "danger never reduces score".
+check("reflect produces a warning", reflect.warnings.includes("Reflect Damage"));
+check("reflect warning present", reflect.warning?.toLowerCase().includes("reflect") ?? false);
+
+// Core Juice Detector acceptance criterion: a map with great loot stats must
+// score high even when it's dangerous — danger only ever shows up via
+// warnings, never by pulling the score down.
+const SAMPLE_DANGEROUS_BUT_JUICY = `Item Class: Waystones
+Rarity: Rare
+Doomvault
+Waystone (Tier 15)
+--------
+Waystone Tier: 15
+Item Level: 82
+--------
++160% increased Rarity of Items found in this Area
++90% increased Rarity of Monsters
++140% increased Pack Size
++90% Monster Effectiveness
+Area contains an Expedition Encampment
+Monsters reflect 18% of Elemental Damage
+Monsters have 40% increased Attack, Cast, and Movement Speed
+--------
+Corrupted`;
+const dangerousButJuicy = analyzeWaystoneText(SAMPLE_DANGEROUS_BUT_JUICY);
+check("dangerous-but-juicy map scores high despite warnings",
+  dangerousButJuicy.heat.score >= 70 &&
+  dangerousButJuicy.heat.verdict !== "SKIP" &&
+  dangerousButJuicy.warnings.length >= 2);
+// dangerLevel is a fully separate signal from score/verdict — this map must
+// read as clearly dangerous (reflect present) despite its high Juice Score.
+check("dangerous-but-juicy map has dangerLevel 'high'",
+  dangerousButJuicy.dangerLevel === "high");
+// End-to-end (not just the unit-level dangerHitsToWarnings check above):
+// the real pipeline's warnings[] must also come out reflect-first.
+check("dangerous-but-juicy map's warnings are severity-ordered (reflect first)",
+  dangerousButJuicy.warnings[0] === "Reflect Damage");
+// Same guarantee for the structured view the Full-mode danger list renders.
+// Reflect collapses to the UI's "high" tier (adapter.ts's UI_SEVERITY map).
+check("dangerous-but-juicy map's dangerHits mirror warnings with severities",
+  dangerousButJuicy.dangerHits.length === dangerousButJuicy.warnings.length &&
+  dangerousButJuicy.dangerHits.every((h, i) => h.label === dangerousButJuicy.warnings[i]) &&
+  dangerousButJuicy.dangerHits[0].severity === "high");
+
+// Mirror case: a safe map with poor loot stats must score low AND read as
+// low-danger — the two signals move independently in both directions.
+const SAMPLE_SAFE_BUT_DULL = `Item Class: Waystones
+Rarity: Magic
+Waystone of the Calm
+Waystone (Tier 2)
+--------
+Waystone Tier: 2
+Item Level: 10
+--------
++5% increased Rarity of Items found in this Area
+--------`;
+const safeButDull = analyzeWaystoneText(SAMPLE_SAFE_BUT_DULL);
+check("safe-but-dull map scores low with no/low danger",
+  safeButDull.heat.score < 20 &&
+  safeButDull.heat.verdict === "SKIP" &&
+  (safeButDull.dangerLevel === "none" || safeButDull.dangerLevel === "low"));
 
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}`);
 process.exit(failures === 0 ? 0 : 1);

@@ -51,35 +51,50 @@ Whatever was on your clipboard before pressing Ins is restored afterward.
 
 ### Reading the overlay
 
-- **Juice Score** — a single 0-100 number combining Item Rarity, Monster
-  Rarity, Pack Size, Monster Effectiveness, and Waystone Drop Chance, with
-  bonuses for extra content (Ritual/Breach/Delirium/Expedition, extra
-  rare/magic packs) and penalties for mods that slow you down.
+- **Juice Score** — a single 0-100 number measuring loot potential only:
+  Item Rarity, Monster Rarity, Pack Size, Monster Effectiveness, and
+  Waystone Drop Chance, with bonuses for extra content
+  (Ritual/Breach/Delirium/Expedition, extra rare/magic packs). Danger or
+  annoyance mods (reflect, no leech, no regen, fast monsters, elemental
+  penetration, ...) never lower this number — a dangerous map can still
+  score `S`/Legendaire if its loot stats are good.
 - **Juiciness badge / verdict chip** — `FAIBLE` → `MOYEN` → `BON` →
   `EXCELLENT` → `LEGENDAIRE`, paired with a **Skip / Run / Garder** verdict.
-  A mod that actively bricks the loop (reflect, no leech, no regen) always
-  forces `FAIBLE`/Skip, regardless of how good the map's raw stats look.
+  Both are driven by the Juice Score alone, never by danger mods.
 - **Top Tablets / Mechanic Match** (Full mode) — which league mechanic best
   matches this Waystone's stats, and which tablet to slot for it. See
   [KNOWN_ISSUES.md](KNOWN_ISSUES.md) for the current tablet list's scope.
-- **Warning strip** — the single most important caveat about this map, if
-  any (e.g. a speed-penalty or hard-block mod).
+- **Warning strip** — every detected danger/annoyance mod, shown
+  independently of the score. Compact mode and the header's mini badge show
+  only the single most severe one (space-constrained); Full mode's Insights
+  column lists all of them.
+- **Danger level** — a `Safe`/`Manageable`/`Dangerous`/`Very Dangerous`
+  signal derived only from the warnings above (never from the score).
+  Compact mode appends a short tag to the warning strip (e.g. "· High");
+  Full mode shows it next to the Insights heading. A map can be both
+  `S`-tier juicy and `Very Dangerous` at the same time — that's expected,
+  not a bug.
 
 Full mode additionally breaks down exactly where the score came from and
 lists every detected modifier.
 
-### Tuning the scoring (meta.json)
+### Tuning via meta.json
 
-Per-mechanic priority stats, recommended tablets, and skip thresholds live
-in an editable `meta.json` in the app's config directory (seeded on first
-run from `src-tauri/default-meta.json`). Edit it and restart the overlay
-to pick up changes — no rebuild needed.
+NOTE:
+Scoring weights, thresholds, and mod patterns are currently hardcoded in
+`src/analyzer/scoring.ts`.
 
-**Not covered by `meta.json`:** the Juice Score's own weights, per-stat
-caps, the SKIP threshold, and the hard-block/speed-penalty/positive-mod
-regex patterns are currently hardcoded in `src/analyzer/scoring.ts` —
-changing those requires editing that file and rebuilding. Only mechanics
-(`mechanics.ts`) and tablets (`tablets.ts`) are meta.json-driven today.
+`meta.json` only controls:
+- mechanics
+- tablets
+- rewards
+- enable/disable flags
+
+It does NOT affect scoring weights.
+
+An editable `meta.json` lives in the app's config directory (seeded on
+first run from `src-tauri/default-meta.json`). Edit it and restart the
+overlay to pick up changes — no rebuild needed.
 
 **Adding a tablet** doesn't need a code change either: add an entry to
 `meta.json`'s `"tablets"` array with a name and its mods written as plain

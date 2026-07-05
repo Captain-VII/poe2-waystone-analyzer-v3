@@ -1,5 +1,6 @@
 import type { AnalysisResult, TierClass } from "../types";
 import type { Mode, EffectiveMode } from "../settings";
+import { renderDangerList, bindDangerListToggle } from "./DangerList";
 import {
   loadShowInsights,
   saveShowInsights,
@@ -138,7 +139,7 @@ export function mountOverlay(
               <div class="sec-h">Top Tablets</div>
               <div data-tablets></div>
             </div>
-            <div class="warn-strip" data-warn hidden><span class="w-ic">⚠</span><span data-warntext></span></div>
+            <div class="warn-strip" data-warn hidden><span class="w-ic">⚠</span><span data-warntext></span><span class="w-level" data-warnlevel></span></div>
             <button class="p-foot" data-foot><kbd>Ins</kbd> Analyze Waystone</button>
           </div>
           <div class="body body-full">
@@ -158,7 +159,7 @@ export function mountOverlay(
               </div>
               <div class="col" data-col-insights>
                 <div class="insights-block" data-insights-block>
-                  <div class="sec-h">Insights</div>
+                  <div class="sec-h">Insights <span class="danger-badge" data-danger-badge hidden></span></div>
                   <div class="insights" data-insights></div>
                 </div>
               </div>
@@ -317,7 +318,7 @@ export function mountOverlay(
     q("[data-breakdown]").innerHTML = heat.breakdown
       .map(
         (b) => `
-        <div class="brow${b.value < 0 ? " neg" : ""}">
+        <div class="brow">
           <span class="b-lab">${esc(b.label)}</span>
           <div class="bar"><i></i></div>
           <span class="b-val">${fmtDelta(b.value)}</span>
@@ -331,10 +332,10 @@ export function mountOverlay(
     // original contract only ever budgeted ≤3 insight rows for this
     // column's fixed height (docs/overlay-ui-spec.md), and keyFactors is a
     // net-new source of rows on top of that, plus the new tab-rewards line
-    // under the top tablet. Capping the *combined* total at 2 (warning
-    // stays separate/always-shown, as before) — measured against a live
-    // render (Playwright) to fit the fixed 580×332 panel with both new
-    // features present, instead of silently overflowing it.
+    // under the top tablet. The danger list (severity-grouped, DangerList.ts)
+    // comes first and always shows in full; factors/insights fill whatever's
+    // left, capped at 1. The column overflow-scrolls if a mod-heavy map
+    // still exceeds the fixed 580×332 panel's height budget.
     const factorRows = result.keyFactors.map(
       (line) => `<div class="ins-row factor"><span class="i-ic">+</span><span>${esc(line)}</span></div>`,
     );
@@ -343,15 +344,30 @@ export function mountOverlay(
       return `<div class="ins-row${cls ? ` ${cls}` : ""}"><span class="i-ic">${icon}</span><span>${esc(line)}</span></div>`;
     });
     q("[data-insights]").innerHTML = [
-      ...(result.warning
-        ? [`<div class="ins-row danger"><span class="i-ic">⚠</span><span>${esc(result.warning)}</span></div>`]
-        : []),
-      ...[...factorRows, ...insightRows].slice(0, 2),
+      renderDangerList(result.dangerHits),
+      ...[...factorRows, ...insightRows].slice(0, 1),
     ].join("");
+
+    // Danger badge: purely a display label over `dangerLevel` (itself
+    // derived only from `warnings`, never `score`) — sits inline in the
+    // Insights heading so it costs no extra vertical row.
+    const dangerBadge = q("[data-danger-badge]");
+    if (result.dangerLevel === "none") {
+      dangerBadge.hidden = true;
+    } else {
+      dangerBadge.hidden = false;
+      dangerBadge.textContent = result.dangerLabel;
+      dangerBadge.className = `danger-badge lvl-${result.dangerLevel}`;
+    }
 
     if (result.warning) {
       warn.hidden = false;
       q("[data-warntext]").textContent = result.warning;
+      // Compact strip has room for the single most-severe warning only —
+      // append a short level tag (e.g. "· High") rather than the full
+      // dangerLabel (too long for this width).
+      const level = result.dangerLevel;
+      q("[data-warnlevel]").textContent = level === "none" ? "" : ` · ${level[0].toUpperCase()}${level.slice(1)}`;
     } else {
       warn.hidden = true;
     }
@@ -497,6 +513,7 @@ export function mountOverlay(
   }
 
   footBtn.addEventListener("click", opts.onAnalyze);
+  bindDangerListToggle(q("[data-insights]"));
   if (opts.onCycleTier) {
     const onCycleTier = opts.onCycleTier;
     badge.classList.add("dev-clickable");

@@ -7,15 +7,22 @@ import { NotAWaystoneError, parseWaystone } from "./parser";
 import { parseUnified } from "./unified-parser";
 import {
   classifyModifierKind,
+  computeDangerLevel,
+  dangerHitsToWarnings,
+  detectDangerHits,
   evaluateMap,
   DEFAULT_THRESHOLD,
+  DANGER_SEVERITY_ORDER,
+  type DangerHit,
+  type DangerLevel,
+  type DangerSeverity,
   type FieldContribution,
   type Weights,
 } from "./scoring";
 import { getActiveMechanics, scoreMechanicFit, NORMALIZE_CAP, type MechanicDef, type StatKey } from "./mechanics";
 import { getActiveTablets, getConfidenceMultiplier, type TabletDef } from "./tablets";
 import { describeReward } from "./rewards";
-import type { AnalysisResult, MechanicScore, Modifier, Rating, TierClass, Verdict } from "../types";
+import type { AnalysisResult, DangerHitView, MechanicScore, Modifier, Rating, TierClass, Verdict } from "../types";
 import type { ModStats } from "./mod-parser";
 
 // Juiciness levels (§6): score → tierClass (internal id) band.
@@ -34,6 +41,45 @@ const TIER_LABELS: Record<TierClass, string> = {
   splus: "Excellent",
   god: "Legendaire",
 };
+
+// dangerLevel → user-facing label. Purely a display mapping over a signal
+// already fully independent of score/tierClass (computeDangerLevel derives
+// it from `warnings` alone) — see scoring.ts's file-level comment. Exported
+// for mock.ts's dev fixtures, so the preview data stays derived the same
+// way the real adapter derives it.
+export const DANGER_LABELS: Record<DangerLevel, string> = {
+  none: "Safe",
+  low: "Manageable",
+  medium: "Dangerous",
+  high: "Very Dangerous",
+};
+
+// scoring.ts's internal severity vocabulary (reflect/strong/moderate/minor,
+// what computeDangerLevel reasons over) collapsed to the UI's 3-tier scale
+// (DangerList.ts's grouping). This mapping is a display concern only — it
+// must never move into scoring.ts, and must never feed back into
+// computeDangerLevel/dangerLevel. KEEP EXACTLY: reflect + strong -> "high"
+// (both are the "actively hurts you" tier), moderate -> "medium",
+// minor -> "low".
+const UI_SEVERITY: Record<DangerSeverity, DangerHitView["severity"]> = {
+  reflect: "high",
+  strong: "high",
+  moderate: "medium",
+  minor: "low",
+};
+
+// dangerHits → UI-ready view. Boundary-layer concern (belongs here, not in
+// scoring.ts): sorts by the same domain order `dangerHitsToWarnings` uses
+// (reusing DANGER_SEVERITY_ORDER rather than re-deriving it, so the two can
+// never drift), then resolves labels via `dangerHitsToWarnings` itself on
+// the already-sorted hits — a no-op re-sort — so `dangerHits[i].label` is
+// always exactly `warnings[i]`. Exported for mock.ts's dev fixtures, same
+// reason as DANGER_LABELS above.
+export function describeDangerHits(hits: DangerHit[]): DangerHitView[] {
+  const sorted = [...hits].sort((a, b) => DANGER_SEVERITY_ORDER[a.severity] - DANGER_SEVERITY_ORDER[b.severity]);
+  const labels = dangerHitsToWarnings(sorted);
+  return sorted.map((h, i) => ({ id: h.id, label: labels[i], severity: UI_SEVERITY[h.severity] }));
+}
 
 /** Mechanics with a real, tablet-linked story in PoE2 (tablets.ts, verified
  *  2026-07-04 against poe2wiki.net/maxroll.gg/odealo.com + poe2db.tw) — the
@@ -62,11 +108,13 @@ function scoreToRating(score: number): Rating {
   return "D";
 }
 
-/** §9 verdict logic: Skip / Run / Garder. Tier is used as the "high tier"
- *  signal for Garder — waystones tier III+ worth keeping for a good tablet
- *  rather than running immediately. */
-function classifyVerdict(score: number, hardBlock: boolean, tier: number): Verdict {
-  if (hardBlock || score < 20) return "SKIP";
+/** §9 verdict logic: Skip / Run / Garder — purely a function of the Juice
+ *  Score (loot potential) and tier. Danger/annoyance mods never factor in
+ *  here; they only ever surface via `warning`/`warnings`. Tier is used as
+ *  the "high tier" signal for Garder — waystones tier III+ worth keeping
+ *  for a good tablet rather than running immediately. */
+function classifyVerdict(score: number, tier: number): Verdict {
+  if (score < 20) return "SKIP";
   if (score >= 50 && tier >= 3) return "GARDER";
   return "RUN";
 }
@@ -83,7 +131,6 @@ const FIELD_LABELS: Record<keyof Weights, string> = {
 function buildBreakdown(
   fields: Record<keyof Weights, FieldContribution>,
   bonusTotal: number,
-  penaltyDelta: number,
 ): AnalysisResult["heat"]["breakdown"] {
   const rows: AnalysisResult["heat"]["breakdown"] = (Object.keys(fields) as (keyof Weights)[]).map((key) => ({
     key,
@@ -91,18 +138,11 @@ function buildBreakdown(
     value: fields[key].contribution,
   }));
   if (bonusTotal > 0) rows.push({ key: "bonus", label: "Bonus", value: Math.round(bonusTotal * 10) / 10 });
-  if (penaltyDelta > 0) rows.push({ key: "penalty", label: "Penalty", value: -Math.round(penaltyDelta * 10) / 10 });
   return rows;
 }
 
 function buildModifiers(rawLines: string[]): Modifier[] {
   return rawLines.map((text) => ({ text, kind: classifyModifierKind(text) }));
-}
-
-function formatWarning(hardBlockReasons: string[], penaltyReasons: string[]): string | null {
-  if (hardBlockReasons.length > 0) return `Hard block: ${hardBlockReasons[0]}`;
-  if (penaltyReasons.length > 0) return `Speed penalty: ${penaltyReasons[0]}`;
-  return null;
 }
 
 function buildInsights(bonusReasons: { reason: string; bonus: number }[]): string[] {
@@ -252,8 +292,10 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
 
   const stats = parseUnified(text);
   const evaluation = evaluateMap(stats, text);
-  const tierClass = evaluation.hardBlock ? "trash" : classifyTier(evaluation.score);
-  const verdict = classifyVerdict(evaluation.score, evaluation.hardBlock, parsed.tier);
+  const tierClass = classifyTier(evaluation.score);
+  const verdict = classifyVerdict(evaluation.score, parsed.tier);
+  const warnings = dangerHitsToWarnings(evaluation.dangerHits);
+  const dangerLevel = computeDangerLevel(evaluation.dangerHits);
 
   const mechanicScores = computeMechanicScores(stats, text);
   // Trust fix: only a mechanic with a real PoE2 tablet (see tablets.ts's
@@ -282,6 +324,9 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
     rating: scoreToRating(fit),
     rewards: tablet.rewards && tablet.rewards.length > 0 ? tablet.rewards.map(describeReward) : undefined,
   }));
+  // Trust fix: never show a mechanic recommendation with no tablet paired to
+  // it — that reads as a broken/misleading suggestion in the UI.
+  const finalRecommendedMechanic = tablets.length > 0 ? recommendedMechanic : null;
 
   return {
     waystone: {
@@ -295,24 +340,25 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
       tierClass,
       tierLabel: TIER_LABELS[tierClass],
       verdict,
-      rating: evaluation.hardBlock ? "D" : scoreToRating(evaluation.score),
-      breakdown: buildBreakdown(
-        evaluation.breakdown,
-        evaluation.bonusDetails.reduce((sum, b) => sum + b.bonus, 0),
-        evaluation.penaltyDelta,
-      ),
+      rating: scoreToRating(evaluation.score),
+      breakdown: buildBreakdown(evaluation.breakdown, evaluation.bonusDetails.reduce((sum, b) => sum + b.bonus, 0)),
     },
     modifiers: buildModifiers(parsed.modifiers),
     tablets,
-    warning: formatWarning(
-      evaluation.hardBlockReasons,
-      evaluation.penaltyDetails.map((p) => p.reason),
-    ),
+    warning: warnings[0] ?? null,
+    warnings,
+    dangerHits: describeDangerHits(evaluation.dangerHits),
+    dangerLevel,
+    dangerLabel: DANGER_LABELS[dangerLevel],
     insights: buildInsights(evaluation.bonusDetails),
     mechanicScores,
-    recommendedMechanic,
-    keyFactors: buildKeyFactors(evaluation.breakdown, recommendedMechanic, bestTabletLinked?.score ?? 0, ranked[0]),
+    recommendedMechanic: finalRecommendedMechanic,
+    keyFactors: buildKeyFactors(evaluation.breakdown, finalRecommendedMechanic, bestTabletLinked?.score ?? 0, ranked[0]),
   };
 }
 
 export { DEFAULT_THRESHOLD };
+// Re-exported for verify-adapter.mjs's unit-level danger-logic tests only —
+// not used by the overlay UI (which only ever sees the AnalysisResult
+// contract fields: warning/warnings/dangerLevel/dangerLabel).
+export { computeDangerLevel, dangerHitsToWarnings, detectDangerHits };

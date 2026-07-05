@@ -36,6 +36,20 @@
   border-bottom: 1px solid rgba(184, 135, 53, 0.18);
 }
 
+/* Inline in the "Insights" heading (no extra row) — purely a display label
+   over dangerLevel, independent of tier/score styling. */
+.danger-badge {
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--danger);
+  opacity: 0.75;
+}
+.danger-badge.lvl-medium { opacity: 0.9; }
+.danger-badge.lvl-high { opacity: 1; }
+.danger-badge[hidden] { display: none; }
+
 .body-full .score-num { font-size: 29px; }
 .body-full .halo { width: 100px; height: 100px; }
 
@@ -145,3 +159,42 @@
 .ins-row.factor .i-ic { color: var(--gold-hi); font-weight: 700; }
 .ins-row.value .i-ic { font-size: 11px; }
 .ins-row.safe .i-ic { font-size: 11px; }
+
+/* ---- danger list (DangerList.ts): severity-grouped warnings ---- */
+.danger-list { display: flex; flex-direction: column; gap: 1px; margin-bottom: 3px; }
+/* Group headers stay lighter than .sec-h — labels inside a section, not a
+   new section. Color carries the tier; size keeps them out of the way. */
+.dl-group-h {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  opacity: 0.85;
+  margin: 3px 0 1px;
+}
+.danger-list .dl-group-h:first-child { margin-top: 0; }
+.dl-row {
+  display: flex;
+  gap: 7px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.dl-row .dl-ic { flex: none; font-size: 10px; line-height: 1.8; }
+.dl-group-h.dl-high, .dl-row.dl-high { color: var(--danger); }
+.dl-row.dl-high { font-weight: 600; }
+.dl-group-h.dl-medium, .dl-row.dl-medium { color: var(--gold-hi); }
+.dl-group-h.dl-low, .dl-row.dl-low { color: var(--grey); }
+.dl-row.dl-hidden { display: none; }
+.danger-list.dl-expanded .dl-row.dl-hidden { display: flex; }
+.dl-more {
+  align-self: flex-start;
+  margin-top: 1px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: 600 10px var(--sans);
+  letter-spacing: 0.5px;
+  color: var(--grey);
+  cursor: pointer;
+}
+.dl-more:hover { color: var(--gold-hi); }
