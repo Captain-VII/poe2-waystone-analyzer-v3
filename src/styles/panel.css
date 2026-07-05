@@ -232,6 +232,19 @@
 }
 .rating-pill::before { content: "· "; opacity: 0.5; }
 
+/* ---- plain-language score read (Bad/Average/Good/Excellent), next to the
+   letter rating in the Full-mode Total Heat row — see displayAdapter.ts's
+   getScoreLabel. De-emphasized: the letter rating stays primary. ---- */
+.score-label {
+  font-family: var(--sans, inherit);
+  font-weight: 400;
+  font-size: 10px;
+  color: var(--grey);
+  opacity: 0.75;
+  cursor: default;
+}
+.score-label::before { content: "· "; opacity: 0.6; }
+
 /* Shared by the global-score rating pill and each tablet row's rec-rating. */
 .rec-rating-S { color: var(--god); text-shadow: 0 0 6px rgba(255, 211, 106, 0.4); }
 .rec-rating-A { color: var(--gold-hi); }

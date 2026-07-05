@@ -157,7 +157,7 @@ export function mountOverlay(
                   <span class="badge badge-sm" data-minibadge></span>
                 </div>
                 <div data-breakdown></div>
-                <div class="total-row"><span class="t-lab">Total Heat</span><span class="t-right"><span class="t-val" data-total></span><span class="rating-pill" data-rating-full></span></span></div>
+                <div class="total-row"><span class="t-lab">Total Heat</span><span class="t-right"><span class="t-val" data-total></span><span class="rating-pill" data-rating-full></span><span class="score-label" data-score-label></span></span></div>
               </div>
               <div class="col" data-col-insights>
                 <div class="insights-block" data-insights-block>
@@ -269,6 +269,7 @@ export function mountOverlay(
       el.className = `rating-pill rec-rating-${heat.rating}`;
       el.title = `Rating: ${heat.rating} (${heat.score.toFixed(1)})`;
     }
+    q("[data-score-label]").textContent = heat.scoreLabel;
 
     // Only the top-ranked tablet's rewards are shown (§9 stays a single
     // recommendation, not a rewards table) — rendered as one compact line
