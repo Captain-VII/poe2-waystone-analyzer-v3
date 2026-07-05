@@ -292,8 +292,15 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
 
   const stats = parseUnified(text);
   const evaluation = evaluateMap(stats, text);
-  const tierClass = classifyTier(evaluation.score);
-  const verdict = classifyVerdict(evaluation.score, parsed.tier);
+  // Tier/verdict/rating/heat.score now read `effectiveScore` (reward
+  // synergy, normalized 0-100, minus the danger penalty) instead of the
+  // plain loot-signal `evaluation.score`, so the UI reflects real farming
+  // value rather than raw loot potential alone. `evaluation.breakdown`
+  // (below, in `heat`) is intentionally left reading the old model — its
+  // line-items no longer sum to `heat.score` as a result, which is expected
+  // given the new synergy/stretch/danger math sitting on top of it.
+  const tierClass = classifyTier(evaluation.effectiveScore);
+  const verdict = classifyVerdict(evaluation.effectiveScore, parsed.tier);
   const warnings = dangerHitsToWarnings(evaluation.dangerHits);
   const dangerLevel = computeDangerLevel(evaluation.dangerHits);
 
@@ -336,11 +343,11 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
       modCount: parsed.modifiers.length,
     },
     heat: {
-      score: evaluation.score,
+      score: evaluation.effectiveScore,
       tierClass,
       tierLabel: TIER_LABELS[tierClass],
       verdict,
-      rating: scoreToRating(evaluation.score),
+      rating: scoreToRating(evaluation.effectiveScore),
       breakdown: buildBreakdown(evaluation.breakdown, evaluation.bonusDetails.reduce((sum, b) => sum + b.bonus, 0)),
     },
     modifiers: buildModifiers(parsed.modifiers),

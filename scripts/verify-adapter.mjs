@@ -119,10 +119,15 @@ check("tablet rewards, when present, are non-empty label+value pairs",
 check("keyFactors is an array of at most 4 short strings",
   Array.isArray(result.keyFactors) && result.keyFactors.length <= 4 && result.keyFactors.every((f) => typeof f === "string"));
 
-// §11: "breakdown values are display-final ... sum to score"
+// §11 (superseded 2026-07-06): breakdown rows are the raw loot-signal
+// contributions (rarity/pack size/etc, pre-synergy) and no longer sum to
+// `heat.score` — `heat.score` is now `effectiveScore` (synergy + stretch,
+// normalized 0-100, then the danger penalty), while `breakdown` intentionally
+// still reflects the pre-synergy/pre-danger model so users can see which raw
+// stat drove the result. Just sanity-check the breakdown itself stays a
+// plausible, non-negative composite.
 const breakdownSum = result.heat.breakdown.reduce((s, b) => s + b.value, 0);
-const diff = Math.abs(breakdownSum - result.heat.score);
-check(`breakdown sums to score (${breakdownSum.toFixed(2)} vs ${result.heat.score}, diff ${diff.toFixed(4)})`, diff < 0.05);
+check(`breakdown sum is non-negative and finite (${breakdownSum.toFixed(2)})`, breakdownSum >= 0 && Number.isFinite(breakdownSum));
 
 // modifiers[].kind must be a valid enum value
 check("every modifier has a valid kind",
@@ -149,15 +154,14 @@ try {
 
 check("score in [0,100]", result.heat.score >= 0 && result.heat.score <= 100);
 
-check("breakdown sums to score", diff < 0.05);
-
-// Juice Detector rework: `score`/`verdict`/`tierClass` measure loot
-// potential ONLY. Danger/annoyance mods (reflect, no leech/regen, fast
-// monsters, elemental penetration, ...) are surfaced exclusively through
-// `warning`/`warnings` and must never reduce or gate the score — so there is
-// deliberately NO invariant here coupling `warning` presence to score/verdict
-// (a maxed-out, dangerous map is expected to hit 100 with a warning attached;
-// see the "dangerous-but-juicy" regression below).
+// Juice Detector v2 (2026-07-06): `score`/`verdict`/`tierClass` now measure
+// real farming value, not loot potential alone — `heat.score` is
+// `effectiveScore`, i.e. reward (synergy + stretch, normalized 0-100) scaled
+// down by the danger penalty (none/low x1.0, medium x0.9, high x0.75).
+// Danger/annoyance mods still surface via `warning`/`warnings`/`dangerLevel`
+// too, but they are NO LONGER score-neutral — this is an intentional reversal
+// of the original "danger never reduces score" rule (see the
+// "dangerous-but-juicy" regression below, updated to match).
 
 check("recommendedMechanic valid",
   result.recommendedMechanic === null ||
@@ -285,16 +289,20 @@ Monsters reflect 18% of Elemental Damage
 Monsters have 20% increased Accuracy Rating
 --------`;
 const reflect = analyzeWaystoneText(SAMPLE_REFLECT);
-// Juice Detector rework: reflect is a pure warning signal now, not a score
-// gate. SAMPLE_REFLECT scores 0 here because it carries no rarity/pack/etc
-// stats at all — NOT because reflect forces it. The dangerous-but-juicy
-// regression below is what pins "danger never reduces score".
+// SAMPLE_REFLECT scores 0 regardless of the v2 danger penalty, since it
+// carries no rarity/pack/etc stats at all (0 x any multiplier is still 0) —
+// this only pins that reflect still surfaces as a warning. The
+// dangerous-but-juicy regression below is what pins the actual v2 danger
+// penalty math on a map with real loot stats.
 check("reflect produces a warning", reflect.warnings.includes("Reflect Damage"));
 check("reflect warning present", reflect.warning?.toLowerCase().includes("reflect") ?? false);
 
-// Core Juice Detector acceptance criterion: a map with great loot stats must
-// score high even when it's dangerous — danger only ever shows up via
-// warnings, never by pulling the score down.
+// Juice Detector v2 (2026-07-06): a map with great loot stats but severe
+// danger must still clearly be worth running (verdict !== SKIP, several
+// warnings survive), but its score must now land measurably below what the
+// same loot stats would score if safe — proving the danger penalty
+// (dangerLevel 'high' => x0.75 on effectiveScore) actually applies. This
+// intentionally supersedes the old "danger never reduces score" rule.
 const SAMPLE_DANGEROUS_BUT_JUICY = `Item Class: Waystones
 Rarity: Rare
 Doomvault
@@ -313,10 +321,21 @@ Monsters have 40% increased Attack, Cast, and Movement Speed
 --------
 Corrupted`;
 const dangerousButJuicy = analyzeWaystoneText(SAMPLE_DANGEROUS_BUT_JUICY);
-check("dangerous-but-juicy map scores high despite warnings",
-  dangerousButJuicy.heat.score >= 70 &&
+// Same loot stats, with the two danger-mod lines removed — isolates the
+// danger penalty's effect instead of pinning a magic-number score, so this
+// keeps working across future weight/synergy rebalances.
+const SAMPLE_JUICY_BUT_SAFE = SAMPLE_DANGEROUS_BUT_JUICY
+  .split("\n")
+  .filter((l) => !/reflect|Attack, Cast, and Movement Speed/.test(l))
+  .join("\n");
+const juicyButSafe = analyzeWaystoneText(SAMPLE_JUICY_BUT_SAFE);
+check("dangerous-but-juicy map still clears SKIP despite warnings",
+  dangerousButJuicy.heat.score > 20 &&
   dangerousButJuicy.heat.verdict !== "SKIP" &&
   dangerousButJuicy.warnings.length >= 2);
+check("dangerous-but-juicy map scores measurably below its safe equivalent (danger penalty applied)",
+  juicyButSafe.dangerLevel === "none" &&
+  dangerousButJuicy.heat.score < juicyButSafe.heat.score);
 // dangerLevel is a fully separate signal from score/verdict — this map must
 // read as clearly dangerous (reflect present) despite its high Juice Score.
 check("dangerous-but-juicy map has dangerLevel 'high'",
