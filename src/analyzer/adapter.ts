@@ -35,6 +35,14 @@ const TIER_LABELS: Record<TierClass, string> = {
   god: "Legendaire",
 };
 
+/** Mechanics with a real, tablet-linked story in PoE2 (tablets.ts, verified
+ *  2026-07-04 against poe2wiki.net/maxroll.gg/odealo.com + poe2db.tw) — the
+ *  only mechanics allowed to become `recommendedMechanic` (see below). The
+ *  other 9 mechanics in mechanics.ts have no real tablet at all and must
+ *  never drive a tablet recommendation. Exported for verify-adapter.mjs's
+ *  regression assertion, not just used internally here. */
+export const TABLET_LINKED_MECHANICS = new Set(["Breach", "Ritual", "Delirium", "Expedition", "Abyss", "General"]);
+
 function classifyTier(score: number): TierClass {
   for (const band of TIER_BANDS) {
     if (score < band.max) return band.tierClass;
@@ -248,9 +256,23 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
   const verdict = classifyVerdict(evaluation.score, evaluation.hardBlock, parsed.tier);
 
   const mechanicScores = computeMechanicScores(stats, text);
-  const best = mechanicScores[0];
-  const bestMechanicDef = best ? getActiveMechanics().find((m) => m.name === best.mechanic) : undefined;
-  const recommendedMechanic = best && best.score > 0 ? best.mechanic : null;
+  // Trust fix: only a mechanic with a real PoE2 tablet (see tablets.ts's
+  // 2026-07-04 research pass — Standard/Overseer are the generic fallback,
+  // Breach/Ritual/Delirium/Expedition/Abyss are the five mechanic-specific
+  // ones) may drive a tablet recommendation. The other 9 mechanics in
+  // mechanics.ts are still scored below (mechanicScores keeps all 15 — the
+  // data contract verify-adapter.mjs asserts on) but must never surface as
+  // "matches <mechanic>", since no such tablet exists to match. "General"
+  // stays in this set as the guaranteed-present fallback (mechanics.ts's
+  // only entry with no `detect` gate), so this .find() always resolves.
+  const bestTabletLinked = mechanicScores.find((m) => TABLET_LINKED_MECHANICS.has(m.mechanic));
+  // bestMechanicDef intentionally does not gate on score > 0 — tablet
+  // ranking must still run (falling back to General's stat profile) even
+  // on an all-zero waystone; only the *displayed label* below is gated.
+  const bestMechanicDef = bestTabletLinked
+    ? getActiveMechanics().find((m) => m.name === bestTabletLinked.mechanic)
+    : undefined;
+  const recommendedMechanic = bestTabletLinked && bestTabletLinked.score > 0 ? bestTabletLinked.mechanic : null;
 
   const ranked = bestMechanicDef ? rankTablets(bestMechanicDef, stats) : [];
   const tablets = ranked.slice(0, 4).map(({ tablet, fit }) => ({
@@ -289,7 +311,7 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
     insights: buildInsights(evaluation.bonusDetails),
     mechanicScores,
     recommendedMechanic,
-    keyFactors: buildKeyFactors(evaluation.breakdown, recommendedMechanic, best?.score ?? 0, ranked[0]),
+    keyFactors: buildKeyFactors(evaluation.breakdown, recommendedMechanic, bestTabletLinked?.score ?? 0, ranked[0]),
   };
 }
 
