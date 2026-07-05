@@ -1,8 +1,14 @@
 /** Juice Score engine for PoE2 waystones: a composite over the loot-potential
  *  signals — Item Rarity, Monster Rarity, Pack Size, Monster Effectiveness,
- *  Waystone Drop Chance, Item Quantity — deliberately NOT a per-suffix/prefix
- *  point ledger. One profile, not five: one clear answer, not archetype
- *  tuning.
+ *  Waystone Drop Chance (the cahier des charges' actual 5 signals, §2/§5) —
+ *  deliberately NOT a per-suffix/prefix point ledger. One profile, not five:
+ *  one clear answer, not archetype tuning.
+ *
+ *  Item Quantity (`ModStats.quantity`) is deliberately NOT one of these: it
+ *  skewed results when weighted in (2026-07-06) and isn't part of the spec's
+ *  5 signals. It's still parsed (mod-parser.ts) and still used by the
+ *  Mechanic Match Score (mechanics.ts's Heist/Harvest/Abyss/Expedition
+ *  secondary stats) — only the Juice Score ignores it now.
  *
  *  Danger/annoyance mods (reflect, no leech/regen, reduced recovery, fast
  *  monsters, elemental penetration, ...) are detected here too, and surface
@@ -23,25 +29,25 @@ export interface Weights {
   packSize: number;
   monsterEffectiveness: number;
   waystoneDropChance: number;
-  quantity: number;
 }
 
 // Per-stat ceiling applied before weighting: keeps the score stable and
-// normalized even if a garbled outlier value gets parsed.
-export const CAPS: ModStats = {
+// normalized even if a garbled outlier value gets parsed. Scoped to Weights'
+// keys only (not all of ModStats) — quantity has no cap here since it isn't
+// weighted into the Juice Score (see file-level comment).
+export const CAPS: Record<keyof Weights, number> = {
   itemRarity: 200,
   monsterRarity: 100,
   packSize: 150,
   monsterEffectiveness: 100,
   waystoneDropChance: 100,
-  quantity: 200,
 };
 
 // Weight = (max points this field can contribute at its cap) / cap.
-// Max contributions sum to 100 (§2: item rarity/monster rarity/pack size
-// weighted highest, monster effectiveness medium-high, quantity/drop
-// chance minor) — bonuses/penalties are applied on top and the final
-// score is clamped back into [0, 100].
+// Max contributions sum to 90 (§2: item rarity/monster rarity/pack size
+// weighted highest, monster effectiveness medium-high, drop chance minor)
+// — bonuses/penalties are applied on top and the final score is clamped
+// back into [0, 100].
 //
 // NOT meta.json-driven: unlike mechanics.ts/tablets.ts, these weights (and
 // CAPS/DEFAULT_THRESHOLD/the pattern tables below) are hardcoded here and
@@ -53,7 +59,6 @@ export const DEFAULT_WEIGHTS: Weights = {
   packSize: 22 / CAPS.packSize,
   monsterEffectiveness: 16 / CAPS.monsterEffectiveness,
   waystoneDropChance: 10 / CAPS.waystoneDropChance,
-  quantity: 10 / CAPS.quantity,
 };
 
 export const DEFAULT_THRESHOLD = 20; // below this: SKIP (§9)
@@ -238,7 +243,7 @@ function round2(n: number): number {
 function breakdownFields(
   stats: ModStats,
   weights: Weights,
-  caps: ModStats,
+  caps: Record<keyof Weights, number>,
 ): Record<keyof Weights, FieldContribution> {
   const out = {} as Record<keyof Weights, FieldContribution>;
   for (const field of Object.keys(weights) as (keyof Weights)[]) {

@@ -125,7 +125,6 @@ const FIELD_LABELS: Record<keyof Weights, string> = {
   packSize: "Pack Size",
   monsterEffectiveness: "Monster Effectiveness",
   waystoneDropChance: "Waystone Drop Chance",
-  quantity: "Quantity",
 };
 
 function buildBreakdown(
