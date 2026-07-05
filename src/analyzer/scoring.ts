@@ -1,14 +1,22 @@
-/** Juice Score engine for PoE2 waystones: a composite over the loot-potential
- *  signals — Item Rarity, Monster Rarity, Pack Size, Monster Effectiveness,
- *  Waystone Drop Chance (the cahier des charges' actual 5 signals, §2/§5) —
- *  deliberately NOT a per-suffix/prefix point ledger. One profile, not five:
- *  one clear answer, not archetype tuning.
+/** Juice Score engine for PoE2 waystones.
  *
- *  Item Quantity (`ModStats.quantity`) is deliberately NOT one of these: it
- *  skewed results when weighted in (2026-07-06) and isn't part of the spec's
- *  5 signals. It's still parsed (mod-parser.ts) and still used by the
- *  Mechanic Match Score (mechanics.ts's Heist/Harvest/Abyss/Expedition
- *  secondary stats) — only the Juice Score ignores it now.
+ *  The actual score (`rewardScore`/`effectiveScore`/`score`) is a NORMALIZED
+ *  model (2026-07-06 redesign): each loot signal contributes as a % of a
+ *  "god map" reference value, not as a flat point value. This replaces the
+ *  old flat-additive model, which compressed real maps into a ~0-25 band on
+ *  a nominal 0-100 scale — see `computeBaseScore` below.
+ *
+ *  `breakdown`/`bonusDetails` (from the legacy `Weights`-per-field model and
+ *  `POSITIVE_MOD_PATTERNS`) are kept ONLY as a display breakdown for the UI
+ *  (heat.breakdown chips, key factors, "Bonus: ..." insights in adapter.ts)
+ *  — they no longer feed the actual score. Any resemblance between their
+ *  numbers and `score` is coincidental.
+ *
+ *  Item Quantity (`ModStats.quantity`) is not one of the scored signals: it
+ *  skewed results when weighted in (2026-07-06) and isn't part of the
+ *  cahier des charges' 5 signals. It's still parsed (mod-parser.ts) and
+ *  still used by the Mechanic Match Score (mechanics.ts's Heist/Harvest/
+ *  Abyss/Expedition secondary stats) — only the Juice Score ignores it.
  *
  *  Danger/annoyance mods (reflect, no leech/regen, reduced recovery, fast
  *  monsters, elemental penetration, ...) are detected here too, and surface
@@ -18,8 +26,7 @@
  *  `effectiveScore` (post-penalty, what the UI's tier/verdict/rating are
  *  computed from — see adapter.ts) on `EvaluationResult`. Danger
  *  *detection* (`DangerHit[]`/`computeDangerLevel`) is untouched by this —
- *  only `effectiveScore` reads it. `score` itself (the plain loot-signal
- *  composite) is unaffected and kept only for backward compatibility. */
+ *  only `effectiveScore` reads it. */
 
 import { PATTERNS as NUMERIC_PATTERNS, type ModStats } from "./mod-parser";
 
@@ -31,10 +38,9 @@ export interface Weights {
   waystoneDropChance: number;
 }
 
-// Per-stat ceiling applied before weighting: keeps the score stable and
-// normalized even if a garbled outlier value gets parsed. Scoped to Weights'
-// keys only (not all of ModStats) — quantity has no cap here since it isn't
-// weighted into the Juice Score (see file-level comment).
+// Per-stat ceiling applied before weighting, for the LEGACY display-only
+// breakdown only (see file-level comment) — keeps it stable and normalized
+// even if a garbled outlier value gets parsed. Not used by the actual score.
 export const CAPS: Record<keyof Weights, number> = {
   itemRarity: 200,
   monsterRarity: 100,
@@ -43,11 +49,9 @@ export const CAPS: Record<keyof Weights, number> = {
   waystoneDropChance: 100,
 };
 
-// Weight = (max points this field can contribute at its cap) / cap.
-// Max contributions sum to 90 (§2: item rarity/monster rarity/pack size
-// weighted highest, monster effectiveness medium-high, drop chance minor)
-// — bonuses/penalties are applied on top and the final score is clamped
-// back into [0, 100].
+// Weight = (max points this field can contribute at its cap) / cap, for the
+// legacy display breakdown (`EvaluationResult.breakdown`, UI-only — see
+// file-level comment). NOT used by `rewardScore`/`effectiveScore`/`score`.
 //
 // NOT meta.json-driven: unlike mechanics.ts/tablets.ts, these weights (and
 // CAPS/DEFAULT_THRESHOLD/the pattern tables below) are hardcoded here and
@@ -64,19 +68,18 @@ export const DEFAULT_WEIGHTS: Weights = {
 export const DEFAULT_THRESHOLD = 20; // below this: SKIP (§9)
 
 // Danger/annoyance mods — detected for display only (`warning`/`warnings`/
-// `dangerLevel`), never applied to `score`. `id` is a stable internal key
-// (never shown to the user, never changes with wording/localization);
-// `label` is the current UI-facing text, looked up from `id` only when
-// building `warnings` for display. This split is deliberate: `dangerLevel`
-// is computed from `severity` (via `DangerHit[]`, see below) and must never
-// depend on `label` — renaming/relocalizing a label can't silently change
-// danger logic.
+// `dangerLevel`), and to drive the danger penalty on `effectiveScore` below.
+// `id` is a stable internal key (never shown to the user, never changes with
+// wording/localization); `label` is the current UI-facing text, looked up
+// from `id` only when building `warnings` for display. This split is
+// deliberate: `dangerLevel` is computed from `severity` (via `DangerHit[]`,
+// see below) and must never depend on `label` — renaming/relocalizing a
+// label can't silently change danger logic.
 //
-// `severity` feeds `computeDangerLevel` below only — it never touches
-// `score`. "reflect" is its own tier (heavily weighted, see
-// computeDangerLevel); "strong" mods actively hurt survivability/leech
-// (crit/penetration/speed/no-leech/no-regen); "moderate" slow the loop
-// without threatening it; "minor" is cosmetic annoyance.
+// `severity` feeds `computeDangerLevel` below; "reflect" is its own tier
+// (heavily weighted, see computeDangerLevel); "strong" mods actively hurt
+// survivability/leech (crit/penetration/speed/no-leech/no-regen); "moderate"
+// slow the loop without threatening it; "minor" is cosmetic annoyance.
 export type DangerSeverity = "reflect" | "strong" | "moderate" | "minor";
 const DANGER_PATTERNS: { id: string; label: string; severity: DangerSeverity; pattern: RegExp }[] = [
   // Real PoE2 wording is "Monsters reflect 18% of Elemental Damage" — allow
@@ -152,7 +155,9 @@ const DANGER_LABEL_BY_ID: Record<string, string> = Object.fromEntries(DANGER_PAT
 export const DANGER_SEVERITY_ORDER: Record<DangerSeverity, number> = { reflect: 0, strong: 1, moderate: 2, minor: 3 };
 
 // Positive mods: signals that increase profit/hour beyond what the raw
-// stat numbers already capture — additive flat bonus.
+// stat numbers already capture. Display-only (see file-level comment) —
+// feeds `bonusDetails`/the UI's "Bonus: ..." insights and heat.breakdown's
+// bonus row, NOT the actual score.
 const POSITIVE_MOD_PATTERNS: Record<string, [RegExp, number]> = {
   "more rare monsters": [/(?:increased|additional).*rare\s+monsters/i, 6.0],
   "more magic monsters": [/(?:increased|additional).*magic\s+monsters/i, 4.0],
@@ -162,11 +167,10 @@ const POSITIVE_MOD_PATTERNS: Record<string, [RegExp, number]> = {
   "extra content: expedition": [/\bexpedition\b/i, 8.0],
 };
 
-// Distinct league mechanics we count for the stacking-synergy bonus below.
-// Deliberately separate from POSITIVE_MOD_PATTERNS (which award a small flat
-// bonus per matched *line*) — this only cares how many *distinct* mechanics
-// are stacked on the map, since running several at once compounds density
-// and reward far more than the sum of their individual flat bonuses.
+// Distinct league mechanics counted for both the mechanic-density term in
+// `computeBaseScore` and the stacking-synergy multiplier below — running
+// several at once compounds density and reward far more than any single
+// flat per-mechanic bonus could capture.
 const MECHANIC_SYNERGY_PATTERNS: Record<string, RegExp> = {
   delirium: /\bdelirium\b/i,
   breach: /\bbreach(?:es)?\b/i,
@@ -181,6 +185,40 @@ const MECHANIC_SYNERGY_PATTERNS: Record<string, RegExp> = {
 function countActiveMechanics(text: string): number {
   if (!text) return 0;
   return Object.values(MECHANIC_SYNERGY_PATTERNS).filter((p) => p.test(text)).length;
+}
+
+function clamp01(x: number): number {
+  return Math.max(0, Math.min(1, x));
+}
+
+// "God map" reference thresholds: the stat level at which that signal
+// counts as fully maxed (i.e. contributes its full weight below). Distinct
+// from CAPS above, which only bounds the legacy display breakdown.
+const RARITY_REFERENCE = 100; // Item Rarity %
+const PACK_SIZE_REFERENCE = 30; // Pack Size %
+const DROP_CHANCE_REFERENCE = 120; // Waystone Drop Chance %
+const MECHANIC_REFERENCE = 4; // distinct active mechanics
+
+// Max points each signal contributes once it clears its god-map reference —
+// sums to 100, so a maxed-out map (100% rarity, 30% pack size, 120% drop
+// chance, 4+ mechanics) lands `computeBaseScore` at exactly 100 before
+// synergy/danger are even applied.
+const RARITY_WEIGHT = 30;
+const PACK_SIZE_WEIGHT = 25;
+const DROP_CHANCE_WEIGHT = 30;
+const MECHANIC_WEIGHT = 15;
+
+/** The actual "how good is this map" base signal: each stat contributes as
+ *  a % of its own god-map reference (clamped to 100% of its own weight),
+ *  not as a flat point value — so no single maxed-out stat can dominate the
+ *  total, and a map doesn't need every signal maxed to reach a meaningful
+ *  score. Naturally lands in [0, 100]. */
+function computeBaseScore(stats: ModStats, mechanicCount: number): number {
+  const rarityScore = clamp01(stats.itemRarity / RARITY_REFERENCE) * RARITY_WEIGHT;
+  const packSizeScore = clamp01(stats.packSize / PACK_SIZE_REFERENCE) * PACK_SIZE_WEIGHT;
+  const dropScore = clamp01(stats.waystoneDropChance / DROP_CHANCE_REFERENCE) * DROP_CHANCE_WEIGHT;
+  const mechanicScore = clamp01(mechanicCount / MECHANIC_REFERENCE) * MECHANIC_WEIGHT;
+  return rarityScore + packSizeScore + dropScore + mechanicScore;
 }
 
 // Reward stacking: 2+ distinct mechanics on one map compound each other
@@ -201,21 +239,11 @@ function statSynergyMultiplier(stats: ModStats, mechanicCount: number): number {
   return hasPackSize && mechanicCount >= 1 ? 1.1 : 1.0;
 }
 
-// High-end stretch: without this, a clearly excellent map (high reward +
-// synergy) compresses into the same range as a merely-good one. Smooth
-// (rather than the earlier hard `if (>20) *1.2; if (>30) *1.3` steps) so it
-// can't produce a discontinuous jump right at the 20/30 boundary, and caps
-// its own multiplier at 1.5x so it can't run away when stacked with the
-// synergy multipliers above — `normalizeToScale` below is what ultimately
-// keeps the composite bounded, this just shapes the curve going into it.
-function applyStretch(score: number): number {
-  return score * (1 + Math.min(0.5, score / 100));
-}
-
 // Smooth cap back onto a 0-100 scale: asymptotically approaches 100 as
 // `raw` grows instead of hard-clipping, so two maps that both blow past the
-// old ceiling still rank against each other (a raw 400 still normalizes
-// higher than a raw 250) rather than both flattening to the same 100.
+// nominal ceiling (from synergy multipliers stacking on top of an already
+// maxed base score) still rank against each other rather than both
+// flattening to the same 100.
 function normalizeToScale(raw: number): number {
   return 100 * (1 - Math.exp(-Math.max(0, raw) / 100));
 }
@@ -224,9 +252,9 @@ function normalizeToScale(raw: number): number {
 // so it's worth less per hour even at the same raw reward score.
 const DANGER_PENALTY: Record<DangerLevel, number> = {
   none: 1.0,
-  low: 1.0,
-  medium: 0.9,
-  high: 0.75,
+  low: 0.95,
+  medium: 0.85,
+  high: 0.7,
 };
 
 export interface FieldContribution {
@@ -240,6 +268,8 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+// LEGACY per-field breakdown — display only (see file-level comment). Does
+// NOT feed `rewardScore`/`effectiveScore`/`score`.
 function breakdownFields(
   stats: ModStats,
   weights: Weights,
@@ -269,9 +299,7 @@ export interface DangerHit {
   severity: DangerSeverity;
 }
 
-/** All matched danger/annoyance mods on this map, in pattern-table order —
- *  display/level-computation input only, never applied to `score` (see the
- *  file-level comment). */
+/** All matched danger/annoyance mods on this map, in pattern-table order. */
 export function detectDangerHits(text: string): DangerHit[] {
   if (!text) return [];
   return DANGER_PATTERNS.filter((d) => d.pattern.test(text)).map((d) => ({ id: d.id, severity: d.severity }));
@@ -291,8 +319,8 @@ export type DangerLevel = "none" | "low" | "medium" | "high";
 
 /** Derives an at-a-glance danger signal from `DangerHit[]` — `severity`
  *  only, never a label/warning string, so renaming or relocalizing a
- *  warning can never change this. Also never derived from raw text or
- *  `score`, keeping it fully independent of the Juice Score. Deliberately
+ *  warning can never change this. Also never derived from raw text,
+ *  keeping it fully independent of danger *detection*. Deliberately
  *  simple, evaluated most-severe-first:
  *  - "high": any "reflect" hit, or 3+ hits with at least one "strong" one
  *    (crit/penetration/fast-monsters/no-leech/no-regen).
@@ -337,40 +365,47 @@ export function detectPositiveMods(text: string): BonusDetail[] {
 }
 
 export interface EvaluationResult {
-  /** Unchanged from before: weighted loot-signal fields + extra-content
-   *  bonus, clamped to [0, 100]. Kept only for backward compatibility
-   *  (`decision` below and `bonusDetails`/`breakdown`-sum math still key off
-   *  it) — the UI now reads `effectiveScore` instead, see adapter.ts. */
+  /** Final score, thresholded on for `decision` — equal to `effectiveScore`.
+   *  Kept as its own field (rather than dropped in favor of just
+   *  `effectiveScore`) for backward compatibility with existing callers. */
   score: number;
   decision: "run" | "skip";
+  /** LEGACY per-field breakdown (display only — heat.breakdown/keyFactors in
+   *  adapter.ts). Computed from the old flat `Weights`/`CAPS` model, fully
+   *  decoupled from `score`/`rewardScore`/`effectiveScore` below — it will
+   *  NOT sum to them. */
   breakdown: Record<keyof Weights, FieldContribution>;
+  /** LEGACY positive-mod bonuses (display only — adapter.ts's "Bonus: ..."
+   *  insights and heat.breakdown's bonus row). Not applied to the score. */
   bonusDetails: BonusDetail[];
   /** Danger/annoyance mods detected on this map (structured, string-free) —
    *  feeds `warning`/`warnings`/`dangerLevel` display AND the danger penalty
    *  applied below (`effectiveScore`). */
   dangerHits: DangerHit[];
-  /** `score` scaled by mechanic-stacking synergy, the Pack-Size/mechanic
-   *  synergy bonus, and a high-end stretch, THEN normalized back onto a
-   *  0-100 scale (smooth asymptotic cap, not a hard clip) — "how good is
-   *  this map on paper", ignoring danger. This is what the UI's `heat.score`
-   *  now shows (see adapter.ts), pre-danger-penalty. */
+  /** The real score: each loot signal normalized against a "god map"
+   *  reference (`computeBaseScore`), scaled by mechanic-stacking synergy and
+   *  the Pack-Size/mechanic synergy bonus, then smooth-capped back onto
+   *  [0, 100] — "how good is this map on paper", ignoring danger. */
   rewardScore: number;
   /** `rewardScore` scaled by `DANGER_PENALTY[dangerLevel]`, clamped to
-   *  [0, 100] — "how good is this map to actually farm". This is what the
-   *  UI's tier/verdict/rating are now computed from (see adapter.ts). */
+   *  [0, 100] — "how good is this map to actually farm". Same value as
+   *  `score`. */
   effectiveScore: number;
 }
 
-/** Composite Juice Score: weighted loot-signal fields + extra-content bonus
- *  (`score`, unchanged — kept for backward compatibility, see
- *  `EvaluationResult`). From it, derives the two numbers the UI actually
- *  uses: `rewardScore` (`score` with a mechanic-stacking synergy
- *  multiplier, a Pack-Size/mechanic synergy bonus, and a high-end stretch
- *  applied, then normalized back onto 0-100 with a smooth asymptotic cap
- *  so stacking bonuses can't blow past the scale) and `effectiveScore`
- *  (`rewardScore` scaled down by danger — a "good but risky" map should net
- *  out below a "good and safe" one, and it stays within [0, 100] because
- *  `rewardScore` is already bounded and the danger multiplier is <= 1). */
+/** Composite Juice Score (2026-07-06 normalized-model redesign): each loot
+ *  signal contributes as a % of a "god map" reference value (`computeBaseScore`
+ *  — Item Rarity/100%, Pack Size/30%, Waystone Drop Chance/120%, 4+
+ *  mechanics), not as a flat point value, so real maps land across the full
+ *  [0, 100] range instead of compressing into ~0-25. From there: a
+ *  mechanic-stacking synergy multiplier, a Pack-Size/mechanic synergy bonus,
+ *  a smooth cap back onto [0, 100] (`rewardScore`), and finally the danger
+ *  penalty (`effectiveScore` — a "good but risky" map nets out below a
+ *  "good and safe" one). `score` = `effectiveScore`, so existing callers
+ *  (adapter.ts's tier/verdict/rating, all already reading `effectiveScore`
+ *  directly) need no changes. `breakdown`/`bonusDetails` are still computed
+ *  from the old flat model, but purely for UI display now — see the
+ *  file-level comment. */
 export function evaluateMap(
   stats: ModStats,
   rawText = "",
@@ -378,21 +413,19 @@ export function evaluateMap(
   threshold: number = DEFAULT_THRESHOLD,
 ): EvaluationResult {
   const breakdown = breakdownFields(stats, weights, CAPS);
-  const baseScore = round2(Object.values(breakdown).reduce((sum, f) => sum + f.contribution, 0));
-
   const bonusDetails = detectPositiveMods(rawText);
   const dangerHits = detectDangerHits(rawText);
 
-  const score = round2(Math.max(0, Math.min(100, baseScore + bonusDetails.reduce((sum, b) => sum + b.bonus, 0))));
-  const decision = score >= threshold ? "run" : "skip";
-
   const mechanicCount = countActiveMechanics(rawText);
-  const synergized = score * synergyMultiplier(mechanicCount) * statSynergyMultiplier(stats, mechanicCount);
-  const stretched = applyStretch(synergized);
-  const rewardScore = round2(normalizeToScale(stretched));
+  const baseScore = computeBaseScore(stats, mechanicCount);
+  const synergized = baseScore * synergyMultiplier(mechanicCount) * statSynergyMultiplier(stats, mechanicCount);
+  const rewardScore = round2(normalizeToScale(synergized));
 
   const dangerLevel = computeDangerLevel(dangerHits);
   const effectiveScore = round2(Math.max(0, Math.min(100, rewardScore * DANGER_PENALTY[dangerLevel])));
+
+  const score = effectiveScore;
+  const decision = score >= threshold ? "run" : "skip";
 
   return { score, decision, breakdown, bonusDetails, dangerHits, rewardScore, effectiveScore };
 }
