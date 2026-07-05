@@ -74,8 +74,9 @@
 /* ---- column 2: heat breakdown ---- */
 .score-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 4px 12px;
   margin: 2px 0 12px;
   position: relative;
 }

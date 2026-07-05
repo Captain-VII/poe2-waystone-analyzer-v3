@@ -49,7 +49,10 @@ export const DEFAULT_THRESHOLD = 20; // below this: SKIP (§9)
 // hardBlock: actively fights the loop -> skip outright.
 // speedPenalty: slows the loop without bricking it -> score multiplied down.
 const HARD_BLOCK_PATTERNS: Record<string, RegExp> = {
-  "reflect damage": /reflect(?:s|ed)?\s+\w*\s*damage/i,
+  // Real PoE2 wording is "Monsters reflect 18% of Elemental Damage" — allow
+  // any short run of characters (the "18% of Elemental" part) between the
+  // verb and "damage", not just a single bare word.
+  "reflect damage": /reflect(?:s|ed)?\b[^\n]{0,30}?damage/i,
   "cannot leech": /cannot\s+leech/i,
   "no regeneration": /no\s+.*regenerat/i,
 };

@@ -214,7 +214,7 @@
    * fit — `.p-sub` already yields all its space first (flex:1,
    * min-width:0), so this is the last line of defense, not the everyday
    * behavior for the four shorter labels. */
-  max-width: 96px;
+  max-width: 124px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
