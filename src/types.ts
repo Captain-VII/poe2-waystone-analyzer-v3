@@ -75,7 +75,10 @@ export interface AnalysisResult {
     /** Display order; values sum to score. */
     breakdown: BreakdownEntry[];
   };
-  /** Pre-sorted: danger > positive > neutral. */
+  /** Pre-sorted: danger > positive > neutral.
+   *  `modifiers` and `mechanicScores` are computed but not currently used
+   *  in UI. They are REQUIRED by verify-adapter.mjs tests and part of the
+   *  data contract. Do not remove without updating tests. */
   modifiers: Modifier[];
   /** Sorted by delta desc; Compact and Full both take up to 3. */
   tablets: Tablet[];
@@ -83,7 +86,9 @@ export interface AnalysisResult {
   warning: string | null;
   /** 0–3 short lines, Full mode only. */
   insights: string[];
-  /** Mechanic Match Score per detected/candidate mechanic (§7), desc sorted. */
+  /** Mechanic Match Score per detected/candidate mechanic (§7), desc sorted.
+   *  Not currently used in UI. REQUIRED by verify-adapter.mjs tests and
+   *  part of the data contract. Do not remove without updating tests. */
   mechanicScores: MechanicScore[];
   /** Best mechanic to target, or null if none scored above zero. */
   recommendedMechanic: string | null;

@@ -6,7 +6,7 @@
 //
 // SAMPLE is inlined directly (no external/sibling-repo file) so this script
 // runs deterministically and offline on a fresh clone.
-import { analyzeWaystoneText } from "./.adapter-bundle.mjs";
+import { analyzeWaystoneText, TABLET_LINKED_MECHANICS } from "./.adapter-bundle.mjs";
 
 const SAMPLE = `Item Class: Waystones
 Rarity: Rare
@@ -97,6 +97,74 @@ try {
 } catch (e) {
   check(`empty/degenerate waystone text never throws (threw: ${e})`, false);
 }
+
+// ============================================================
+// INVARIANTS — must survive any future weight/threshold rebalance.
+// These encode relationships between fields, never a specific
+// magic-number output, so tuning DEFAULT_WEIGHTS never breaks them.
+// ============================================================
+
+check("score in [0,100]", result.heat.score >= 0 && result.heat.score <= 100);
+
+check("breakdown sums to score", diff < 0.05);
+
+// AnalysisResult.heat has no `hardBlock` boolean (internal to scoring.ts's
+// EvaluationResult only) — `warning` starting with "Hard block:" is the
+// exact public-contract proxy: formatWarning() only ever produces that
+// prefix when hardBlockReasons is non-empty, which is exactly when
+// hardBlock fired. (Checking a nonexistent `result.heat.hardBlock` here
+// would make this assertion a silent no-op — always true, never testing
+// anything — which is worse than not having it at all.)
+check("hard-block warning implies score 0 and SKIP",
+  !result.warning?.startsWith("Hard block:") || (result.heat.score === 0 && result.heat.verdict === "SKIP"));
+
+check("recommendedMechanic valid",
+  result.recommendedMechanic === null ||
+  (
+    TABLET_LINKED_MECHANICS.has(result.recommendedMechanic) &&
+    result.mechanicScores.find((m) => m.mechanic === result.recommendedMechanic)?.score > 0
+  ));
+
+check("deterministic scoring",
+  analyzeWaystoneText(SAMPLE).heat.score === analyzeWaystoneText(SAMPLE).heat.score);
+
+// NOT asserted: "no single breakdown component exceeds the total score."
+// Verified empirically false — scoring.ts's speed-penalty multipliers
+// apply to the post-sum total, but each breakdown row displays its
+// pre-penalty contribution, so a single field (e.g. itemRarity: 4.95) can
+// legitimately exceed a final penalized score (e.g. 3.03) on real input
+// with a "reduced recovery"/"avoid ailments" mod present. Asserting it
+// would fail on correct output, not catch a real regression — a flaky
+// check here is worse than no check.
+
+// ============================================================
+// PINNED REGRESSION TESTS — must NEVER break. Each one encodes a
+// specific, already-diagnosed bug; an invariant can't catch a
+// regression in the exact regex/filter that fixed it, only re-running
+// the literal scenario can.
+// ============================================================
+
+// Real PoE2 wording ("Monsters reflect 18% of Elemental Damage") must
+// still hard-block — regression case for the reflect-regex fix.
+const SAMPLE_REFLECT = `Item Class: Waystones
+Rarity: Magic
+Waystone of the Fool
+Waystone (Tier 4)
+--------
+Waystone Tier: 4
+Item Level: 20
+--------
+Monsters reflect 18% of Elemental Damage
+Monsters have 20% increased Accuracy Rating
+--------`;
+const reflect = analyzeWaystoneText(SAMPLE_REFLECT);
+// AnalysisResult.heat has no `hardBlock` boolean (that's internal to
+// scoring.ts's EvaluationResult, never surfaced past adapter.ts) — the
+// public contract's hard-block signal is score 0 + tierClass "trash" +
+// verdict "SKIP", which is exactly what the UI keys off of.
+check("reflect hard-blocks",
+  reflect.heat.score === 0 && reflect.heat.tierClass === "trash" && reflect.heat.verdict === "SKIP");
+check("reflect warning present", reflect.warning?.includes("reflect") ?? false);
 
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}`);
 process.exit(failures === 0 ? 0 : 1);

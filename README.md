@@ -70,10 +70,16 @@ lists every detected modifier.
 
 ### Tuning the scoring (meta.json)
 
-Weights, per-mechanic priority stats, recommended tablets, and skip
-thresholds live in an editable `meta.json` in the app's config directory
-(seeded on first run from `src-tauri/default-meta.json`). Edit it and
-restart the overlay to pick up changes — no rebuild needed.
+Per-mechanic priority stats, recommended tablets, and skip thresholds live
+in an editable `meta.json` in the app's config directory (seeded on first
+run from `src-tauri/default-meta.json`). Edit it and restart the overlay
+to pick up changes — no rebuild needed.
+
+**Not covered by `meta.json`:** the Juice Score's own weights, per-stat
+caps, the SKIP threshold, and the hard-block/speed-penalty/positive-mod
+regex patterns are currently hardcoded in `src/analyzer/scoring.ts` —
+changing those requires editing that file and rebuilding. Only mechanics
+(`mechanics.ts`) and tablets (`tablets.ts`) are meta.json-driven today.
 
 **Adding a tablet** doesn't need a code change either: add an entry to
 `meta.json`'s `"tablets"` array with a name and its mods written as plain

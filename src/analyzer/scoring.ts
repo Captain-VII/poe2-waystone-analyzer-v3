@@ -34,6 +34,11 @@ export const CAPS: ModStats = {
 // weighted highest, monster effectiveness medium-high, quantity/drop
 // chance minor) — bonuses/penalties are applied on top and the final
 // score is clamped back into [0, 100].
+//
+// NOT meta.json-driven: unlike mechanics.ts/tablets.ts, these weights (and
+// CAPS/DEFAULT_THRESHOLD/the three pattern tables below) are hardcoded here
+// and read by nothing in meta-config.ts. Tuning them requires editing this
+// file and rebuilding — see README's "Tuning the scoring" section.
 export const DEFAULT_WEIGHTS: Weights = {
   itemRarity: 22 / CAPS.itemRarity,
   monsterRarity: 20 / CAPS.monsterRarity,
