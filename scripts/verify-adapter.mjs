@@ -1,17 +1,29 @@
-// Contract check for the analyzer adapter (M5): run against the real
-// sample_waystone.txt from v2, assert AnalysisResult boundary rules hold
-// (docs/overlay-ui-spec.md §11). Run via: npm run verify-adapter
-// (that script bundles src/analyzer/adapter.ts with esbuild first, since
-// Node's ESM resolver needs explicit extensions the TS source doesn't use).
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+// Contract check for the analyzer adapter (M5): assert AnalysisResult
+// boundary rules hold (docs/overlay-ui-spec.md §11). Run via:
+// npm run verify-adapter (that script bundles src/analyzer/adapter.ts with
+// esbuild first, since Node's ESM resolver needs explicit extensions the TS
+// source doesn't use).
+//
+// SAMPLE is inlined directly (no external/sibling-repo file) so this script
+// runs deterministically and offline on a fresh clone.
 import { analyzeWaystoneText } from "./.adapter-bundle.mjs";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const V2_SAMPLE = join(__dirname, "..", "..", "poe2-waystone-analyzer-v2", "sample_waystone.txt");
-
-const sample = readFileSync(V2_SAMPLE, "utf-8");
+const SAMPLE = `Item Class: Waystones
+Rarity: Rare
+Forsaken Vault
+Waystone (Tier 15)
+--------
+Waystone Tier: 15
+Item Level: 82
+--------
++45% increased Rarity of Items found in this Area
++38% increased Rarity of Monsters
++25% increased Pack Size
++30% Monster Effectiveness
+2 additional Rare Monster packs
+Area contains an Expedition Encampment
+--------
+Corrupted`;
 
 let failures = 0;
 function check(label, cond) {
@@ -23,11 +35,15 @@ function check(label, cond) {
   }
 }
 
-const result = analyzeWaystoneText(sample);
+const result = analyzeWaystoneText(SAMPLE);
 check("parses sample as a valid waystone (non-null)", result !== null);
 if (!result) process.exit(1);
 
 console.log(JSON.stringify(result, null, 2));
+
+// SAMPLE has exactly 6 mod lines between the two `--------` separators —
+// confirm the parser's block-boundary logic still isolates that block.
+console.log(`waystone.modCount: ${result.waystone.modCount} (expected 6)`);
 
 check("waystone.tier === 15", result.waystone.tier === 15);
 check("waystone.name === 'Forsaken Vault'", result.waystone.name === "Forsaken Vault");
