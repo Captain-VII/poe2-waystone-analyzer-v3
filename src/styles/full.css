@@ -4,23 +4,21 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 30fr 34fr 36fr;
+  grid-template-columns: 34fr 34fr 32fr;
   gap: 0 16px;
   padding: 14px 18px 16px;
 }
 
 /* min-height:0 lets a grid item shrink to its track's real size instead of
-   stretching to content (a `.mods{flex:1}` child can't actually engage its
-   own overflow-y:auto scroll without this — pre-existing gap, found while
-   verifying the rewards/rating additions below didn't overflow the fixed
-   panel). overflow-y:auto on every column (not just col1's `.mods`, which
-   already had its own) is the same established pattern applied uniformly —
-   excess content scrolls instead of silently clipping or spilling past the
-   card's bottom edge on the transparent overlay. */
+   stretching to content — needed for a column's own overflow-y:auto to
+   actually engage instead of the column stretching to fit everything.
+   overflow-y:auto on every column: excess content scrolls instead of
+   silently clipping or spilling past the card's bottom edge on the
+   transparent overlay. */
 .col { min-width: 0; min-height: 0; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; }
-/* Same thin gold scrollbar as `.mods` below — without this, a column that
-   overflows (col 3 can, on some DPI/font-metric combos) falls back to the
-   default fat WebView2 scrollbar, visually clashing with col 1's. */
+/* Thin gold scrollbar — without this, a column that overflows (on some
+   DPI/font-metric combos) falls back to the default fat WebView2
+   scrollbar, visually clashing with the rest of the panel. */
 .col {
   scrollbar-width: thin;
   scrollbar-color: rgba(184, 135, 53, 0.35) transparent;
@@ -41,37 +39,7 @@
 .body-full .score-num { font-size: 29px; }
 .body-full .halo { width: 100px; height: 100px; }
 
-/* ---- column 1: detected modifiers ---- */
-.mods {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding-right: 4px;
-  mask-image: linear-gradient(#000 calc(100% - 16px), transparent);
-  -webkit-mask-image: linear-gradient(#000 calc(100% - 16px), transparent);
-  scrollbar-width: thin;
-  scrollbar-color: rgba(184, 135, 53, 0.35) transparent;
-}
-.mods::-webkit-scrollbar { width: 3px; }
-.mods::-webkit-scrollbar-thumb { background: rgba(184, 135, 53, 0.35); }
-
-.mod {
-  display: flex;
-  gap: 6px;
-  font-size: 13px;
-  line-height: 1.45;
-  padding: 2px 0;
-  color: var(--grey);
-}
-.mod b { color: var(--ivory); font-weight: 600; }
-.mod .m-ic { flex: none; width: 12px; color: var(--gold-hi); font-size: 11px; }
-.mod.danger { color: var(--danger); font-weight: 600; }
-.mod.danger b { color: inherit; }
-.mod.danger .m-ic { color: var(--danger); }
-.mod.neutral { color: rgba(184, 169, 138, 0.7); }
-.mod.neutral .m-ic { visibility: hidden; }
-
-/* ---- column 2: heat breakdown ---- */
+/* ---- column 1: heat breakdown ---- */
 .score-row {
   display: flex;
   flex-wrap: wrap;
@@ -108,6 +76,15 @@
 }
 .brow.neg .bar i { background: var(--danger); }
 
+/* Heat Breakdown is now supporting context, not the focal point (Top
+   Tablets is) — dim the bars/labels a notch so the eye isn't pulled here
+   first. The negative/penalty variant stays at full strength; a penalty is
+   still worth noticing at a glance. */
+[data-col-heat] .bar i { filter: saturate(0.75) brightness(0.92); }
+[data-col-heat] .brow.neg .bar i { filter: none; }
+[data-col-heat] .b-val { color: rgba(232, 226, 212, 0.75); }
+[data-col-heat] .brow.neg .b-val { color: var(--danger); }
+
 .brow .b-val {
   flex: none;
   width: 44px;
@@ -142,27 +119,14 @@
 }
 .tier-god .total-row .t-val { text-shadow: 0 0 10px rgba(255, 211, 106, 0.3); }
 
-/* ---- column 3: tablets (dense) + insights ---- */
-.body-full .rec-row {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  height: 23px;
-  font-size: 13px;
+/* ---- column 2: top tablets (now the focal column — dominant grid share,
+   see .cols above) ---- */
+.body-full [data-col-tablets] .sec-h {
+  color: var(--tier, var(--gold-hi));
+  font-weight: 700;
 }
 
-.col3-sep {
-  height: 1px;
-  /* Tightened from 8px (2026-07-04): column 3 stacks 3 sections plus the
-     new tab-rewards line under the top tablet in a fixed-height column with
-     no scroll of its own — every pixel here is now load-bearing for
-     keeping the warning row from clipping in worst-case (long-wrapping
-     warning text + a tablet with rewards). Purely spacing, no information
-     lost. */
-  margin: 5px 0;
-  background: linear-gradient(90deg, rgba(184, 135, 53, 0.3), transparent);
-}
-
+/* ---- column 3: insights ---- */
 .insights { display: flex; flex-direction: column; gap: 2px; }
 .ins-row {
   display: flex;

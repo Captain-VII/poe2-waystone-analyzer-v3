@@ -245,6 +245,7 @@
   font-weight: 700;
   font-size: 10px;
   width: 12px;
+  padding-top: 1px;
   text-align: center;
 }
 
@@ -599,17 +600,16 @@
 /* ---- top tablet's reward breakdown (rewards.ts), one compact line under
    the #1 ranked tablet only — never a separate titled section, see
    docs/implementation-plan.md's UI-rewards entry ---- */
-.rec-wrap { display: block; }
 .tab-rewards {
-  font-size: 10.5px;
+  font-size: 10px;
   color: var(--grey);
-  padding-left: 24px;
+  padding-left: 11px;
   margin-top: 1px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.tab-rewards .rw-ic { color: var(--gold); font-size: 8px; margin: 0 2px 0 8px; }
+.tab-rewards .rw-ic { color: var(--gold); font-size: 8px; margin: 0 2px 0 4px; }
 .tab-rewards .rw-ic:first-child { margin-left: 0; }
 .tab-rewards b { color: var(--gold-hi); font-weight: 600; }
 

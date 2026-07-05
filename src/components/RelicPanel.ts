@@ -75,11 +75,6 @@ function esc(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 }
 
-/** §5: numeric magnitudes in mod prose render bold ivory. Input must be escaped. */
-function boldNumerics(escaped: string): string {
-  return escaped.replace(/([+\-−]?\d+(?:\.\d+)?%?)/g, "<b>$1</b>");
-}
-
 function fmtDelta(v: number): string {
   return (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1);
 }
@@ -148,11 +143,11 @@ export function mountOverlay(
           </div>
           <div class="body body-full">
             <div class="cols">
-              <div class="col">
-                <div class="sec-h">Detected Modifiers</div>
-                <div class="mods" data-mods></div>
+              <div class="col" data-col-tablets>
+                <div class="sec-h">Top Tablets</div>
+                <div data-tablets-full></div>
               </div>
-              <div class="col">
+              <div class="col" data-col-heat>
                 <div class="sec-h">Heat Breakdown</div>
                 <div class="score-row">
                   <span class="score-wrap" data-hero-full><span class="halo"></span><span class="score-num" data-score-full></span></span>
@@ -161,13 +156,7 @@ export function mountOverlay(
                 <div data-breakdown></div>
                 <div class="total-row"><span class="t-lab">Total Heat</span><span class="t-right"><span class="t-val" data-total></span><span class="rating-pill" data-rating-full></span></span></div>
               </div>
-              <div class="col" data-col3>
-                <div class="sec-h">Top Tablets</div>
-                <div data-tablets-full></div>
-                <div class="col3-sep"></div>
-                <div class="sec-h">Mechanic Match</div>
-                <div data-mechanics></div>
-                <div class="col3-sep"></div>
+              <div class="col" data-col-insights>
                 <div class="insights-block" data-insights-block>
                   <div class="sec-h">Insights</div>
                   <div class="insights" data-insights></div>
@@ -235,8 +224,8 @@ export function mountOverlay(
   const warn = q("[data-warn]");
   const toggleBtn = q("[data-toggle]");
   const footBtn = q("[data-foot]");
-  const mods = q("[data-mods]");
-  const col3 = q("[data-col3]");
+  const colTablets = q("[data-col-tablets]");
+  const colInsights = q("[data-col-insights]");
   const settingsBtn = q("[data-settings]");
   const settingsPanel = q("[data-settings-panel]");
   const setModeBtn = q("[data-set-mode]") as HTMLButtonElement;
@@ -287,21 +276,34 @@ export function mountOverlay(
             .map((r) => `<span class="rw-ic">◆</span> ${esc(r.label)} <b>${fmtDelta(r.value)}</b>`)
             .join("")}</div>`
         : "";
-    const tabletRow = (t: AnalysisResult["tablets"][number], i: number, reasoned: boolean) => {
+    // Only rank I gets the reason/rewards lines — ranks II/III are a single
+    // tight scan-line (rank, name, rating, score) with no extra reading, so
+    // the eye has exactly one place to linger (§ scan-speed pass).
+    const tabletRow = (t: AnalysisResult["tablets"][number], i: number) => {
+      const isBest = i === 0;
+      // Every real tablet name ends in "Tablet" (Expedition Tablet, Standard
+      // Precursor Tablet, ...) — that word carries no distinguishing info once
+      // it's in a column titled "Top Tablets", so it's dropped here (display
+      // only; t.name itself, used below for the reason-stripping and the
+      // hover title, is untouched).
+      const shortName = t.name.replace(/\s+Tablet$/i, "");
       const line = `
         <span class="rec-rank">${RANKS[i]}</span>
-        <span class="rec-name">${esc(t.name)}</span>
+        <span class="rec-name" title="${esc(t.name)}">${esc(shortName)}</span>
         <span class="rec-rating rec-rating-${t.rating}">${t.rating}</span>
         <span class="rec-delta">${fmtDelta(t.delta)}</span>`;
-      const rewards = i === 0 ? rewardsLine(t) : "";
-      if (reasoned) {
-        return `<div class="tab-row"><div class="tab-line">${line}</div><div class="tab-reason">${esc(t.reason)}</div>${rewards}</div>`;
-      }
-      return rewards ? `<div class="rec-wrap"><div class="rec-row">${line}</div>${rewards}</div>` : `<div class="rec-row">${line}</div>`;
+      if (!isBest) return `<div class="tab-row"><div class="tab-line">${line}</div></div>`;
+      // t.reason is already computed by adapter.ts as "<name> matches <mechanic>
+      // (n/100)" — the name repeats what rec-name already shows right above it,
+      // so it's stripped here (display-only, adapter.ts untouched) to save the
+      // column width for the part that's actually new information.
+      const stripped = t.reason.startsWith(t.name) ? t.reason.slice(t.name.length).trim() : t.reason;
+      const reason = stripped.charAt(0).toUpperCase() + stripped.slice(1);
+      return `<div class="tab-row best"><div class="tab-line">${line}</div><div class="tab-reason">${esc(reason)}</div>${rewardsLine(t)}</div>`;
     };
     q("[data-tablets]").innerHTML = result.tablets
       .slice(0, 3)
-      .map((t, i) => tabletRow(t, i, true))
+      .map((t, i) => tabletRow(t, i))
       .join("");
     // Trimmed from 4 to 3 (2026-07-04, matches Compact's existing cap):
     // frees the vertical room the new rec-rating column and top tablet's
@@ -309,27 +311,7 @@ export function mountOverlay(
     // column 3's fixed, non-scrolling height budget.
     q("[data-tablets-full]").innerHTML = result.tablets
       .slice(0, 3)
-      .map((t, i) => tabletRow(t, i, false))
-      .join("");
-
-    q("[data-mods]").innerHTML = result.modifiers
-      .map((m) => {
-        const icon = m.kind === "danger" ? "⚠" : m.kind === "positive" ? "▴" : "·";
-        const text = m.kind === "danger" ? esc(m.text) : boldNumerics(esc(m.text));
-        return `<div class="mod ${m.kind === "positive" ? "" : m.kind}"><span class="m-ic">${icon}</span><span>${text}</span></div>`;
-      })
-      .join("");
-
-    q("[data-mechanics]").innerHTML = result.mechanicScores
-      .slice(0, 4)
-      .map(
-        (m) => `
-        <div class="brow${m.mechanic === result.recommendedMechanic ? " best" : ""}">
-          <span class="b-lab">${esc(m.mechanic)}${m.mechanic === result.recommendedMechanic ? " ★" : ""}</span>
-          <div class="bar"><i style="width:${Math.min(m.score, 100)}%"></i></div>
-          <span class="b-val">${m.score}</span>
-        </div>`,
-      )
+      .map((t, i) => tabletRow(t, i))
       .join("");
 
     q("[data-breakdown]").innerHTML = heat.breakdown
@@ -507,10 +489,10 @@ export function mountOverlay(
     if (settingsOpen) return [...els, settingsPanel]; // whole panel as one rect
     if (compareActive) return els; // compare body has no other interactive controls
     if (effective === "compact") els.push(footBtn);
-    // col3 can overflow-scroll on some DPI/font combos — its scrollbar is
-    // unusable unless the column is inside the click-through whitelist,
-    // same rationale as the mods column.
-    if (effective === "full") els.push(mods, col3);
+    // Either full-mode column can overflow-scroll on some DPI/font combos —
+    // its scrollbar is unusable unless the column is inside the
+    // click-through whitelist.
+    if (effective === "full") els.push(colTablets, colInsights);
     return els;
   }
 
