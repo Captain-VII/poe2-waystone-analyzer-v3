@@ -239,13 +239,25 @@ function statSynergyMultiplier(stats: ModStats, mechanicCount: number): number {
   return hasPackSize && mechanicCount >= 1 ? 1.1 : 1.0;
 }
 
-// Smooth cap back onto a 0-100 scale: asymptotically approaches 100 as
-// `raw` grows instead of hard-clipping, so two maps that both blow past the
-// nominal ceiling (from synergy multipliers stacking on top of an already
-// maxed base score) still rank against each other rather than both
-// flattening to the same 100.
+// How many points of headroom above 100 the soft cap allows itself before
+// asymptoting, and how quickly it saturates within that headroom. Only
+// matters for `raw > 100` — see `normalizeToScale`.
+const OVERFLOW_HEADROOM = 20;
+const OVERFLOW_SOFTNESS = 50;
+
+// Identity up to 100 (a maxed-out base score, e.g. `computeBaseScore`'s own
+// ceiling, is NOT compressed — 100 in, 100 out), then a smooth asymptotic
+// cap for genuine overshoot only (synergy multipliers stacking on top of an
+// already-maxed base score). An earlier version (`100 * (1 - e^(-raw/100))`)
+// compressed EVERY input, not just overshoot — a perfect, danger-free map
+// (baseScore 100, no synergy) came out at 63, not 100. This version can
+// mathematically land a few points above 100 for extreme stacking (up to
+// 100 + OVERFLOW_HEADROOM); `effectiveScore` below still hard-clamps to
+// [0, 100], so that's the only number a player ever actually sees.
 function normalizeToScale(raw: number): number {
-  return 100 * (1 - Math.exp(-Math.max(0, raw) / 100));
+  if (raw <= 100) return raw;
+  const excess = raw - 100;
+  return 100 + OVERFLOW_HEADROOM * (1 - Math.exp(-excess / OVERFLOW_SOFTNESS));
 }
 
 // Real farming efficiency: a dangerous map costs more time/deaths per clear,
@@ -384,13 +396,31 @@ export interface EvaluationResult {
   dangerHits: DangerHit[];
   /** The real score: each loot signal normalized against a "god map"
    *  reference (`computeBaseScore`), scaled by mechanic-stacking synergy and
-   *  the Pack-Size/mechanic synergy bonus, then smooth-capped back onto
-   *  [0, 100] — "how good is this map on paper", ignoring danger. */
+   *  the Pack-Size/mechanic synergy bonus — "how good is this map on paper",
+   *  ignoring danger. Unchanged below 100 (no compression for a normal,
+   *  non-overshooting map); may land a few points above 100 under extreme
+   *  synergy stacking (see `normalizeToScale`) — `effectiveScore`/`score`
+   *  are what's actually clamped to [0, 100]. */
   rewardScore: number;
   /** `rewardScore` scaled by `DANGER_PENALTY[dangerLevel]`, clamped to
    *  [0, 100] — "how good is this map to actually farm". Same value as
    *  `score`. */
   effectiveScore: number;
+  /** `computeBaseScore`'s output before synergy/soft-cap/danger are applied
+   *  — the normalized-but-unscaled signal, for display layers that want to
+   *  show "raw stats vs. synergy vs. danger" as separate numbers (see
+   *  displayAdapter.ts) instead of re-deriving them from scratch. */
+  baseScore: number;
+  /** Points gained from `rewardScore` vs. `baseScore` alone — the
+   *  mechanic/Pack-Size synergy multipliers' net effect after the soft cap.
+   *  Always >= 0 (multipliers are all >= 1, soft cap is monotonic). */
+  synergyBonus: number;
+  /** Points lost to the danger multiplier alone, in the same unit space as
+   *  the other score fields (rather than the raw 0-1 multiplier) — computed
+   *  before the [0, 100] clamp, so it never picks up the unrelated overflow
+   *  a `rewardScore` above 100 loses to that clamp. 0 when `dangerLevel` is
+   *  "none". Always >= 0. */
+  dangerPenalty: number;
 }
 
 /** Composite Juice Score (2026-07-06 normalized-model redesign): each loot
@@ -398,10 +428,11 @@ export interface EvaluationResult {
  *  — Item Rarity/100%, Pack Size/30%, Waystone Drop Chance/120%, 4+
  *  mechanics), not as a flat point value, so real maps land across the full
  *  [0, 100] range instead of compressing into ~0-25. From there: a
- *  mechanic-stacking synergy multiplier, a Pack-Size/mechanic synergy bonus,
- *  a smooth cap back onto [0, 100] (`rewardScore`), and finally the danger
- *  penalty (`effectiveScore` — a "good but risky" map nets out below a
- *  "good and safe" one). `score` = `effectiveScore`, so existing callers
+ *  mechanic-stacking synergy multiplier and a Pack-Size/mechanic synergy
+ *  bonus (`rewardScore` — unchanged below 100, only overshoot past 100 gets
+ *  smoothed, see `normalizeToScale`), and finally the danger penalty
+ *  (`effectiveScore`, hard-clamped to [0, 100] — a "good but risky" map nets
+ *  out below a "good and safe" one). `score` = `effectiveScore`, so existing callers
  *  (adapter.ts's tier/verdict/rating, all already reading `effectiveScore`
  *  directly) need no changes. `breakdown`/`bonusDetails` are still computed
  *  from the old flat model, but purely for UI display now — see the
@@ -422,10 +453,29 @@ export function evaluateMap(
   const rewardScore = round2(normalizeToScale(synergized));
 
   const dangerLevel = computeDangerLevel(dangerHits);
-  const effectiveScore = round2(Math.max(0, Math.min(100, rewardScore * DANGER_PENALTY[dangerLevel])));
+  // Computed before the [0, 100] clamp below, specifically so `dangerPenalty`
+  // (derived from this) isolates the danger multiplier's own effect and
+  // never picks up the unrelated overflow the clamp trims off a rewardScore
+  // that landed above 100 (see `normalizeToScale`).
+  const preClampEffective = rewardScore * DANGER_PENALTY[dangerLevel];
+  const effectiveScore = round2(Math.max(0, Math.min(100, preClampEffective)));
 
   const score = effectiveScore;
   const decision = score >= threshold ? "run" : "skip";
 
-  return { score, decision, breakdown, bonusDetails, dangerHits, rewardScore, effectiveScore };
+  const synergyBonus = round2(Math.max(0, rewardScore - baseScore));
+  const dangerPenalty = round2(Math.max(0, rewardScore - preClampEffective));
+
+  return {
+    score,
+    decision,
+    breakdown,
+    bonusDetails,
+    dangerHits,
+    rewardScore,
+    effectiveScore,
+    baseScore: round2(baseScore),
+    synergyBonus,
+    dangerPenalty,
+  };
 }

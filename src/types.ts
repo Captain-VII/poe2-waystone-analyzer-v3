@@ -89,7 +89,11 @@ export interface AnalysisResult {
     /** Letter view of `score`, e.g. for "Rating: S (94.2)" — supplementary
      *  to tierClass/tierLabel, not a replacement. */
     rating: Rating;
-    /** Display order; values sum to score. */
+    /** Display order. Legacy per-field/bonus breakdown (2026-07-06):
+     *  no longer sums to `score` — `score` is now the normalized-model
+     *  effectiveScore (scoring.ts), while this stays the old flat-weighted
+     *  view for the existing chip UI. See src/analyzer/displayAdapter.ts
+     *  for a real-stat-percentage view intended to replace it. */
     breakdown: BreakdownEntry[];
   };
   /** Pre-sorted: danger > positive > neutral.
