@@ -43,8 +43,15 @@ export const NORMALIZE_CAP: Record<StatKey, number> = {
  *  0.6, up to two secondary stats at 0.2 each, scaled to 0-100. `extraBonus`
  *  folds in anything additive-and-clamped (mechanic "naturally present on
  *  the map" detection, or a tablet-name pin) without duplicating the
- *  weighting math at each call site. */
-export function scoreMechanicFit(
+ *  weighting math at each call site.
+ *
+ *  Unrounded — several mechanics share the same priority/secondary stats,
+ *  so a rounded score produces frequent exact ties; callers that need to
+ *  *rank/sort* mechanics or tablets should compare this raw value (see
+ *  adapter.ts's computeMechanicScores/rankTablets), not the rounded
+ *  `scoreMechanicFit` below, or ties silently fall back to array
+ *  declaration order instead of reflecting the actual stat profile. */
+export function scoreMechanicFitRaw(
   profile: Partial<Record<StatKey, number>>,
   mech: MechanicDef,
   extraBonus = 0,
@@ -53,7 +60,17 @@ export function scoreMechanicFit(
   let score = 0.6 * normalized(mech.priorityStat);
   for (const sec of mech.secondaryStats.slice(0, 2)) score += 0.2 * normalized(sec);
   score = score * 100 + extraBonus;
-  return Math.max(0, Math.min(100, Math.round(score)));
+  return Math.max(0, Math.min(100, score));
+}
+
+/** Display/contract version of `scoreMechanicFitRaw` — rounded to a whole
+ *  0-100 number, same as every other user-facing score in this app. */
+export function scoreMechanicFit(
+  profile: Partial<Record<StatKey, number>>,
+  mech: MechanicDef,
+  extraBonus = 0,
+): number {
+  return Math.round(scoreMechanicFitRaw(profile, mech, extraBonus));
 }
 
 export const MECHANICS: MechanicDef[] = [
@@ -175,6 +192,22 @@ export const MECHANICS: MechanicDef[] = [
     secondaryStats: ["monsterRarity", "packSize"],
     recommendedTablets: ["Standard Precursor Tablet", "Overseer Precursor Tablet"],
     skipIfBelow: 30,
+  },
+  {
+    name: "Irradiated",
+    priorityStat: "itemRarity",
+    secondaryStats: ["monsterEffectiveness", "quantity"],
+    recommendedTablets: ["Irradiated Tablet", "Standard Precursor Tablet"],
+    skipIfBelow: 30,
+    detect: /\birradiat(?:ed|ion)\b/i,
+  },
+  {
+    name: "Temple",
+    priorityStat: "itemRarity",
+    secondaryStats: ["packSize", "quantity"],
+    recommendedTablets: ["Temple Tablet", "Standard Precursor Tablet"],
+    skipIfBelow: 30,
+    detect: /\btemple\b|vaal beacon/i,
   },
 ];
 

@@ -21,7 +21,14 @@ import {
   type Weights,
 } from "./scoring";
 import { buildDisplayData, formatPercent } from "./displayAdapter";
-import { getActiveMechanics, scoreMechanicFit, NORMALIZE_CAP, type MechanicDef, type StatKey } from "./mechanics";
+import {
+  getActiveMechanics,
+  scoreMechanicFit,
+  scoreMechanicFitRaw,
+  NORMALIZE_CAP,
+  type MechanicDef,
+  type StatKey,
+} from "./mechanics";
 import { getActiveTablets, getConfidenceMultiplier, type TabletDef } from "./tablets";
 import { describeReward } from "./rewards";
 import type { AnalysisResult, DangerHitView, MechanicScore, Modifier, Rating, TierClass, Verdict } from "../types";
@@ -84,12 +91,23 @@ export function describeDangerHits(hits: DangerHit[]): DangerHitView[] {
 }
 
 /** Mechanics with a real, tablet-linked story in PoE2 (tablets.ts, verified
- *  2026-07-04 against poe2wiki.net/maxroll.gg/odealo.com + poe2db.tw) — the
- *  only mechanics allowed to become `recommendedMechanic` (see below). The
- *  other 9 mechanics in mechanics.ts have no real tablet at all and must
- *  never drive a tablet recommendation. Exported for verify-adapter.mjs's
+ *  2026-07-04 against poe2wiki.net/maxroll.gg/odealo.com + poe2db.tw,
+ *  extended 2026-07-06 with Irradiated/Temple) — the only mechanics allowed
+ *  to become `recommendedMechanic` (see below). The other 9 mechanics in
+ *  mechanics.ts (Blight, Heist, Sanctum, Legion, Harvest, Metamorph,
+ *  Essence, Incursion, Bestiary) have no real tablet at all and must never
+ *  drive a tablet recommendation. Exported for verify-adapter.mjs's
  *  regression assertion, not just used internally here. */
-export const TABLET_LINKED_MECHANICS = new Set(["Breach", "Ritual", "Delirium", "Expedition", "Abyss", "General"]);
+export const TABLET_LINKED_MECHANICS = new Set([
+  "Breach",
+  "Ritual",
+  "Delirium",
+  "Expedition",
+  "Abyss",
+  "General",
+  "Irradiated",
+  "Temple",
+]);
 
 function classifyTier(score: number): TierClass {
   for (const band of TIER_BANDS) {
@@ -194,13 +212,23 @@ function buildKeyFactors(
  *  priority/secondary stats (via `scoreMechanicFit`, shared with tablet
  *  ranking below), plus a flat bonus if the mechanic is already naturally
  *  present on the map text (§8/§9 "mecanique naturelle"). Returns scores
- *  for all mechanics, desc sorted. */
+ *  for all mechanics, desc sorted.
+ *
+ *  Sorted by the *unrounded* `scoreMechanicFitRaw`, not the rounded `score`
+ *  each entry displays — several mechanics share the same priority stat, so
+ *  sorting on the rounded value produced frequent exact ties that silently
+ *  fell back to `MECHANICS`' declaration order (array position), biasing
+ *  which mechanic/tablet won regardless of the waystone's actual stats. */
 function computeMechanicScores(stats: ModStats, rawText: string): MechanicScore[] {
   const scores = getActiveMechanics().map((mech) => {
     const detectBonus = mech.detect?.test(rawText) ? 15 : 0;
-    return { mechanic: mech.name, score: scoreMechanicFit(stats, mech, detectBonus) };
+    return {
+      mechanic: mech.name,
+      score: scoreMechanicFit(stats, mech, detectBonus),
+      raw: scoreMechanicFitRaw(stats, mech, detectBonus),
+    };
   });
-  return scores.sort((a, b) => b.score - a.score);
+  return scores.sort((a, b) => b.raw - a.raw).map(({ mechanic, score }) => ({ mechanic, score }));
 }
 
 /** Which of *this waystone's own* stats synergize with a tablet's mechanic
@@ -218,6 +246,8 @@ const MECHANIC_SYNERGY: Partial<Record<string, StatKey[]>> = {
   expedition: ["quantity", "itemRarity"],
   ritual: ["itemRarity"],
   abyss: ["monsterRarity"],
+  irradiated: ["itemRarity", "monsterEffectiveness"],
+  temple: ["itemRarity", "packSize"],
 };
 
 const SYNERGY_CAP = 10;
@@ -261,12 +291,18 @@ function computeSynergyBonus(stats: ModStats, tablet: TabletDef): number {
  *  `"high"`-confidence tablet is untouched (×1.0), `"low"` is gently
  *  penalized (×0.8), so speculative data can't outrank reliable data on a
  *  thin margin. Never folded into `statFit`/`rewardScore` themselves, and
- *  never changes `scoreToRating`'s bands. */
+ *  never changes `scoreToRating`'s bands.
+ *
+ *  Sorted by the unrounded fit (`fitRaw`), not the rounded `fit` each tablet
+ *  displays — same rounding-tie problem `computeMechanicScores` has, just
+ *  one level down (within the tablets ranked for whichever mechanic won
+ *  up there). `fitRaw` is stripped before returning so the function's
+ *  shape stays exactly `{tablet, fit}[]`. */
 function rankTablets(mech: MechanicDef, stats: ModStats): { tablet: TabletDef; fit: number }[] {
   return getActiveTablets()
     .map((tablet) => {
       const pinBonus = mech.recommendedTablets?.includes(tablet.name) ? 10 : 0;
-      const statFit = scoreMechanicFit(tablet.boosts, mech, pinBonus);
+      const statFit = scoreMechanicFitRaw(tablet.boosts, mech, pinBonus);
       const baseFit = Math.max(0, Math.min(100, statFit + tablet.rewardScore));
       const rawSynergy = computeSynergyBonus(stats, tablet);
       // Diminishing returns: a weak tablet (low baseFit) can't ride synergy
@@ -280,10 +316,12 @@ function rankTablets(mech: MechanicDef, stats: ModStats): { tablet: TabletDef; f
       const synergyBonus = Math.min(scaledSynergy, SYNERGY_CAP);
       const adjusted = Math.max(0, Math.min(100, baseFit + synergyBonus));
       const multiplier = getConfidenceMultiplier(tablet.confidence);
-      const fit = Math.max(0, Math.min(100, Math.round(adjusted * multiplier)));
-      return { tablet, fit };
+      const fitRaw = Math.max(0, Math.min(100, adjusted * multiplier));
+      const fit = Math.round(fitRaw);
+      return { tablet, fit, fitRaw };
     })
-    .sort((a, b) => b.fit - a.fit);
+    .sort((a, b) => b.fitRaw - a.fitRaw)
+    .map(({ tablet, fit }) => ({ tablet, fit }));
 }
 
 function sumBoosts(boosts: TabletDef["boosts"]): number {
@@ -317,10 +355,11 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
 
   const mechanicScores = computeMechanicScores(stats, text);
   // Trust fix: only a mechanic with a real PoE2 tablet (see tablets.ts's
-  // 2026-07-04 research pass — Standard/Overseer are the generic fallback,
-  // Breach/Ritual/Delirium/Expedition/Abyss are the five mechanic-specific
-  // ones) may drive a tablet recommendation. The other 9 mechanics in
-  // mechanics.ts are still scored below (mechanicScores keeps all 15 — the
+  // 2026-07-04 research pass, extended 2026-07-06 — Standard/Overseer are
+  // the generic fallback, Breach/Ritual/Delirium/Expedition/Abyss/
+  // Irradiated/Temple are the seven mechanic-specific ones) may drive a
+  // tablet recommendation. The other 9 mechanics in mechanics.ts are still
+  // scored below (mechanicScores keeps all 17 — the
   // data contract verify-adapter.mjs asserts on) but must never surface as
   // "matches <mechanic>", since no such tablet exists to match. "General"
   // stays in this set as the guaranteed-present fallback (mechanics.ts's

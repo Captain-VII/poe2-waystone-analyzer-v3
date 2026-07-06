@@ -26,13 +26,14 @@ const CURRENCY_WEIGHT_UNIT = 3;
  *
  *  Only the mechanics with a real PoE2 tablet (see tablets.ts, verified
  *  2026-07-04 against poe2wiki.net/maxroll.gg/odealo.com for the six
- *  Precursor-Tower types, and separately against poe2db.tw for Abyss
- *  Tablet, a personal-Map-Device consumable) are listed — relative order
- *  reflects general community consensus on chase-value (Delirium/
+ *  Precursor-Tower types, and separately against poe2db.tw for Abyss/
+ *  Irradiated/Temple Tablets, checked 2026-07-06) are listed — relative
+ *  order reflects general community consensus on chase-value (Delirium/
  *  Expedition currency is usually rated above Breach/Abyss, Ritual's
- *  Tribute the least universally chased), not a sourced economic model;
- *  see KNOWN_ISSUES.md #3 for the same caveat on the rest of this app's
- *  scoring.
+ *  Tribute the least universally chased; Irradiated/Temple have no
+ *  confirmed dedicated currency so sit at a cautious mid/low value), not a
+ *  sourced economic model; see KNOWN_ISSUES.md #3 for the same caveat on
+ *  the rest of this app's scoring.
  *
  *  Spread widened slightly (2026-07-04, later same day) so
  *  Delirium/Expedition read as clearly favored and Ritual as clearly
@@ -44,7 +45,9 @@ export const MECHANIC_VALUES: Record<string, number> = {
   expedition: 9,
   breach: 7,
   abyss: 7,
+  irradiated: 6,
   ritual: 5,
+  temple: 5,
 };
 
 const DEFAULT_MECHANIC_VALUE = 5;

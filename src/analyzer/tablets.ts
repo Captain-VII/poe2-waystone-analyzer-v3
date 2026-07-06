@@ -15,14 +15,15 @@
  *  **Verified against the real game (2026-07-04), replacing the earlier
  *  7 "original" + 8 "placeholder" guesses.** Cross-checked against three
  *  independent sources (poe2wiki.net, maxroll.gg, odealo.com) covering the
- *  actual Precursor Tablet/Atlas Tower system: real PoE2 has exactly **six**
- *  tablet types — Standard, Overseer, Breach, Ritual, Delirium, Expedition —
- *  no more. There is no Abyss, Legion, Heist, Sanctum, Harvest, Metamorph,
- *  Essence, Incursion, or Bestiary tablet in the game; those mechanics get
- *  no dedicated tablet at all (a `mechanics.ts` fact, not a gap in this
- *  file — see KNOWN_ISSUES.md #2). All 8 "placeholder" entries and the
- *  unverified Abyss/Blight/General entries from the earlier pass are
- *  removed rather than kept alongside real data.
+ *  Precursor Tablet/Atlas Tower system, plus poe2db.tw's item data (checked
+ *  2026-07-06) for the full base-type list: real PoE2 has **eight** standard
+ *  tablet types — Standard, Overseer, Breach, Ritual, Delirium, Expedition,
+ *  Abyss, Irradiated, Temple — no more. Legion, Heist, Sanctum, Harvest,
+ *  Metamorph, Essence, Incursion, and Bestiary have no dedicated tablet at
+ *  all (a `mechanics.ts` fact, not a gap in this file — see
+ *  KNOWN_ISSUES.md #2). All 8 "placeholder" entries and the unverified
+ *  Blight/General entries from the earlier pass are removed rather than
+ *  kept alongside real data.
  *
  *  Every real tablet is Magic rarity (1 prefix + 1 suffix) and can roll
  *  from the *same* shared generic-stat prefix pool (Quantity/Rarity/Pack
@@ -183,6 +184,33 @@ export const DEFAULT_TABLETS: RawTabletDef[] = [
       { type: "mechanic", id: "abyss", value: 7 },
       { type: "currency", id: "abyssal_jewel", weight: 2 },
     ],
+  },
+  // Confirmed real via poe2db.tw (data-mined, checked 2026-07-06): base type
+  // "Irradiated Tablet", "Adds Irradiated to a Map". Unlike Breach/Ritual/
+  // Delirium/Expedition/Abyss, Irradiated doesn't grant a distinct
+  // mechanic-specific currency (it's a risk/reward map modifier — tougher
+  // monsters, more generic loot) — represented as a flat `mechanic` reward
+  // only, no `currency` entry. `mods` is a plausible representative roll,
+  // not confirmed wording (poe2db has no affix text for tablets).
+  {
+    name: "Irradiated Tablet",
+    mods: ["15% increased Rarity of Items found"],
+    tags: ["irradiated"],
+    confidence: "low",
+    source: "poe2db",
+    rewards: [{ type: "mechanic", id: "irradiated", value: 6 }],
+  },
+  // Confirmed real via poe2db.tw (data-mined, checked 2026-07-06): base type
+  // "Temple Tablet", "Adds Vaal Beacons to a Map". Same caveat as
+  // Irradiated above: no confirmed dedicated currency, `mods` is a
+  // plausible representative roll.
+  {
+    name: "Temple Tablet",
+    mods: ["15% increased Quantity of Items found"],
+    tags: ["temple"],
+    confidence: "low",
+    source: "poe2db",
+    rewards: [{ type: "mechanic", id: "temple", value: 5 }],
   },
 ];
 
