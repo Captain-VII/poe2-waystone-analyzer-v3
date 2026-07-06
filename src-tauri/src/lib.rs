@@ -4,8 +4,9 @@ use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
     webview::Color,
-    Manager, WebviewUrl, WebviewWindowBuilder,
+    Emitter, Manager, WebviewUrl, WebviewWindowBuilder,
 };
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 /// Bundled starting point for the user-editable meta.json (cahier des
 /// charges §10) — copied into the app config dir on first run only, never
@@ -246,9 +247,90 @@ fn left_click_since_last_poll() -> bool {
     false // dev-only platforms here never run the real click-through path anyway
 }
 
+/// Hotkey accelerators and the action string each one emits to the frontend
+/// (`overlay://hotkey` payload). Registered and handled entirely Rust-side:
+/// the JS-side `register()` API of tauri-plugin-global-shortcut proved
+/// unreliable on Windows — registration would succeed but the event channel
+/// to the webview sometimes never delivered a single keypress until the app
+/// was restarted (diagnosed 2026-07-06 from session logs: healthy launches
+/// showed hundreds of `state=Pressed` deliveries, broken launches showed
+/// zero, with identical successful registrations). Rust-side registration +
+/// a standard `app.emit()` rides the same event system every invoke/report
+/// in this app already uses, which has never misfired.
+/// Escape is deliberately absent — it's a local keydown listener in
+/// hotkeys.ts (a global Escape grab swallowed the key OS-wide).
+const HOTKEYS: &[(&str, &str)] = &[
+    ("Insert", "analyze"),
+    ("Shift+Insert", "toggle"),
+    ("Control+Insert", "compare"),
+];
+
+/// Registers every `HOTKEYS` accelerator, retrying failures on a backoff
+/// (2s→32s) in a background thread — the common conflict is transient (a
+/// previous overlay instance still shutting down during a relaunch).
+fn register_hotkeys(app: &tauri::AppHandle) {
+    const RETRY_DELAYS: [u64; 5] = [2, 4, 8, 16, 32];
+    let mut pending: Vec<&'static str> = Vec::new();
+    for (accel, _) in HOTKEYS {
+        match app.global_shortcut().register(*accel) {
+            Ok(()) => println!("[hotkey] {accel} registered"),
+            Err(e) => {
+                println!("[hotkey] {accel} FAILED to register (will retry): {e}");
+                pending.push(accel);
+            }
+        }
+    }
+    if pending.is_empty() {
+        return;
+    }
+    let handle = app.clone();
+    thread::spawn(move || {
+        for delay in RETRY_DELAYS {
+            thread::sleep(Duration::from_secs(delay));
+            pending.retain(|accel| match handle.global_shortcut().register(*accel) {
+                Ok(()) => {
+                    println!("[hotkey] {accel} registered after retry");
+                    false
+                }
+                Err(_) => true,
+            });
+            if pending.is_empty() {
+                return;
+            }
+        }
+        for accel in &pending {
+            println!("[hotkey] {accel} PERMANENTLY unavailable — bound by another app");
+        }
+    });
+}
+
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, shortcut, event| {
+                    if event.state() != ShortcutState::Pressed {
+                        return;
+                    }
+                    // Compare parsed Shortcuts, not display strings — the
+                    // plugin's to_string() normalization isn't a stable
+                    // format to match against.
+                    let action = HOTKEYS
+                        .iter()
+                        .find(|(accel, _)| accel.parse::<Shortcut>().is_ok_and(|s| s == *shortcut))
+                        .map(|(_, action)| *action);
+                    match action {
+                        Some(action) => {
+                            println!("[hotkey] shortcut pressed -> {action}");
+                            if let Err(e) = app.emit("overlay://hotkey", action) {
+                                println!("[hotkey] emit failed: {e}");
+                            }
+                        }
+                        None => println!("[hotkey] unmatched shortcut fired: {shortcut:?}"),
+                    }
+                })
+                .build(),
+        )
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_notification::init())
@@ -264,6 +346,7 @@ pub fn run() {
         ])
         .setup(|app| {
             seed_meta_json(app.handle());
+            register_hotkeys(app.handle());
 
             // --debug-opaque-overlay (or OVERLAY_DEBUG_OPAQUE=1 under `tauri dev`):
             // same window geometry/position as the shipped overlay, but opaque,
