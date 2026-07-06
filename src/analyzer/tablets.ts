@@ -169,16 +169,21 @@ export const DEFAULT_TABLETS: RawTabletDef[] = [
   // 2026-07-04): base type "Abyss Tablet", drop level 65, "Adds Abysses to
   // a Map", 10 uses remaining — a personal-Map-Device consumable, not
   // slotted into a Precursor Tower like the six above (a real mechanical
-  // difference this app doesn't model). poe2db explicitly doesn't have
-  // exact affix text ("Modifier weight information cannot be obtained from
-  // game files"), so — unlike the six above — its `mods` here is a
-  // plausible representative roll, not confirmed wording; real value is
-  // mostly Abyssal Jewels/Abyssal troves, represented via `rewards`.
+  // difference this app doesn't model). Its `mods` is a plausible
+  // representative roll, not confirmed wording (poe2db has no affix text)
+  // — but that's equally true of every mechanic-specific entry above, so
+  // it carries the same "medium" confidence they do (was "low", which
+  // stacked a permanent ×0.8 vs ×0.92 penalty on top of its already-lowest
+  // rewardScore and kept it pinned to the bottom of the list — rebalanced
+  // 2026-07-06). Roll aligned with the researched 0.5 Abyss profile
+  // (monsterRarity priority — loot comes from rares, pack size explicitly
+  // not recommended); real value is mostly Abyssal Jewels/troves, via
+  // `rewards`.
   {
     name: "Abyss Tablet",
-    mods: ["15% increased Pack Size"],
+    mods: ["15% increased Rarity of Monsters"],
     tags: ["abyss"],
-    confidence: "low",
+    confidence: "medium",
     source: "poe2db",
     rewards: [
       { type: "mechanic", id: "abyss", value: 7 },
