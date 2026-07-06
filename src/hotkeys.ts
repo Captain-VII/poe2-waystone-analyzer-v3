@@ -65,10 +65,17 @@ export async function registerHotkeys(
   // register).
   await tryRegister("Control+Insert", () => onToggleCompare());
   await tryRegister("Insert", () => onAnalyze());
-  // Bare Escape — RegisterHotKey-style global shortcuts don't consume the
-  // keystroke (unlike a low-level keyboard hook), so the game still gets
-  // its own Escape normally; this just also notifies us to hide.
-  await tryRegister("Escape", () => onHide());
+  // Escape is deliberately NOT a global shortcut: on Windows,
+  // RegisterHotKey-style registration DOES swallow the keystroke system-wide
+  // (confirmed in real use 2026-07-06 — Escape stopped working in the game
+  // and every other app while the overlay ran; the previous comment here
+  // claiming otherwise was wrong). A local keydown listener only fires when
+  // the overlay window itself has focus — exactly the one case where
+  // "Escape = hide the overlay" makes sense — and costs every other app
+  // nothing.
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") onHide();
+  });
 
   if (isMac) {
     // Dev-only aliases so hotkeys are testable on a Mac keyboard without an
