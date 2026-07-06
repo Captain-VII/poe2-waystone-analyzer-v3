@@ -45,18 +45,47 @@ export async function registerHotkeys(
   // "Control+Insert" silently killed the rest of registration before). A
   // failure here is logged, not thrown, so the remaining bindings still
   // get a chance.
+  //
+  // On failure, retries continue in the background (2s/4s/8s/16s/32s):
+  // the most common real-world conflict is *transient* — a previous
+  // overlay instance still shutting down and holding the accelerator for
+  // a moment during a relaunch (reported 2026-07-06: Insert dead at
+  // startup until a manual restart). The first attempt is awaited so the
+  // happy path is unchanged; retries never block init().
+  const RETRY_DELAYS_MS = [2000, 4000, 8000, 16000, 32000];
   async function tryRegister(accel: string, handler: (state: string) => void): Promise<void> {
-    try {
-      await register(accel, (e) => {
+    const attempt = () =>
+      register(accel, (e) => {
         dbg(accel, e.state);
         if (e.state === "Pressed") handler(e.state);
       });
+    try {
+      await attempt();
+      return;
     } catch (err) {
-      console.warn(`[hotkeys] failed to register "${accel}" — likely already bound by another app`, err);
+      console.warn(`[hotkeys] failed to register "${accel}" — retrying in background`, err);
       void invoke("log_frontend_report", {
-        report: `[hotkey debug] FAILED to register ${accel}: ${String(err)}`,
+        report: `[hotkey debug] FAILED to register ${accel} (will retry): ${String(err)}`,
       }).catch(() => {});
     }
+    void (async () => {
+      for (const delay of RETRY_DELAYS_MS) {
+        await new Promise((r) => setTimeout(r, delay));
+        try {
+          await attempt();
+          void invoke("log_frontend_report", {
+            report: `[hotkey debug] ${accel} registered after retry`,
+          }).catch(() => {});
+          return;
+        } catch {
+          // still held elsewhere — next backoff step
+        }
+      }
+      console.warn(`[hotkeys] "${accel}" permanently unavailable — bound by another app`);
+      void invoke("log_frontend_report", {
+        report: `[hotkey debug] ${accel} PERMANENTLY unavailable after ${RETRY_DELAYS_MS.length} retries`,
+      }).catch(() => {});
+    })();
   }
 
   await tryRegister("Shift+Insert", () => onToggle());
