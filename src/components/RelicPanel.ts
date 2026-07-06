@@ -58,11 +58,6 @@ const BADGE_LABEL: Record<TierClass, string> = {
 
 const RANKS = ["I", "II", "III", "IV"];
 
-/** Fallback bar-width divisor for breakdown rows without their own `max`
- *  (2026-07-06: only the "bonus" row now — the 5 core stat rows carry a
- *  real per-stat cap, see BreakdownEntry.max). */
-const BR_MAX = 35;
-
 const CORNER_PATHS = `
   <path d="M2 23 V8 Q2 2 8 2 H23" fill="none" stroke="currentColor" stroke-width="2.2"/>
   <path d="M2 17 Q10 15 10 10 Q15 10 17 2" fill="none" stroke="currentColor" stroke-width="1" opacity=".7"/>
@@ -318,17 +313,25 @@ export function mountOverlay(
       .map((t, i) => tabletRow(t, i))
       .join("");
 
+    // The column-1 label width (~104px) fits every breakdown label except
+    // these two — shortened display-only (full name still on hover), same
+    // pattern as tabletRow's `shortName` above; adapter.ts's `label` (used
+    // by Insights' "High <label>" phrasing, which has room for the long
+    // form) is untouched.
+    const BREAKDOWN_SHORT_LABELS: Partial<Record<string, string>> = {
+      monsterEffectiveness: "Monster Eff.",
+      waystoneDropChance: "Drop Chance",
+    };
     q("[data-breakdown]").innerHTML = heat.breakdown
-      .map(
-        (b) => `
+      .map((b) => {
+        const shortLabel = BREAKDOWN_SHORT_LABELS[b.key] ?? b.label;
+        return `
         <div class="brow">
-          <span class="b-lab">${esc(b.label)}</span>
-          <div class="bar"><i></i></div>
+          <span class="b-lab" title="${esc(b.label)}">${esc(shortLabel)}</span>
           <span class="b-val">${b.display ?? fmtDelta(b.value)}</span>
-        </div>`,
-      )
+        </div>`;
+      })
       .join("");
-    animateBars();
 
     // Key factors + insights share one row, folded together rather than a
     // new titled section (see docs/implementation-plan.md) — but the
@@ -376,26 +379,6 @@ export function mountOverlay(
     }
   }
 
-  function animateBars(): void {
-    const rows = panel.querySelectorAll<HTMLElement>("[data-breakdown] .brow");
-    rows.forEach((row, i) => {
-      const fill = row.querySelector(".bar i") as HTMLElement;
-      const entry = current.heat.breakdown[i];
-      const value = entry?.value ?? 0;
-      // Real stat rows scale against their own cap (e.g. Item Rarity's 200%
-      // vs. Pack Size's 150%) rather than one flat constant shared across
-      // very different stat scales — see BreakdownEntry.max.
-      const max = entry?.max ?? BR_MAX;
-      const width = `${Math.min((Math.abs(value) / max) * 100, 100)}%`;
-      if (opts.isReduced()) {
-        fill.style.width = width; // §10: bars set instantly
-        return;
-      }
-      fill.style.width = "0";
-      requestAnimationFrame(() => requestAnimationFrame(() => (fill.style.width = width)));
-    });
-  }
-
   function spawnSparks(): void {
     const host = effective === "full" ? q("[data-hero-full]") : q("[data-hero-compact]");
     for (let n = 0; n < 5; n++) {
@@ -421,7 +404,6 @@ export function mountOverlay(
     retrigger(chip, "flare");
     if (!warn.hidden) retrigger(warn, "reveal"); // §7 warning reveal
     if (!miniWarn.hidden) retrigger(miniWarn, "reveal");
-    animateBars();
     if (current.heat.tierClass === "god") spawnSparks();
   }
 
@@ -447,7 +429,6 @@ export function mountOverlay(
     // only fires on an actual layout switch, not every re-application of
     // the same mode. Avoids a stale Settings panel over the new layout.
     if (settingsOpen && modeChanged) toggleSettings();
-    if (m === "full") animateBars(); // §7 bar sweep also triggers on entering Full
   }
 
   /** Settings-panel-only display prefs (insights visibility, opacity,
