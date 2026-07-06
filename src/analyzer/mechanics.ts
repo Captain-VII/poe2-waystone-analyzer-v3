@@ -82,18 +82,24 @@ export const MECHANICS: MechanicDef[] = [
     skipIfBelow: 35,
     detect: /\bblight\b/i,
   },
+  // Community consensus 0.5 (switchbladegaming/timesaver/u4gm, 2026-07-06):
+  // pack size drives splinter throughput in the fog; rarity (140%+ target)
+  // and quantity (20-25%) scale what each fog kill is worth.
   {
     name: "Delirium",
     priorityStat: "packSize",
-    secondaryStats: ["itemRarity", "monsterRarity"],
+    secondaryStats: ["itemRarity", "quantity"],
     recommendedTablets: ["Delirium Tablet", "Standard Precursor Tablet"],
     skipIfBelow: 40,
     detect: /\bdelirium\b/i,
   },
+  // Community consensus 0.5 (maxroll/aoeah/timesaver, 2026-07-06): logbook/
+  // artifact quantity is the money stat, then runic/rare monster spawns;
+  // pack size only helps chain detonations.
   {
     name: "Expedition",
-    priorityStat: "monsterEffectiveness",
-    secondaryStats: ["packSize", "waystoneDropChance"],
+    priorityStat: "quantity",
+    secondaryStats: ["monsterRarity", "packSize"],
     recommendedTablets: ["Expedition Tablet", "Standard Precursor Tablet"],
     skipIfBelow: 35,
     detect: /\bexpedition\b/i,
@@ -138,26 +144,35 @@ export const MECHANICS: MechanicDef[] = [
     skipIfBelow: 30,
     detect: /\bmetamorph\b|catalyst/i,
   },
+  // Community consensus 0.5 (mobalytics tierlist/mmogah, 2026-07-06): loot
+  // comes from rares — rare monster count first, then item quantity and
+  // monster effectiveness; pack size is explicitly not recommended.
   {
     name: "Abyss",
-    priorityStat: "packSize",
-    secondaryStats: ["monsterRarity", "quantity"],
+    priorityStat: "monsterRarity",
+    secondaryStats: ["quantity", "monsterEffectiveness"],
     recommendedTablets: ["Abyss Tablet", "Standard Precursor Tablet"],
     skipIfBelow: 30,
     detect: /\babyss(?:al)?\b/i,
   },
+  // Community consensus 0.5 (mobalytics/exile.codex/aoeah, 2026-07-06):
+  // tribute scales with magic/rare monster count and pack density — item
+  // rarity does NOT affect ritual rewards, so it's dropped here.
   {
     name: "Ritual",
     priorityStat: "monsterRarity",
-    secondaryStats: ["itemRarity", "packSize"],
+    secondaryStats: ["packSize", "monsterEffectiveness"],
     recommendedTablets: ["Ritual Tablet", "Standard Precursor Tablet"],
     skipIfBelow: 35,
     detect: /\britual\b/i,
   },
+  // Community consensus 0.5 (switchbladegaming/aoeah/boostmatch,
+  // 2026-07-06): rare monster count first, then ~60-65% combined
+  // rarity + monster effectiveness; rares carry the value, not white packs.
   {
     name: "Breach",
-    priorityStat: "monsterEffectiveness",
-    secondaryStats: ["packSize", "monsterRarity"],
+    priorityStat: "monsterRarity",
+    secondaryStats: ["itemRarity", "monsterEffectiveness"],
     recommendedTablets: ["Breach Tablet", "Standard Precursor Tablet"],
     skipIfBelow: 35,
     detect: /\bbreach(?:es)?\b/i,

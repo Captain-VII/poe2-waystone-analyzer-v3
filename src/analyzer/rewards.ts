@@ -40,12 +40,16 @@ const CURRENCY_WEIGHT_UNIT = 3;
  *  behind, rather than all four sitting within 2 points of each other —
  *  same single lever, no second weighting table layered on top of it (see
  *  `rewardContribution`'s doc comment for why). */
+// Expedition deliberately demoted from 9 to 5 (2026-07-06, user choice):
+// it's now a *secondary* mechanic (see adapter.ts's PRIMARY_MECHANIC_TAGS)
+// — its previously second-highest reward value made its tablet crowd the
+// top of the list regardless of the waystone's actual profile.
 export const MECHANIC_VALUES: Record<string, number> = {
   delirium: 10,
-  expedition: 9,
   breach: 7,
   abyss: 7,
   irradiated: 6,
+  expedition: 5,
   ritual: 5,
   temple: 5,
 };

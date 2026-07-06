@@ -240,17 +240,54 @@ function computeMechanicScores(stats: ModStats, rawText: string): MechanicScore[
  *  Real `StatKey`s only; "monster density"/"magic monsters" aren't tracked
  *  stats in this app (see KNOWN_ISSUES.md #2), so the nearest tracked proxy
  *  is used instead (`monsterEffectiveness`/`monsterRarity`). */
+// Kept aligned with each mechanic's researched priority/secondary stats in
+// mechanics.ts (community consensus 0.5, 2026-07-06) — same sources, same
+// rationale comments there.
 const MECHANIC_SYNERGY: Partial<Record<string, StatKey[]>> = {
-  delirium: ["packSize", "monsterRarity"],
-  breach: ["packSize", "monsterEffectiveness"],
-  expedition: ["quantity", "itemRarity"],
-  ritual: ["itemRarity"],
-  abyss: ["monsterRarity"],
+  delirium: ["packSize", "itemRarity"],
+  breach: ["monsterRarity", "itemRarity"],
+  expedition: ["quantity", "monsterRarity"],
+  ritual: ["monsterRarity", "packSize"],
+  abyss: ["monsterRarity", "quantity"],
   irradiated: ["itemRarity", "monsterEffectiveness"],
   temple: ["itemRarity", "packSize"],
 };
 
+/** User-designated primary mechanics (2026-07-06): the ones worth building
+ *  a map around. Tablets whose mechanic isn't in this set (Expedition,
+ *  Irradiated, Temple, and the generic Standard/Overseer) take a gentle
+ *  end-stage ×0.8 on their fit in `rankTablets` — same soft-malus pattern
+ *  as `getConfidenceMultiplier`, never a hard grouping: a secondary tablet
+ *  that fits this waystone far better can still rank first. */
+const PRIMARY_MECHANIC_TAGS = new Set(["breach", "delirium", "ritual", "abyss"]);
+const SECONDARY_MECHANIC_MULTIPLIER = 0.8;
+
 const SYNERGY_CAP = 10;
+
+// Short stat names for the tablet list's one-line synergy footer ("Pack
+// size + Monster eff. = Breach loot") — tighter than FIELD_LABELS, which
+// is sized for the Heat Breakdown rows, not an inline formula.
+const SYNERGY_STAT_LABELS: Record<StatKey, string> = {
+  itemRarity: "Rarity",
+  monsterRarity: "Monster rarity",
+  packSize: "Pack size",
+  monsterEffectiveness: "Monster eff.",
+  waystoneDropChance: "Waystones",
+  quantity: "Quantity",
+};
+
+/** "Pack size + Monster eff. = Breach loot" — why the top tablet pairs
+ *  with this map, phrased from the same MECHANIC_SYNERGY stats
+ *  computeSynergyBonus scores on (never a second, drifting list).
+ *  Undefined for tablets without a synergy-mapped mechanic tag
+ *  (Standard/Overseer/General) — the overlay hides the footer then. */
+function buildSynergyLine(tablet: TabletDef): string | undefined {
+  const mechId = tablet.tags?.find((t) => t in MECHANIC_SYNERGY);
+  const synergyStats = mechId ? MECHANIC_SYNERGY[mechId] : undefined;
+  if (!mechId || !synergyStats || synergyStats.length === 0) return undefined;
+  const mechName = mechId.charAt(0).toUpperCase() + mechId.slice(1);
+  return `${synergyStats.map((s) => SYNERGY_STAT_LABELS[s]).join(" + ")} = ${mechName} loot`;
+}
 
 /** Small additive bonus (0-`SYNERGY_CAP`) rewarding a tablet whose mechanic
  *  synergizes with what this specific waystone is actually strong in.
@@ -315,8 +352,11 @@ function rankTablets(mech: MechanicDef, stats: ModStats): { tablet: TabletDef; f
         rawSynergy <= maxAllowedBonus ? rawSynergy : maxAllowedBonus + (rawSynergy - maxAllowedBonus) * 0.25;
       const synergyBonus = Math.min(scaledSynergy, SYNERGY_CAP);
       const adjusted = Math.max(0, Math.min(100, baseFit + synergyBonus));
-      const multiplier = getConfidenceMultiplier(tablet.confidence);
-      const fitRaw = Math.max(0, Math.min(100, adjusted * multiplier));
+      const confidenceMult = getConfidenceMultiplier(tablet.confidence);
+      const tierMult = tablet.tags?.some((t) => PRIMARY_MECHANIC_TAGS.has(t))
+        ? 1
+        : SECONDARY_MECHANIC_MULTIPLIER;
+      const fitRaw = Math.max(0, Math.min(100, adjusted * confidenceMult * tierMult));
       const fit = Math.round(fitRaw);
       return { tablet, fit, fitRaw };
     })
@@ -374,11 +414,16 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
   const recommendedMechanic = bestTabletLinked && bestTabletLinked.score > 0 ? bestTabletLinked.mechanic : null;
 
   const ranked = bestMechanicDef ? rankTablets(bestMechanicDef, stats) : [];
-  const tablets = ranked.slice(0, 4).map(({ tablet, fit }) => ({
+  // 5 rows (was 4): the tablet list is now a uniform icon/score/bar scan
+  // list with no per-row reason/rewards lines, so five rows cost less
+  // height than the old three did.
+  const tablets = ranked.slice(0, 5).map(({ tablet, fit }, i) => ({
     name: tablet.name,
     delta: Math.round((sumBoosts(tablet.boosts) / 10) * 10) / 10,
     reason: `${tablet.name} matches ${recommendedMechanic ?? "General"} (${fit}/100)`,
     rating: scoreToRating(fit),
+    fit,
+    synergy: i === 0 ? buildSynergyLine(tablet) : undefined,
     rewards: tablet.rewards && tablet.rewards.length > 0 ? tablet.rewards.map(describeReward) : undefined,
   }));
   // Trust fix: never show a mechanic recommendation with no tablet paired to
