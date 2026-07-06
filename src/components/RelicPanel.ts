@@ -56,7 +56,20 @@ const BADGE_LABEL: Record<TierClass, string> = {
   god: "LEGENDAIRE ✦",
 };
 
-const RANKS = ["I", "II", "III", "IV"];
+/** Row icon per tablet, keyed by the display short name (name minus the
+ *  "(Precursor) Tablet" suffix, lowercased). Display-only flavor — an
+ *  unknown/new tablet (e.g. added via meta.json) falls back to "◆". */
+const TABLET_ICONS: Record<string, string> = {
+  breach: "⚡",
+  ritual: "🔱",
+  delirium: "🌀",
+  abyss: "👁",
+  expedition: "⛏",
+  irradiated: "☢",
+  temple: "🏛",
+  standard: "✦",
+  overseer: "👑",
+};
 
 const CORNER_PATHS = `
   <path d="M2 23 V8 Q2 2 8 2 H23" fill="none" stroke="currentColor" stroke-width="2.2"/>
@@ -133,7 +146,7 @@ export function mountOverlay(
             </div>
             <div class="sep"></div>
             <div class="tabs-v">
-              <div class="sec-h">Top Tablets</div>
+              <div class="sec-h">Tablettes Recommandées</div>
               <div data-tablets></div>
             </div>
             <div class="warn-strip" data-warn hidden><span class="w-ic">⚠</span><span data-warntext></span><span class="w-level" data-warnlevel></span></div>
@@ -142,7 +155,7 @@ export function mountOverlay(
           <div class="body body-full">
             <div class="cols">
               <div class="col" data-col-tablets>
-                <div class="sec-h">Top Tablets</div>
+                <div class="sec-h">Tablettes Recommandées</div>
                 <div data-tablets-full></div>
               </div>
               <div class="col" data-col-heat>
@@ -266,52 +279,33 @@ export function mountOverlay(
     }
     q("[data-score-label]").textContent = heat.scoreLabel;
 
-    // Only the top-ranked tablet's rewards are shown (§9 stays a single
-    // recommendation, not a rewards table) — rendered as one compact line
-    // under its row, nothing added when it has none.
-    const rewardsLine = (t: AnalysisResult["tablets"][number]) =>
-      t.rewards && t.rewards.length > 0
-        ? `<div class="tab-rewards">${t.rewards
-            .map((r) => `<span class="rw-ic">◆</span> ${esc(r.label)} <b>${fmtDelta(r.value)}</b>`)
-            .join("")}</div>`
-        : "";
-    // Only rank I gets the reason/rewards lines — ranks II/III are a single
-    // tight scan-line (rank, name, rating, score) with no extra reading, so
-    // the eye has exactly one place to linger (§ scan-speed pass).
-    const tabletRow = (t: AnalysisResult["tablets"][number], i: number) => {
-      const isBest = i === 0;
+    // One uniform scan-row per tablet: icon · NAME · fit score · fit bar
+    // (0-100 → bar width). No per-row reason/rating/rewards lines anymore —
+    // the single synergy footer under the list carries the "why" instead.
+    const tabletRow = (t: AnalysisResult["tablets"][number]) => {
       // Every real tablet name ends in "Tablet" (Expedition Tablet, Standard
-      // Precursor Tablet, ...) — that word carries no distinguishing info once
-      // it's in a column titled "Top Tablets", so it's dropped here (display
-      // only; t.name itself, used below for the reason-stripping and the
-      // hover title, is untouched).
-      const shortName = t.name.replace(/\s+Tablet$/i, "");
-      const line = `
-        <span class="rec-rank">${RANKS[i]}</span>
-        <span class="rec-name" title="${esc(t.name)}">${esc(shortName)}</span>
-        <span class="rec-rating rec-rating-${t.rating}">${t.rating}</span>
-        <span class="rec-delta">${fmtDelta(t.delta)}</span>`;
-      if (!isBest) return `<div class="tab-row"><div class="tab-line">${line}</div></div>`;
-      // t.reason is already computed by adapter.ts as "<name> matches <mechanic>
-      // (n/100)" — the name repeats what rec-name already shows right above it,
-      // so it's stripped here (display-only, adapter.ts untouched) to save the
-      // column width for the part that's actually new information.
-      const stripped = t.reason.startsWith(t.name) ? t.reason.slice(t.name.length).trim() : t.reason;
-      const reason = stripped.charAt(0).toUpperCase() + stripped.slice(1);
-      return `<div class="tab-row best"><div class="tab-line">${line}</div><div class="tab-reason">${esc(reason)}</div>${rewardsLine(t)}</div>`;
+      // Precursor Tablet, ...) — that word carries no distinguishing info in
+      // a column titled "Tablettes Recommandées", so it's dropped here
+      // (display only; t.name stays in the hover title).
+      const shortName = t.name.replace(/\s+(Precursor\s+)?Tablet$/i, "");
+      const icon = TABLET_ICONS[shortName.toLowerCase()] ?? "◆";
+      return `
+        <div class="trow" title="${esc(t.reason)}">
+          <span class="t-ic">${icon}</span>
+          <span class="t-name" title="${esc(t.name)}">${esc(shortName)}</span>
+          <span class="t-fit">${t.fit}</span>
+          <div class="tbar"><i style="width:${Math.min(Math.max(t.fit, 0), 100)}%"></i></div>
+        </div>`;
     };
-    q("[data-tablets]").innerHTML = result.tablets
-      .slice(0, 3)
-      .map((t, i) => tabletRow(t, i))
-      .join("");
-    // Trimmed from 4 to 3 (2026-07-04, matches Compact's existing cap):
-    // frees the vertical room the new rec-rating column and top tablet's
-    // tab-rewards line need to avoid clipping the warning row below in
-    // column 3's fixed, non-scrolling height budget.
-    q("[data-tablets-full]").innerHTML = result.tablets
-      .slice(0, 3)
-      .map((t, i) => tabletRow(t, i))
-      .join("");
+    // "Pack size + Rarity = Breach loot" — the top pick's synergy note,
+    // adapter-computed (tablets[0].synergy); footer hidden when absent
+    // (Standard/Overseer/General have no mechanic-specific synergy).
+    const synergyFooter = result.tablets[0]?.synergy
+      ? `<div class="t-syn"><span class="t-syn-ic">⚡</span>${esc(result.tablets[0].synergy)}</div>`
+      : "";
+    const tabletsHtml = result.tablets.slice(0, 5).map(tabletRow).join("") + synergyFooter;
+    q("[data-tablets]").innerHTML = tabletsHtml;
+    q("[data-tablets-full]").innerHTML = tabletsHtml;
 
     // The column-1 label width (~104px) fits every breakdown label except
     // these two — shortened display-only (full name still on hover), same

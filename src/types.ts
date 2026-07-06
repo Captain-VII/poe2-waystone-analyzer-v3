@@ -88,6 +88,16 @@ export interface Tablet {
   /** Letter view of this tablet's stat+reward fit score (0-100) against the
    *  recommended mechanic. */
   rating: Rating;
+  /** The same 0-100 stat+reward fit score `rating` is the letter view of —
+   *  numeric, for the row's score figure and bar width (`fit / 100`).
+   *  Computed in adapter.ts (rankTablets), never in the overlay. */
+  fit: number;
+  /** One-line "why this pairs with the map" note (e.g. "Pack size +
+   *  Monster eff. = Breach loot"), derived adapter-side from the tablet
+   *  mechanic's synergy stats. Only set on the top-ranked tablet; the
+   *  overlay renders it as the list's footer line and hides the footer
+   *  when absent. */
+  synergy?: string;
   /** Individual reward line items (rewards.ts), already resolved to a
    *  display label + the exact number that contributed to this tablet's
    *  fit score. Omitted/empty when the tablet declares no `rewards` — the
@@ -124,7 +134,7 @@ export interface AnalysisResult {
    *  in UI. They are REQUIRED by verify-adapter.mjs tests and part of the
    *  data contract. Do not remove without updating tests. */
   modifiers: Modifier[];
-  /** Sorted by delta desc; Compact and Full both take up to 3. */
+  /** Sorted by fit desc; Compact and Full both render up to 5. */
   tablets: Tablet[];
   /**
    * warning:

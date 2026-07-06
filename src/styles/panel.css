@@ -245,22 +245,78 @@
 }
 .score-label::before { content: "· "; opacity: 0.6; }
 
-/* Shared by the global-score rating pill and each tablet row's rec-rating. */
+/* Letter-grade colors, used by the global-score rating pill. */
 .rec-rating-S { color: var(--god); text-shadow: 0 0 6px rgba(255, 211, 106, 0.4); }
 .rec-rating-A { color: var(--gold-hi); }
 .rec-rating-B { color: var(--ivory); opacity: 0.85; }
 .rec-rating-C { color: var(--grey); }
 .rec-rating-D { color: #8a5a4a; }
 
-.rec-rating {
-  flex: none;
-  font-family: var(--serif);
-  font-weight: 700;
-  font-size: 10px;
-  width: 12px;
-  padding-top: 1px;
-  text-align: center;
+/* ---- recommended-tablets list: one uniform scan-row per tablet
+   (icon · NAME · fit score · fit bar), shared by Compact and Full ---- */
+.trow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 21px;
+  font-size: 11px;
 }
+.trow .t-ic {
+  flex: none;
+  width: 15px;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1;
+}
+.trow .t-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--ivory);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.trow .t-fit {
+  flex: none;
+  width: 22px;
+  text-align: right;
+  color: var(--grey);
+  font-variant-numeric: tabular-nums;
+  font-size: 10px;
+}
+.trow .tbar {
+  flex: none;
+  width: 52px;
+  height: 5px;
+  background: var(--track);
+  border-radius: 2px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.5);
+}
+.trow .tbar i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--gold), var(--gold-hi));
+  border-radius: 2px;
+}
+/* Top pick stands out by name color only — rows stay uniform height. */
+.trow:first-child .t-name { color: var(--gold-hi); }
+
+/* Synergy footer under the list: "⚡ Pack size + Rarity = Breach loot". */
+.t-syn {
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(184, 135, 53, 0.35);
+  font-size: 10px;
+  color: var(--grey);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.t-syn .t-syn-ic { color: var(--gold-hi); margin-right: 4px; }
 
 /* cross-fading mode layouts inside the morphing panel (§7 mode morph) */
 .bodies {
@@ -609,22 +665,6 @@
     transparent
   );
 }
-
-/* ---- top tablet's reward breakdown (rewards.ts), one compact line under
-   the #1 ranked tablet only — never a separate titled section, see
-   docs/implementation-plan.md's UI-rewards entry ---- */
-.tab-rewards {
-  font-size: 10px;
-  color: var(--grey);
-  padding-left: 11px;
-  margin-top: 1px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.tab-rewards .rw-ic { color: var(--gold); font-size: 8px; margin: 0 2px 0 4px; }
-.tab-rewards .rw-ic:first-child { margin-left: 0; }
-.tab-rewards b { color: var(--gold-hi); font-weight: 600; }
 
 .sec-h {
   font-size: 11px;
