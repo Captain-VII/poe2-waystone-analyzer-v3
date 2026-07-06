@@ -26,6 +26,7 @@ import {
   scoreMechanicFit,
   scoreMechanicFitRaw,
   NORMALIZE_CAP,
+  TABLET_ROLL_CAP,
   type MechanicDef,
   type StatKey,
 } from "./mechanics";
@@ -339,7 +340,9 @@ function rankTablets(mech: MechanicDef, stats: ModStats): { tablet: TabletDef; f
   return getActiveTablets()
     .map((tablet) => {
       const pinBonus = mech.recommendedTablets?.includes(tablet.name) ? 10 : 0;
-      const statFit = scoreMechanicFitRaw(tablet.boosts, mech, pinBonus);
+      // TABLET_ROLL_CAP, not NORMALIZE_CAP: a tablet carries one 10-25%
+      // roll, not a waystone's stacked totals — see mechanics.ts.
+      const statFit = scoreMechanicFitRaw(tablet.boosts, mech, pinBonus, TABLET_ROLL_CAP);
       const baseFit = Math.max(0, Math.min(100, statFit + tablet.rewardScore));
       const rawSynergy = computeSynergyBonus(stats, tablet);
       // Diminishing returns: a weak tablet (low baseFit) can't ride synergy

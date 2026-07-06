@@ -113,11 +113,11 @@ export const DEFAULT_TABLETS: RawTabletDef[] = [
   // Real suffixes are almost entirely Breach-specific (Splinters, monster
   // density, additional Breaches) rather than a generic stat — that value
   // flows through `rewards`, not `mods`. `mods` here is one representative
-  // shared-prefix roll (Pack Size, since Breach content is dense packs of
-  // Magic monsters).
+  // shared-prefix roll (Rare Monsters, matching the researched 0.5 Breach
+  // profile: rares carry the value, not white packs).
   {
     name: "Breach Tablet",
-    mods: ["20% increased Pack Size"],
+    mods: ["20% increased Rarity of Monsters"],
     tags: ["breach"],
     confidence: "medium",
     source: "wiki",
@@ -127,10 +127,12 @@ export const DEFAULT_TABLETS: RawTabletDef[] = [
     ],
   },
   // Real suffixes are Ritual Tribute/Favour-focused, not a generic stat —
-  // see `rewards`. `mods` is a representative shared-prefix roll.
+  // see `rewards`. `mods` is a representative shared-prefix roll (Rare
+  // Monsters: tribute scales with magic/rare monster count, and item
+  // rarity does NOT affect ritual rewards per the 0.5 research pass).
   {
     name: "Ritual Tablet",
-    mods: ["15% increased Rarity of Items found"],
+    mods: ["15% increased Rarity of Monsters"],
     tags: ["ritual"],
     confidence: "medium",
     source: "wiki",

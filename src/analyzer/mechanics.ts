@@ -25,10 +25,10 @@ export interface MechanicDef {
   detect?: RegExp;
 }
 
-// Per-stat cap used to normalize a raw stat value (waystone mod magnitude,
-// or a tablet's own boost magnitude) into a 0-1 "how strong is this"
-// signal — shared by mechanic scoring (adapter.ts's computeMechanicScores)
-// and tablet-fit scoring (adapter.ts's rankTablets) so both use one scale.
+// Per-stat cap used to normalize a raw stat value into a 0-1 "how strong
+// is this" signal. Sized for a WAYSTONE's total stat profile (many mods
+// stacking up to ~200% rarity, ~150% pack size) — used by mechanic scoring
+// (adapter.ts's computeMechanicScores) and synergy bonuses.
 export const NORMALIZE_CAP: Record<StatKey, number> = {
   itemRarity: 200,
   monsterRarity: 100,
@@ -36,6 +36,22 @@ export const NORMALIZE_CAP: Record<StatKey, number> = {
   monsterEffectiveness: 100,
   waystoneDropChance: 100,
   quantity: 200,
+};
+
+// Same idea, sized for a single TABLET roll: a tablet carries one shared-
+// prefix mod of 10-25% (tablets.ts research pass), so judging it against
+// the waystone-total scale above made even a perfect tablet score ~8/100
+// on statFit — the whole 0-100 fit scale was dead above ~43 and every
+// tablet displayed C/D forever (user report 2026-07-06). 25 ≈ a top roll
+// of the shared prefix pool; waystoneDropChance 12 because Overseer's real
+// roll is 5-10%. Passed by adapter.ts's rankTablets as the `caps` override.
+export const TABLET_ROLL_CAP: Record<StatKey, number> = {
+  itemRarity: 25,
+  monsterRarity: 25,
+  packSize: 25,
+  monsterEffectiveness: 25,
+  waystoneDropChance: 12,
+  quantity: 25,
 };
 
 /** Crosses any stat profile (a waystone's parsed mods, or a tablet's parsed
@@ -55,8 +71,9 @@ export function scoreMechanicFitRaw(
   profile: Partial<Record<StatKey, number>>,
   mech: MechanicDef,
   extraBonus = 0,
+  caps: Record<StatKey, number> = NORMALIZE_CAP,
 ): number {
-  const normalized = (key: StatKey) => Math.min(1, (profile[key] ?? 0) / NORMALIZE_CAP[key]);
+  const normalized = (key: StatKey) => Math.min(1, (profile[key] ?? 0) / caps[key]);
   let score = 0.6 * normalized(mech.priorityStat);
   for (const sec of mech.secondaryStats.slice(0, 2)) score += 0.2 * normalized(sec);
   score = score * 100 + extraBonus;
@@ -69,8 +86,9 @@ export function scoreMechanicFit(
   profile: Partial<Record<StatKey, number>>,
   mech: MechanicDef,
   extraBonus = 0,
+  caps: Record<StatKey, number> = NORMALIZE_CAP,
 ): number {
-  return Math.round(scoreMechanicFitRaw(profile, mech, extraBonus));
+  return Math.round(scoreMechanicFitRaw(profile, mech, extraBonus, caps));
 }
 
 export const MECHANICS: MechanicDef[] = [
