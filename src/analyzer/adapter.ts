@@ -135,7 +135,7 @@ function scoreToRating(score: number): Rating {
  *  the "high tier" signal for Garder — waystones tier III+ worth keeping
  *  for a good tablet rather than running immediately. */
 function classifyVerdict(score: number, tier: number): Verdict {
-  if (score < 20) return "SKIP";
+  if (score < DEFAULT_THRESHOLD) return "SKIP";
   if (score >= 50 && tier >= 3) return "GARDER";
   return "RUN";
 }
@@ -404,17 +404,28 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
   // tablet recommendation. The other 9 mechanics in mechanics.ts are still
   // scored below (mechanicScores keeps all 17 — the
   // data contract verify-adapter.mjs asserts on) but must never surface as
-  // "matches <mechanic>", since no such tablet exists to match. "General"
-  // stays in this set as the guaranteed-present fallback (mechanics.ts's
-  // only entry with no `detect` gate), so this .find() always resolves.
-  const bestTabletLinked = mechanicScores.find((m) => TABLET_LINKED_MECHANICS.has(m.mechanic));
-  // bestMechanicDef intentionally does not gate on score > 0 — tablet
-  // ranking must still run (falling back to General's stat profile) even
-  // on an all-zero waystone; only the *displayed label* below is gated.
+  // "matches <mechanic>", since no such tablet exists to match.
+  //
+  // §10 gate + deterministic fallback: a mechanic may only drive the tablet
+  // recommendation if it actually scored (> 0) AND the map's Juice Score
+  // clears that mechanic's `skipIfBelow` ("below this Juice Score, this
+  // mechanic isn't worth chasing"). find() walks the desc-sorted list, so
+  // this picks the best fitting mechanic *worth chasing at this score*, not
+  // just the best fitting one. When nothing qualifies (white/zero-stat
+  // waystone, low-score map), tablet ranking still runs — against the
+  // actual "General" def. Before this, raw-score-0 ties fell back to
+  // MECHANICS declaration order, silently ranking tablets against
+  // Delirium's profile while the reason label claimed "General".
+  const activeMechanics = getActiveMechanics();
+  const bestTabletLinked = mechanicScores.find((m) => {
+    if (!TABLET_LINKED_MECHANICS.has(m.mechanic) || m.score <= 0) return false;
+    const def = activeMechanics.find((d) => d.name === m.mechanic);
+    return def !== undefined && evaluation.effectiveScore >= def.skipIfBelow;
+  });
   const bestMechanicDef = bestTabletLinked
-    ? getActiveMechanics().find((m) => m.name === bestTabletLinked.mechanic)
-    : undefined;
-  const recommendedMechanic = bestTabletLinked && bestTabletLinked.score > 0 ? bestTabletLinked.mechanic : null;
+    ? activeMechanics.find((m) => m.name === bestTabletLinked.mechanic)
+    : activeMechanics.find((m) => m.name === "General");
+  const recommendedMechanic = bestTabletLinked ? bestTabletLinked.mechanic : null;
 
   const ranked = bestMechanicDef ? rankTablets(bestMechanicDef, stats) : [];
   // 5 rows (was 4): the tablet list is now a uniform icon/score/bar scan

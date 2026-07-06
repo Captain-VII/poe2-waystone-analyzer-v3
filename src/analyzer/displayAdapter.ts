@@ -16,11 +16,14 @@ export type ScoreLabel = "Bad" | "Average" | "Good" | "Excellent";
 
 /** Coarse, player-facing read of a 0-100 score — separate from adapter.ts's
  *  `tierClass`/`rating` (which drive UI tier bands/letter grades elsewhere);
- *  this is only ever used inside `DisplayData`. */
+ *  this is only ever used inside `DisplayData`. Bands deliberately sit on
+ *  the same 20/40/60 boundaries as adapter.ts's TIER_BANDS (Bad = trash,
+ *  Average = low, Good = good, Excellent = splus + god) so the overlay never
+ *  shows an "EXCELLENT" tier badge next to a "Good" score label. */
 export function getScoreLabel(score: number): ScoreLabel {
-  if (score < 25) return "Bad";
-  if (score < 50) return "Average";
-  if (score < 70) return "Good";
+  if (score < 20) return "Bad";
+  if (score < 40) return "Average";
+  if (score < 60) return "Good";
   return "Excellent";
 }
 

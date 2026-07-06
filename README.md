@@ -51,16 +51,18 @@ Whatever was on your clipboard before pressing Ins is restored afterward.
 
 ### Reading the overlay
 
-- **Juice Score** — a single 0-100 number measuring loot potential only:
+- **Juice Score** — a single 0-100 number measuring real farming value:
   Item Rarity, Monster Rarity, Pack Size, Monster Effectiveness, and
-  Waystone Drop Chance, with bonuses for extra content
-  (Ritual/Breach/Delirium/Expedition, extra rare/magic packs). Danger or
-  annoyance mods (reflect, no leech, no regen, fast monsters, elemental
-  penetration, ...) never lower this number — a dangerous map can still
-  score `S`/Legendaire if its loot stats are good.
+  Waystone Drop Chance (each as a % of a "god map" reference), plus
+  mechanic density and stacking synergy for extra content
+  (Ritual/Breach/Delirium/Expedition, ...). Danger/annoyance mods
+  (reflect, no leech, no regen, fast monsters, elemental penetration, ...)
+  scale the score down (x0.95 / x0.85 / x0.7 for low/medium/high danger) —
+  a great-but-deadly map lands measurably below its safe equivalent, but
+  good loot stats still clearly outweigh the penalty.
 - **Juiciness badge / verdict chip** — `FAIBLE` → `MOYEN` → `BON` →
   `EXCELLENT` → `LEGENDAIRE`, paired with a **Skip / Run / Garder** verdict.
-  Both are driven by the Juice Score alone, never by danger mods.
+  Both are driven by the (danger-adjusted) Juice Score.
 - **Top Tablets / Mechanic Match** (Full mode) — which league mechanic best
   matches this Waystone's stats, and which tablet to slot for it. See
   [KNOWN_ISSUES.md](KNOWN_ISSUES.md) for the current tablet list's scope.

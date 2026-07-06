@@ -92,8 +92,22 @@ const DANGER_PATTERNS: { id: string; label: string; severity: DangerSeverity; pa
     pattern: /reflect(?:s|ed)?\b[^\n]{0,30}?damage/i,
   },
   { id: "cannot-leech", label: "Cannot Leech", severity: "strong", pattern: /cannot\s+leech/i },
-  { id: "no-regeneration", label: "No Regeneration", severity: "strong", pattern: /no\s+.*regenerat/i },
-  { id: "reduced-recovery", label: "Reduced Recovery", severity: "moderate", pattern: /reduced\s+.*recovery/i },
+  // Real PoE2 wording is "Players cannot Regenerate Life, Mana or Energy
+  // Shield" — "no ... regenerat" alone never matched it.
+  {
+    id: "no-regeneration",
+    label: "No Regeneration",
+    severity: "strong",
+    pattern: /(?:no|cannot)\s+[^\n]{0,30}?regenerat/i,
+  },
+  // Real PoE2 wording is "Players have X% less Recovery Rate of Life and
+  // Energy Shield" — "reduced ... recovery" alone never matched it.
+  {
+    id: "reduced-recovery",
+    label: "Reduced Recovery",
+    severity: "moderate",
+    pattern: /(?:reduced|less)\s+[^\n]{0,30}?recovery/i,
+  },
   {
     id: "reduced-regeneration",
     label: "Reduced Regeneration",
@@ -111,7 +125,10 @@ const DANGER_PATTERNS: { id: string; label: string; severity: DangerSeverity; pa
     id: "high-crit-monsters",
     label: "High Crit Monsters",
     severity: "strong",
-    pattern: /monsters?[^\n]{0,40}critical/i,
+    // Verb-scoped (have/gain/deal): the map suffix "Monsters take X%
+    // reduced Extra Damage from Critical Hits" is a *defensive* monster mod
+    // (annoying, not dangerous) and must not read as monsters critting you.
+    pattern: /monsters?\s+(?:have|gain|deal)[^\n]{0,40}critical/i,
   },
   {
     id: "elemental-penetration",
@@ -127,6 +144,36 @@ const DANGER_PATTERNS: { id: string; label: string; severity: DangerSeverity; pa
     label: "Fast Monsters",
     severity: "strong",
     pattern: /monsters?[^\n]{0,40}(?:attack|cast|movement)[^\n]{0,15}speed/i,
+  },
+  {
+    id: "extra-elemental-damage",
+    label: "Extra Elemental Damage",
+    severity: "strong",
+    // "Monsters deal 30% of Damage as Extra Fire" / "Monsters gain 20% of
+    // their Physical Damage as extra Chaos Damage".
+    pattern: /(?:deals?|gains?)[^\n]{0,30}?damage\s+as\s+extra/i,
+  },
+  {
+    id: "lowered-max-resistances",
+    label: "Lowered Max Resistances",
+    severity: "strong",
+    // "-12% maximum Player Resistances" — the stat only ever appears on a
+    // waystone as this malus, so matching the stat name alone is safe.
+    pattern: /maximum\s+player\s+resistances/i,
+  },
+  {
+    id: "additional-projectiles",
+    label: "Extra Projectiles",
+    severity: "moderate",
+    // "Monsters fire 2 additional Projectiles"
+    pattern: /fires?\s+\d+\s+additional\s+projectiles?/i,
+  },
+  {
+    id: "player-curses",
+    label: "Cursed Players",
+    severity: "moderate",
+    // "Players are Cursed with Elemental Weakness/Enfeeble/Temporal Chains"
+    pattern: /players?\s+are\s+cursed\s+with/i,
   },
   {
     id: "reduced-curse-effect",
@@ -163,7 +210,9 @@ const POSITIVE_MOD_PATTERNS: Record<string, [RegExp, number]> = {
   "more magic monsters": [/(?:increased|additional).*magic\s+monsters/i, 4.0],
   "extra content: ritual": [/\britual\b/i, 10.0],
   "extra content: breach": [/\bbreach(?:es)?\b/i, 10.0],
-  "extra content: delirium": [/\bdelirium\b/i, 8.0],
+  // "deliri(?:um|ous)": instilled waystones read "Players in Area are X%
+  // Delirious", never the word "Delirium" itself — both must count.
+  "extra content: delirium": [/\bdeliri(?:um|ous)\b/i, 8.0],
   "extra content: expedition": [/\bexpedition\b/i, 8.0],
 };
 
@@ -172,7 +221,9 @@ const POSITIVE_MOD_PATTERNS: Record<string, [RegExp, number]> = {
 // several at once compounds density and reward far more than any single
 // flat per-mechanic bonus could capture.
 const MECHANIC_SYNERGY_PATTERNS: Record<string, RegExp> = {
-  delirium: /\bdelirium\b/i,
+  // Instilled waystones read "Players in Area are X% Delirious" — the word
+  // "Delirium" never appears on the item, so match both forms.
+  delirium: /\bdeliri(?:um|ous)\b/i,
   breach: /\bbreach(?:es)?\b/i,
   ritual: /\britual\b/i,
   abyss: /\babyss(?:al)?\b/i,
@@ -195,18 +246,26 @@ function clamp01(x: number): number {
 // counts as fully maxed (i.e. contributes its full weight below). Distinct
 // from CAPS above, which only bounds the legacy display breakdown.
 const RARITY_REFERENCE = 100; // Item Rarity %
+const MONSTER_RARITY_REFERENCE = 100; // Monster Rarity %
 const PACK_SIZE_REFERENCE = 30; // Pack Size %
+const MONSTER_EFFECTIVENESS_REFERENCE = 100; // Monster Effectiveness %
 const DROP_CHANCE_REFERENCE = 120; // Waystone Drop Chance %
 const MECHANIC_REFERENCE = 4; // distinct active mechanics
 
 // Max points each signal contributes once it clears its god-map reference —
-// sums to 100, so a maxed-out map (100% rarity, 30% pack size, 120% drop
-// chance, 4+ mechanics) lands `computeBaseScore` at exactly 100 before
-// synergy/danger are even applied.
-const RARITY_WEIGHT = 30;
-const PACK_SIZE_WEIGHT = 25;
-const DROP_CHANCE_WEIGHT = 30;
-const MECHANIC_WEIGHT = 15;
+// sums to 100, so a maxed-out map (100% rarity, 100% monster rarity, 30%
+// pack size, 100% monster effectiveness, 120% drop chance, 4+ mechanics)
+// lands `computeBaseScore` at exactly 100 before synergy/danger are even
+// applied. All 5 cahier-des-charges signals (§2/§5) are scored — the
+// original god-map redesign (2026-07-06) shipped with monsterRarity and
+// monsterEffectiveness accidentally dropped (a +90%/+80% waystone scored
+// 0/100), restored later the same day.
+const RARITY_WEIGHT = 25;
+const MONSTER_RARITY_WEIGHT = 15;
+const PACK_SIZE_WEIGHT = 20;
+const MONSTER_EFFECTIVENESS_WEIGHT = 10;
+const DROP_CHANCE_WEIGHT = 20;
+const MECHANIC_WEIGHT = 10;
 
 /** The actual "how good is this map" base signal: each stat contributes as
  *  a % of its own god-map reference (clamped to 100% of its own weight),
@@ -215,10 +274,13 @@ const MECHANIC_WEIGHT = 15;
  *  score. Naturally lands in [0, 100]. */
 function computeBaseScore(stats: ModStats, mechanicCount: number): number {
   const rarityScore = clamp01(stats.itemRarity / RARITY_REFERENCE) * RARITY_WEIGHT;
+  const monsterRarityScore = clamp01(stats.monsterRarity / MONSTER_RARITY_REFERENCE) * MONSTER_RARITY_WEIGHT;
   const packSizeScore = clamp01(stats.packSize / PACK_SIZE_REFERENCE) * PACK_SIZE_WEIGHT;
+  const monsterEffectivenessScore =
+    clamp01(stats.monsterEffectiveness / MONSTER_EFFECTIVENESS_REFERENCE) * MONSTER_EFFECTIVENESS_WEIGHT;
   const dropScore = clamp01(stats.waystoneDropChance / DROP_CHANCE_REFERENCE) * DROP_CHANCE_WEIGHT;
   const mechanicScore = clamp01(mechanicCount / MECHANIC_REFERENCE) * MECHANIC_WEIGHT;
-  return rarityScore + packSizeScore + dropScore + mechanicScore;
+  return rarityScore + monsterRarityScore + packSizeScore + monsterEffectivenessScore + dropScore + mechanicScore;
 }
 
 // Reward stacking: 2+ distinct mechanics on one map compound each other
@@ -425,7 +487,8 @@ export interface EvaluationResult {
 
 /** Composite Juice Score (2026-07-06 normalized-model redesign): each loot
  *  signal contributes as a % of a "god map" reference value (`computeBaseScore`
- *  — Item Rarity/100%, Pack Size/30%, Waystone Drop Chance/120%, 4+
+ *  — Item Rarity/100%, Monster Rarity/100%, Pack Size/30%, Monster
+ *  Effectiveness/100%, Waystone Drop Chance/120%, 4+
  *  mechanics), not as a flat point value, so real maps land across the full
  *  [0, 100] range instead of compressing into ~0-25. From there: a
  *  mechanic-stacking synergy multiplier and a Pack-Size/mechanic synergy

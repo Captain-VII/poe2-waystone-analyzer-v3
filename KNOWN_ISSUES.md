@@ -166,13 +166,28 @@ PoE2 league mechanics, just not ones with their own tablet), not a bug.
 
 ## 3. Juice Score weights and Mechanic Match Score formula are a first pass
 
-The Juice Score (`src/analyzer/scoring.ts`'s `DEFAULT_WEIGHTS`) and the
-Mechanic Match Score cross (priority stat weighted 0.6, up to two secondary
-stats at 0.2 each, `src/analyzer/adapter.ts`'s `computeMechanicScores`) are
-reasonable first-pass formulas per the cahier des charges, not tuned against
-real gameplay data. Weights/thresholds/tablet lists are user-editable via the
-app config dir's `meta.json` (seeded from `src-tauri/default-meta.json` on
-first run) without a rebuild — see §10 of the cahier des charges.
+The Juice Score's god-map references/weights (`src/analyzer/scoring.ts`'s
+`computeBaseScore` constants — `DEFAULT_WEIGHTS` there is the *legacy
+display-only* breakdown, not the score) and the Mechanic Match Score cross
+(priority stat weighted 0.6, up to two secondary stats at 0.2 each,
+`src/analyzer/adapter.ts`'s `computeMechanicScores`) are reasonable
+first-pass formulas per the cahier des charges, not tuned against real
+gameplay data.
+
+What `meta.json` (app config dir, seeded from `src-tauri/default-meta.json`
+on first run, §10) can actually override without a rebuild: each mechanic's
+`priority_stat`/`secondary_stats`/`recommended_tablets`/`skip_if_below`, and
+the whole `tablets` list (mods/tags/enabled/rewards/confidence/source). The
+Juice Score weights, god-map references, SKIP threshold, danger patterns,
+and synergy multipliers are **hardcoded in `scoring.ts`** and require an
+edit + rebuild — earlier revisions of this entry wrongly claimed they were
+meta.json-editable.
+
+Known calibration doubt: `mechanics.ts`'s `NORMALIZE_CAP.quantity = 200`
+is likely far above what a real waystone can roll (Item Quantity totals are
+small), which keeps quantity-driven mechanic fits (Expedition's priority
+stat) very low. Left as-is for lack of sourced roll data — lower it if a
+real cap turns up.
 
 ## 4. Mechanic-presence detection is a simple keyword match
 

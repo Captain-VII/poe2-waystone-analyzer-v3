@@ -109,7 +109,9 @@ export const MECHANICS: MechanicDef[] = [
     secondaryStats: ["itemRarity", "quantity"],
     recommendedTablets: ["Delirium Tablet", "Standard Precursor Tablet"],
     skipIfBelow: 40,
-    detect: /\bdelirium\b/i,
+    // Instilled waystones read "Players in Area are X% Delirious" — the
+    // word "Delirium" never appears on the item, so match both forms.
+    detect: /\bdeliri(?:um|ous)\b/i,
   },
   // Community consensus 0.5 (maxroll/aoeah/timesaver, 2026-07-06): logbook/
   // artifact quantity is the money stat, then runic/rare monster spawns;

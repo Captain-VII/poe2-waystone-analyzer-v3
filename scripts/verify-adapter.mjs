@@ -157,7 +157,7 @@ check("score in [0,100]", result.heat.score >= 0 && result.heat.score <= 100);
 // Juice Detector v2 (2026-07-06): `score`/`verdict`/`tierClass` now measure
 // real farming value, not loot potential alone — `heat.score` is
 // `effectiveScore`, i.e. reward (synergy + stretch, normalized 0-100) scaled
-// down by the danger penalty (none/low x1.0, medium x0.9, high x0.75).
+// down by the danger penalty (none x1.0, low x0.95, medium x0.85, high x0.7).
 // Danger/annoyance mods still surface via `warning`/`warnings`/`dangerLevel`
 // too, but they are NO LONGER score-neutral — this is an intentional reversal
 // of the original "danger never reduces score" rule (see the
@@ -301,7 +301,7 @@ check("reflect warning present", reflect.warning?.toLowerCase().includes("reflec
 // danger must still clearly be worth running (verdict !== SKIP, several
 // warnings survive), but its score must now land measurably below what the
 // same loot stats would score if safe — proving the danger penalty
-// (dangerLevel 'high' => x0.75 on effectiveScore) actually applies. This
+// (dangerLevel 'high' => x0.7 on effectiveScore) actually applies. This
 // intentionally supersedes the old "danger never reduces score" rule.
 const SAMPLE_DANGEROUS_BUT_JUICY = `Item Class: Waystones
 Rarity: Rare
@@ -368,6 +368,102 @@ check("safe-but-dull map scores low with no/low danger",
   safeButDull.heat.score < 20 &&
   safeButDull.heat.verdict === "SKIP" &&
   (safeButDull.dangerLevel === "none" || safeButDull.dangerLevel === "low"));
+
+// ============================================================
+// SCORING-AUDIT REGRESSIONS (2026-07-06, second pass) — each pins one
+// specific defect found and fixed by the scoring-system audit.
+// ============================================================
+
+// (1) Monster Rarity / Monster Effectiveness must contribute to the Juice
+// Score. The god-map redesign originally shipped with both dropped: a
+// +90%/+80% waystone scored 0/100 SKIP while its own mechanic panel showed
+// Abyss/Ritual/Breach fits of ~70.
+const SAMPLE_MONSTER_ONLY = `Item Class: Waystones
+Rarity: Rare
+Beast Nexus
+Waystone (Tier 15)
+--------
+Waystone Tier: 15
+Item Level: 82
+--------
++90% increased Rarity of Monsters
++80% Monster Effectiveness
+--------`;
+const monsterOnly = analyzeWaystoneText(SAMPLE_MONSTER_ONLY);
+check("monster-rarity/effectiveness-only map scores > 0 (both signals feed the score)",
+  monsterOnly.heat.score > 0);
+
+// (2) Instilled-waystone wording: "Players in Area are X% Delirious" (the
+// word "Delirium" never appears on the item) must count as Delirium —
+// pinned via the detect bonus: the same map scores Delirium strictly
+// higher with the line than without it.
+const mkDeliriousSample = (withLine) => `Item Class: Waystones
+Rarity: Rare
+Fogged Vault
+Waystone (Tier 15)
+--------
+Waystone Tier: 15
+Item Level: 82
+--------
++30% increased Pack Size${withLine ? "\nPlayers in Area are 24% Delirious" : ""}
+--------`;
+const deliriumScoreOf = (r) => r.mechanicScores.find((m) => m.mechanic === "Delirium")?.score ?? 0;
+check("'Players in Area are X% Delirious' grants Delirium its detect bonus",
+  deliriumScoreOf(analyzeWaystoneText(mkDeliriousSample(true))) >
+  deliriumScoreOf(analyzeWaystoneText(mkDeliriousSample(false))));
+
+// (3) "Monsters take X% reduced Extra Damage from Critical Hits" is a
+// DEFENSIVE monster mod — it must not read as monsters critting the player
+// (the false positive applied an unearned x0.85 danger penalty).
+check("detectDangerHits: 'take reduced Extra Damage from Critical Hits' does NOT match",
+  !detectDangerHits("Monsters take 40% reduced Extra Damage from Critical Hits")
+    .some((h) => h.id === "high-crit-monsters"));
+
+// (4) Real PoE2 wordings for the existing recovery/regen categories.
+check("detectDangerHits: 'less Recovery Rate' wording (moderate)",
+  detectDangerHits("Players have 60% less Recovery Rate of Life and Energy Shield")
+    .some((h) => h.id === "reduced-recovery" && h.severity === "moderate"));
+check("detectDangerHits: 'cannot Regenerate' wording (strong)",
+  detectDangerHits("Players cannot Regenerate Life, Mana or Energy Shield")
+    .some((h) => h.id === "no-regeneration" && h.severity === "strong"));
+
+// (5) Danger categories added by the audit, one real wording each.
+check("detectDangerHits: extra elemental damage (strong)",
+  detectDangerHits("Monsters deal 30% of Damage as Extra Fire")
+    .some((h) => h.id === "extra-elemental-damage" && h.severity === "strong"));
+check("detectDangerHits: lowered max player resistances (strong)",
+  detectDangerHits("-12% maximum Player Resistances")
+    .some((h) => h.id === "lowered-max-resistances" && h.severity === "strong"));
+check("detectDangerHits: additional projectiles (moderate)",
+  detectDangerHits("Monsters fire 2 additional Projectiles")
+    .some((h) => h.id === "additional-projectiles" && h.severity === "moderate"));
+check("detectDangerHits: players cursed (moderate)",
+  detectDangerHits("Players are Cursed with Elemental Weakness")
+    .some((h) => h.id === "player-curses" && h.severity === "moderate"));
+
+// (6) White (no-mod) waystone: tablet ranking must run against the actual
+// General profile. Before, raw-score-0 ties fell back to MECHANICS
+// declaration order (Delirium) while the reason label claimed "General".
+const SAMPLE_WHITE = `Item Class: Waystones
+Rarity: Normal
+Waystone
+Waystone (Tier 15)
+--------
+Waystone Tier: 15
+Item Level: 82`;
+const white = analyzeWaystoneText(SAMPLE_WHITE);
+check("white waystone: no mechanic recommendation, tablets ranked vs General",
+  white.recommendedMechanic === null &&
+  white.tablets.length > 0 &&
+  white.tablets.every((t) => t.reason.includes("matches General")));
+
+// (7) §10 skipIfBelow gate: a map whose Juice Score sits below every
+// eligible mechanic's skipIfBelow must not recommend one, even when a
+// mechanic fits well — monsterOnly (score ~21) fits Abyss/Ritual/Breach at
+// ~70, but their thresholds are all 30+.
+check("skipIfBelow gates the mechanic recommendation on low-score maps",
+  monsterOnly.recommendedMechanic === null &&
+  monsterOnly.tablets.every((t) => t.reason.includes("matches General")));
 
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}`);
 process.exit(failures === 0 ? 0 : 1);
