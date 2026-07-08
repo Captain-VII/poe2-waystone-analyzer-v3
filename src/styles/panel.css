@@ -456,6 +456,17 @@
   background: linear-gradient(90deg, transparent, rgba(184, 135, 53, 0.3) 15%, rgba(184, 135, 53, 0.3) 85%, transparent);
 }
 
+/* The binding is a button (click → capture the next keydown, see
+   RelicPanel's onHotkeyCaptureKey) styled as a bare kbd chip — the chrome
+   lives on the kbd, not the button. */
+.set-hotkey {
+  flex: none;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+.set-hotkey:disabled { cursor: default; }
 .set-hotkey kbd {
   font-family: var(--sans);
   font-size: 11px;
@@ -464,7 +475,29 @@
   border: 1px solid rgba(184, 135, 53, 0.4);
   border-radius: 3px;
   padding: 2px 6px;
+  min-width: 22px; /* the "…" capture placeholder shouldn't collapse the chip */
+  display: inline-block;
+  text-align: center;
+  transition: color 120ms ease-out, border-color 120ms ease-out;
 }
+.set-hotkey:hover:not(:disabled) kbd { border-color: var(--gold-hi); color: var(--gold-hi); }
+.set-hotkey.capturing kbd {
+  color: var(--gold-hi);
+  border-color: var(--gold-hi);
+  background: rgba(184, 135, 53, 0.3);
+}
+
+/* Transient "Enregistré ✓" / error feedback next to the binding; squeezed
+   between the label and the chip, so it truncates rather than wraps. */
+.set-hotkey-msg {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.set-hotkey-msg[hidden] { display: none; }
+.set-hotkey-msg.err { color: var(--danger); }
 
 .set-slider {
   width: 100%;

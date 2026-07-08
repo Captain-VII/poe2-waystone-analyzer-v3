@@ -2,7 +2,7 @@ import { MOCK_RESULTS, TIER_ORDER } from "./mock";
 import { mountOverlay, type AnalyzeFailure } from "./components/RelicPanel";
 import { placeTopRight, computeEffectiveMode, watchDisplayChanges } from "./placement";
 import { loadMode, saveMode, loadReduceEffects, loadCompactCompressed, type Mode } from "./settings";
-import { registerHotkeys } from "./hotkeys";
+import { registerHotkeys, getHotkeyBase, setHotkeyBase } from "./hotkeys";
 import { reportInteractiveRegions } from "./interactive-rect";
 import { runDiagnostics, applyDebugOpaqueOverride, sendReport, showWhenPainted, logAnalyzeAttempt } from "./diagnostics";
 import { readClipboardText } from "./clipboard";
@@ -30,6 +30,10 @@ const overlay = mountOverlay(document.getElementById("app")!, MOCK_RESULTS[tier]
   onToggleMode: toggleMode,
   onHide: hideOverlay,
   onInteractiveChange: () => void reportRegions(),
+  // Rust validates, swaps the three registrations (with rollback on
+  // conflict), and persists — see lib.rs's set_hotkey_base. Only offered
+  // inside the real overlay; plain-browser dev keeps a display-only row.
+  onSetHotkey: "__TAURI_INTERNALS__" in window ? setHotkeyBase : undefined,
   // Dev-only: clicking the tier badge cycles the mock fixtures, for UI
   // testing without a real clipboard waystone. Disabled in production
   // builds (import.meta.env.DEV is false) — it would otherwise silently
@@ -181,6 +185,9 @@ async function init(): Promise<void> {
   await sendReport("post-placement");
   await showWhenPainted();
   await registerHotkeys(analyze, toggleMode, toggleCompare, hideOverlay);
+  // The overlay mounts (synchronously, above) before the persisted base
+  // can be fetched — labels default to Ins, corrected here if remapped.
+  overlay.setHotkeyLabel(await getHotkeyBase());
   await watchDisplayChanges(() => void handleDisplayChange());
   await sendReport("display-watch-attached");
   // Startup paint only — must NOT simulate Ctrl+C: whatever window has OS

@@ -15,6 +15,48 @@
 // the Rust-side registration is Windows-targeted (Insert exists there).
 const isMac = navigator.platform.startsWith("Mac") || navigator.userAgent.includes("Mac OS");
 
+export const DEFAULT_HOTKEY_BASE = "Insert";
+
+/** Short display label for a stored base key — bases are raw
+ *  `KeyboardEvent.code` values validated Rust-side ("Insert", "KeyA",
+ *  "F9", "Numpad5"), so this strips the W3C code prefixes for display. */
+export function hotkeyLabel(base: string): string {
+  if (base === "Insert") return "Ins";
+  if (base === "PageUp") return "PgUp";
+  if (base === "PageDown") return "PgDn";
+  if (base === "Delete") return "Del";
+  if (/^Key[A-Z]$/.test(base)) return base.slice(3);
+  if (/^Digit[0-9]$/.test(base)) return base.slice(5);
+  if (base.startsWith("Numpad")) return `Num ${base.slice(6)}`;
+  return base;
+}
+
+/** Maps a captured keydown to a candidate base key, or null for a bare
+ *  modifier press (capture should keep listening). Modifier *state* is
+ *  deliberately ignored: the Shift/Ctrl layers are reserved for
+ *  toggle/compare, so only the unmodified base is remappable. */
+export function keyEventToBase(e: KeyboardEvent): string | null {
+  if (!e.code || /^(Shift|Control|Alt|Meta)/.test(e.code)) return null;
+  return e.code;
+}
+
+export async function getHotkeyBase(): Promise<string> {
+  if (!("__TAURI_INTERNALS__" in window)) return DEFAULT_HOTKEY_BASE;
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke<string>("get_hotkey_base").catch(() => DEFAULT_HOTKEY_BASE);
+}
+
+/** Resolves with the normalized stored base; rejects with a
+ *  user-displayable message (Rust returns French error strings —
+ *  reserved key, unparseable key, or registration conflict). */
+export async function setHotkeyBase(base: string): Promise<string> {
+  if (!("__TAURI_INTERNALS__" in window)) {
+    throw new Error("indisponible hors overlay");
+  }
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke<string>("set_hotkey_base", { base });
+}
+
 export async function registerHotkeys(
   onAnalyze: () => void,
   onToggle: () => void,

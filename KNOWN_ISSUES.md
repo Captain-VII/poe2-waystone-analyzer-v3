@@ -233,10 +233,20 @@ Both settings are now toggles in the in-app Settings panel (gear button):
 "Reduce Effects" (disables pulse/flare/spark animations, keeps all color
 information) and "Compact Compressed" (a ~359px Compact layout for HUDs
 where the default 392px card overlaps something else on screen). They
-apply immediately and persist in `localStorage` as before. The disabled
-"Change hotkey" button was removed from Settings at the same time —
-custom hotkey remapping remains unimplemented (hotkeys are hardcoded on
-the Rust side); the Settings row still displays the fixed `Ins` binding.
+apply immediately and persist in `localStorage` as before.
+
+**Update (2026-07-08):** custom hotkey remapping is now implemented. The
+Settings row's `Ins` chip is a button: click it, press the new key (Escape
+cancels), and all three shortcuts move to that base key (key = analyze,
+Shift+key = toggle, Ctrl+key = compare). The base is validated Rust-side
+(modifiers, Escape, copy/paste keys, and chat keys like Enter/Space are
+rejected; a key already grabbed by another app rolls back to the previous
+binding with an error message) and persists in `hotkey.txt` in the app
+config dir — Rust-side, not `localStorage`, because registration happens at
+startup before the webview exists. One quirk: the *currently bound* key
+can't be captured in the remap flow, because the OS-level global grab means
+the webview never receives its keydown — re-selecting the same key would be
+a no-op anyway.
 
 ## 8. Compare mode is basic
 

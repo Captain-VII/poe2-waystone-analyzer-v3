@@ -15,6 +15,7 @@ import {
   loadScale,
   saveScale,
 } from "../overlaySettings";
+import { DEFAULT_HOTKEY_BASE, hotkeyLabel, keyEventToBase } from "../hotkeys";
 
 export interface OverlayOptions {
   mode: Mode;
@@ -34,6 +35,11 @@ export interface OverlayOptions {
    *  the Settings panel opening/closing) so main.ts can re-report
    *  click-through regions — see interactiveEls(). */
   onInteractiveChange?(): void;
+  /** KNOWN_ISSUES #7: remap the hotkey base key (Shift/Ctrl layers derive
+   *  from it). Resolves with the normalized stored base; rejects with a
+   *  user-displayable message. Omitted = remapping unavailable (the
+   *  Settings row stays display-only). */
+  onSetHotkey?(base: string): Promise<string>;
 }
 
 /** Why an Ins press produced no new result: the copy/read itself failed
@@ -54,6 +60,10 @@ export interface OverlayHandle {
    *  body was active; `closeCompare()` restores it. */
   showCompare(results: AnalysisResult[]): void;
   closeCompare(): void;
+  /** Updates every rendered hotkey label (Settings row, Compact footer,
+   *  toggle tooltip) — called once at startup when the persisted base is
+   *  fetched from Rust, and after a successful remap. */
+  setHotkeyLabel(base: string): void;
   /** Panel element, for click-through rect reporting. */
   panelEl: HTMLElement;
   /** Currently-visible interactive controls (§2: toggle / footer / mod-scroll
@@ -166,7 +176,7 @@ export function mountOverlay(
               <div data-tablets></div>
             </div>
             <div class="warn-strip" data-warn hidden><span class="w-ic">⚠</span><span data-warntext></span><span class="w-level" data-warnlevel></span></div>
-            <button class="p-foot" data-foot><kbd>Ins</kbd> Analyze Waystone</button>
+            <button class="p-foot" data-foot><kbd data-foot-kbd>Ins</kbd> Analyze Waystone</button>
           </div>
           <div class="body body-full">
             <div class="cols">
@@ -237,9 +247,10 @@ export function mountOverlay(
                 </div>
                 <input class="set-slider" type="range" min="0.8" max="1.05" step="0.05" data-set-scale />
               </div>
-              <div class="set-row">
+              <div class="set-row" title="Cliquez puis appuyez sur la nouvelle touche (Échap annule). Shift+touche bascule Compact/Full, Ctrl+touche ouvre Compare.">
                 <span class="set-lab">Hotkey</span>
-                <span class="set-hotkey"><kbd>Ins</kbd></span>
+                <span class="set-val set-hotkey-msg" data-hotkey-msg hidden></span>
+                <button class="set-hotkey" data-set-hotkey type="button" aria-label="Remap the analyze hotkey"><kbd data-hotkey-kbd>Ins</kbd></button>
               </div>
               <div class="set-sep"></div>
               <div class="set-row">
@@ -278,6 +289,10 @@ export function mountOverlay(
   const setScaleInput = q("[data-set-scale]") as HTMLInputElement;
   const setScaleVal = q("[data-set-scale-val]");
   const setHideBtn = q("[data-set-hide]");
+  const hotkeyBtn = q("[data-set-hotkey]") as HTMLButtonElement;
+  const hotkeyKbd = q("[data-hotkey-kbd]");
+  const hotkeyMsg = q("[data-hotkey-msg]");
+  const footKbd = q("[data-foot-kbd]");
 
   let current = initial;
   let effective: EffectiveMode = opts.mode;
@@ -511,10 +526,72 @@ export function mountOverlay(
 
   function toggleSettings(): void {
     settingsOpen = !settingsOpen;
+    if (!settingsOpen) stopHotkeyCapture(); // a half-finished capture must not outlive its UI
     if (settingsOpen && compareActive) closeCompare();
     overlayEl.classList.toggle("settings-open", settingsOpen);
     settingsBtn.classList.toggle("active", settingsOpen);
     opts.onInteractiveChange?.();
+  }
+
+  /** Hotkey remap (KNOWN_ISSUES #7). Click the binding → capture the next
+   *  keydown (window-level, capture phase, so hotkeys.ts's Escape-to-hide
+   *  bubble listener never sees the press) → hand it to opts.onSetHotkey
+   *  (Rust validates, swaps registrations, persists). Note the *current*
+   *  hotkey can't be captured — it's globally grabbed OS-side, so the
+   *  webview never receives its keydown — but re-selecting the same key
+   *  would be a no-op anyway. */
+  let hotkeyBase = DEFAULT_HOTKEY_BASE;
+  let capturingHotkey = false;
+  let hotkeyMsgTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function applyHotkeyLabel(): void {
+    const label = hotkeyLabel(hotkeyBase);
+    hotkeyKbd.textContent = label;
+    footKbd.textContent = label;
+    toggleBtn.title = `Toggle Compact / Full (Shift+${label})`;
+  }
+
+  function setHotkeyLabel(base: string): void {
+    hotkeyBase = base;
+    if (!capturingHotkey) applyHotkeyLabel();
+  }
+
+  function showHotkeyMsg(text: string, isError: boolean): void {
+    hotkeyMsg.textContent = text;
+    hotkeyMsg.classList.toggle("err", isError);
+    hotkeyMsg.hidden = false;
+    clearTimeout(hotkeyMsgTimer);
+    hotkeyMsgTimer = setTimeout(() => (hotkeyMsg.hidden = true), 2500);
+  }
+
+  function stopHotkeyCapture(): void {
+    if (!capturingHotkey) return;
+    capturingHotkey = false;
+    hotkeyBtn.classList.remove("capturing");
+    applyHotkeyLabel();
+    window.removeEventListener("keydown", onHotkeyCaptureKey, true);
+  }
+
+  function onHotkeyCaptureKey(e: KeyboardEvent): void {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.key === "Escape") {
+      stopHotkeyCapture();
+      return;
+    }
+    const base = keyEventToBase(e);
+    if (!base) return; // bare modifier — keep listening
+    stopHotkeyCapture();
+    opts
+      .onSetHotkey!(base)
+      .then((stored) => {
+        hotkeyBase = stored;
+        applyHotkeyLabel();
+        showHotkeyMsg("Enregistré ✓", false);
+      })
+      .catch((err: unknown) => {
+        showHotkeyMsg(err instanceof Error ? err.message : String(err), true);
+      });
   }
 
   /** §12: side-by-side Juice Scores, best one starred + highlighted border.
@@ -597,6 +674,20 @@ export function mountOverlay(
     applyScale(scale);
   });
   setHideBtn.addEventListener("click", opts.onHide);
+  if (opts.onSetHotkey) {
+    hotkeyBtn.addEventListener("click", () => {
+      if (capturingHotkey) {
+        stopHotkeyCapture(); // second click = cancel
+        return;
+      }
+      capturingHotkey = true;
+      hotkeyBtn.classList.add("capturing");
+      hotkeyKbd.textContent = "…";
+      window.addEventListener("keydown", onHotkeyCaptureKey, true);
+    });
+  } else {
+    hotkeyBtn.disabled = true; // plain-browser dev: display-only, like before
+  }
 
   setMode(opts.mode); // applied before first paint — no mode flash (§9)
   syncReducedClass();
@@ -609,6 +700,7 @@ export function mountOverlay(
   setCompressedInput.checked = loadCompactCompressed();
   applyOpacity(loadOpacity());
   applyScale(loadScale());
+  applyHotkeyLabel();
   setResult(initial);
-  return { setResult, setMode, analyze, showAnalyzeError, showCompare, closeCompare, panelEl: panel, interactiveEls };
+  return { setResult, setMode, analyze, showAnalyzeError, showCompare, closeCompare, setHotkeyLabel, panelEl: panel, interactiveEls };
 }

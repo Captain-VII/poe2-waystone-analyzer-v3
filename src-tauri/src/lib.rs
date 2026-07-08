@@ -247,8 +247,9 @@ fn left_click_since_last_poll() -> bool {
     false // dev-only platforms here never run the real click-through path anyway
 }
 
-/// Hotkey accelerators and the action string each one emits to the frontend
-/// (`overlay://hotkey` payload). Registered and handled entirely Rust-side:
+/// Modifier layer per action, applied to one user-remappable base key
+/// (KNOWN_ISSUES #7): base = analyze, Shift+base = toggle, Control+base =
+/// compare. The accelerators are registered and handled entirely Rust-side:
 /// the JS-side `register()` API of tauri-plugin-global-shortcut proved
 /// unreliable on Windows — registration would succeed but the event channel
 /// to the webview sometimes never delivered a single keypress until the app
@@ -259,20 +260,143 @@ fn left_click_since_last_poll() -> bool {
 /// in this app already uses, which has never misfired.
 /// Escape is deliberately absent — it's a local keydown listener in
 /// hotkeys.ts (a global Escape grab swallowed the key OS-wide).
-const HOTKEYS: &[(&str, &str)] = &[
-    ("Insert", "analyze"),
-    ("Shift+Insert", "toggle"),
-    ("Control+Insert", "compare"),
+const HOTKEY_ACTIONS: &[(&str, &str)] = &[
+    ("", "analyze"),
+    ("Shift+", "toggle"),
+    ("Control+", "compare"),
 ];
 
-/// Registers every `HOTKEYS` accelerator, retrying failures on a backoff
-/// (2s→32s) in a background thread — the common conflict is transient (a
-/// previous overlay instance still shutting down during a relaunch).
-fn register_hotkeys(app: &tauri::AppHandle) {
+const DEFAULT_HOTKEY_BASE: &str = "Insert";
+
+/// Keys a global grab must never own: Escape (already a local listener, and
+/// grabbing it OS-wide broke the key everywhere — see hotkeys.ts), the
+/// clipboard trio (Control+C is what `simulate_copy` *sends* — grabbing it
+/// would make the overlay swallow its own copy keystroke, plus break
+/// copy/paste system-wide), and core typing keys the game's chat needs.
+const HOTKEY_BLOCKLIST: &[&str] = &[
+    "Escape", "KeyC", "KeyV", "KeyX", "Enter", "NumpadEnter", "Space", "Tab", "Backspace",
+];
+
+/// Current base key — user-remappable via `set_hotkey_base`, persisted in
+/// the app config dir (see `hotkey_file`) since registration happens at
+/// startup, before the webview (and its localStorage) exists.
+struct HotkeyBase(Mutex<String>);
+
+/// The three (accelerator, action) pairs derived from a base key.
+fn hotkey_accels(base: &str) -> Vec<(String, &'static str)> {
+    HOTKEY_ACTIONS
+        .iter()
+        .map(|(prefix, action)| (format!("{prefix}{base}"), *action))
+        .collect()
+}
+
+/// Rejects modifiers/blocklisted keys and anything the shortcut plugin can't
+/// parse (the frontend sends raw `KeyboardEvent.code` values — "KeyA",
+/// "F9", "Insert", "Numpad5" — which are exactly the W3C `Code` names the
+/// plugin's parser accepts).
+fn validate_hotkey_base(base: &str) -> Result<(), String> {
+    if base.is_empty() || base.contains('+') || base.contains(char::is_whitespace) {
+        return Err("touche invalide".into());
+    }
+    if HOTKEY_BLOCKLIST.iter().any(|b| b.eq_ignore_ascii_case(base)) {
+        return Err("touche réservée (Échap, copier/coller, chat)".into());
+    }
+    for (accel, _) in hotkey_accels(base) {
+        if accel.parse::<Shortcut>().is_err() {
+            return Err("touche non supportée".into());
+        }
+    }
+    Ok(())
+}
+
+fn hotkey_file(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+    app.path().app_config_dir().ok().map(|d| d.join("hotkey.txt"))
+}
+
+fn persist_hotkey_base(app: &tauri::AppHandle, base: &str) {
+    let Some(path) = hotkey_file(app) else { return };
+    if let Some(dir) = path.parent() {
+        let _ = fs::create_dir_all(dir);
+    }
+    if let Err(e) = fs::write(&path, base) {
+        println!("[hotkey] persist failed: {e}");
+    }
+}
+
+fn load_hotkey_base(app: &tauri::AppHandle) -> String {
+    let stored = hotkey_file(app)
+        .and_then(|p| fs::read_to_string(p).ok())
+        .map(|s| s.trim().to_string());
+    match stored {
+        Some(base) if !base.is_empty() => {
+            if validate_hotkey_base(&base).is_ok() {
+                base
+            } else {
+                println!("[hotkey] stored base {base:?} invalid — using {DEFAULT_HOTKEY_BASE}");
+                DEFAULT_HOTKEY_BASE.into()
+            }
+        }
+        _ => DEFAULT_HOTKEY_BASE.into(),
+    }
+}
+
+#[tauri::command]
+fn get_hotkey_base(state: tauri::State<'_, HotkeyBase>) -> String {
+    state.0.lock().unwrap().clone()
+}
+
+/// Remaps the base key: unregisters the old trio, registers the new one,
+/// and rolls back to the old trio if any new registration fails (typically
+/// a conflict with another app's global shortcut) so the overlay never ends
+/// up with no working hotkeys. Persists on success. Errors are
+/// user-displayable French (shown in the Settings panel).
+#[tauri::command]
+fn set_hotkey_base(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, HotkeyBase>,
+    base: String,
+) -> Result<String, String> {
+    let base = base.trim().to_string();
+    validate_hotkey_base(&base)?;
+    let old = state.0.lock().unwrap().clone();
+    if old == base {
+        return Ok(base);
+    }
+    let gs = app.global_shortcut();
+    for (accel, _) in hotkey_accels(&old) {
+        let _ = gs.unregister(accel.as_str());
+    }
+    let mut registered: Vec<String> = Vec::new();
+    for (accel, _) in hotkey_accels(&base) {
+        match gs.register(accel.as_str()) {
+            Ok(()) => registered.push(accel),
+            Err(e) => {
+                println!("[hotkey] remap to {base} failed at {accel}: {e} — rolling back to {old}");
+                for done in &registered {
+                    let _ = gs.unregister(done.as_str());
+                }
+                for (accel, _) in hotkey_accels(&old) {
+                    let _ = gs.register(accel.as_str());
+                }
+                return Err("touche déjà prise par une autre application".into());
+            }
+        }
+    }
+    *state.0.lock().unwrap() = base.clone();
+    persist_hotkey_base(&app, &base);
+    println!("[hotkey] base remapped: {old} -> {base}");
+    Ok(base)
+}
+
+/// Registers the three accelerators for `base`, retrying failures on a
+/// backoff (2s→32s) in a background thread — the common conflict is
+/// transient (a previous overlay instance still shutting down during a
+/// relaunch).
+fn register_hotkeys(app: &tauri::AppHandle, base: &str) {
     const RETRY_DELAYS: [u64; 5] = [2, 4, 8, 16, 32];
-    let mut pending: Vec<&'static str> = Vec::new();
-    for (accel, _) in HOTKEYS {
-        match app.global_shortcut().register(*accel) {
+    let mut pending: Vec<String> = Vec::new();
+    for (accel, _) in hotkey_accels(base) {
+        match app.global_shortcut().register(accel.as_str()) {
             Ok(()) => println!("[hotkey] {accel} registered"),
             Err(e) => {
                 println!("[hotkey] {accel} FAILED to register (will retry): {e}");
@@ -287,7 +411,12 @@ fn register_hotkeys(app: &tauri::AppHandle) {
     thread::spawn(move || {
         for delay in RETRY_DELAYS {
             thread::sleep(Duration::from_secs(delay));
-            pending.retain(|accel| match handle.global_shortcut().register(*accel) {
+            // A remap (set_hotkey_base) may have landed while waiting —
+            // don't resurrect accelerators for a base the user replaced.
+            let current = handle.state::<HotkeyBase>().0.lock().unwrap().clone();
+            let live: Vec<String> = hotkey_accels(&current).into_iter().map(|(a, _)| a).collect();
+            pending.retain(|a| live.contains(a));
+            pending.retain(|accel| match handle.global_shortcut().register(accel.as_str()) {
                 Ok(()) => {
                     println!("[hotkey] {accel} registered after retry");
                     false
@@ -315,10 +444,11 @@ pub fn run() {
                     // Compare parsed Shortcuts, not display strings — the
                     // plugin's to_string() normalization isn't a stable
                     // format to match against.
-                    let action = HOTKEYS
-                        .iter()
+                    let base = app.state::<HotkeyBase>().0.lock().unwrap().clone();
+                    let action = hotkey_accels(&base)
+                        .into_iter()
                         .find(|(accel, _)| accel.parse::<Shortcut>().is_ok_and(|s| s == *shortcut))
-                        .map(|(_, action)| *action);
+                        .map(|(_, action)| action);
                     match action {
                         Some(action) => {
                             println!("[hotkey] shortcut pressed -> {action}");
@@ -342,11 +472,15 @@ pub fn run() {
             show_window,
             reveal_window,
             simulate_copy,
-            hide_window
+            hide_window,
+            get_hotkey_base,
+            set_hotkey_base
         ])
         .setup(|app| {
             seed_meta_json(app.handle());
-            register_hotkeys(app.handle());
+            let hotkey_base = load_hotkey_base(app.handle());
+            app.manage(HotkeyBase(Mutex::new(hotkey_base.clone())));
+            register_hotkeys(app.handle(), &hotkey_base);
 
             // --debug-opaque-overlay (or OVERLAY_DEBUG_OPAQUE=1 under `tauri dev`):
             // same window geometry/position as the shipped overlay, but opaque,

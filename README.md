@@ -49,6 +49,11 @@ other app.
 These are **global shortcuts** — they work even while the game has focus.
 Whatever was on your clipboard before pressing Ins is restored afterward.
 
+The base key (Ins) is remappable: open Settings (gear button), click the
+**Hotkey** binding, then press the new key — the Shift/Ctrl variants follow
+it automatically. Escape cancels the capture. The choice persists across
+restarts (`hotkey.txt` in the app config dir, next to `meta.json`).
+
 ### Reading the overlay
 
 - **Juice Score** — a single 0-100 number measuring real farming value:
