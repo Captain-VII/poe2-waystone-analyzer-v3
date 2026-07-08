@@ -239,9 +239,13 @@ apply immediately and persist in `localStorage` as before.
 Settings row's `Ins` chip is a button: click it, press the new key (Escape
 cancels), and all three shortcuts move to that base key (key = analyze,
 Shift+key = toggle, Ctrl+key = compare). The base is validated Rust-side
-(modifiers, Escape, copy/paste keys, and chat keys like Enter/Space are
-rejected; a key already grabbed by another app rolls back to the previous
-binding with an error message) and persists in `hotkey.txt` in the app
+(modifiers, Escape, Enter/Space/Tab/Backspace, and every *printable* key —
+letters, digits, punctuation, numpad — are rejected, because a global grab
+swallows the key OS-wide and would break typing everywhere, game chat
+included; a key already grabbed by another app rolls back to the previous
+binding with an error message). What's left: F-keys, Insert/Delete/Home/
+End/PageUp/PageDown, arrows, and lock keys. The base persists in
+`hotkey.txt` in the app
 config dir — Rust-side, not `localStorage`, because registration happens at
 startup before the webview exists. One quirk: the *currently bound* key
 can't be captured in the remap flow, because the OS-level global grab means

@@ -269,13 +269,36 @@ const HOTKEY_ACTIONS: &[(&str, &str)] = &[
 const DEFAULT_HOTKEY_BASE: &str = "Insert";
 
 /// Keys a global grab must never own: Escape (already a local listener, and
-/// grabbing it OS-wide broke the key everywhere — see hotkeys.ts), the
-/// clipboard trio (Control+C is what `simulate_copy` *sends* — grabbing it
-/// would make the overlay swallow its own copy keystroke, plus break
-/// copy/paste system-wide), and core typing keys the game's chat needs.
+/// grabbing it OS-wide broke the key everywhere — see hotkeys.ts) and
+/// editing keys. Printable keys (letters/digits/punctuation/numpad) are
+/// rejected separately by `is_printable_key` — a global grab swallows the
+/// key OS-wide, which would break typing everywhere, the game's chat
+/// included (and Control+C is what `simulate_copy` *sends*: grabbing C
+/// would make the overlay swallow its own copy keystroke).
 const HOTKEY_BLOCKLIST: &[&str] = &[
-    "Escape", "KeyC", "KeyV", "KeyX", "Enter", "NumpadEnter", "Space", "Tab", "Backspace",
+    "Escape", "Enter", "NumpadEnter", "Space", "Tab", "Backspace",
 ];
+
+/// W3C `KeyboardEvent.code` values that produce text — all rejected as
+/// hotkey bases (see HOTKEY_BLOCKLIST's rationale). Anything left is
+/// F-keys, navigation (Insert/Delete/Home/End/PageUp/PageDown), arrows,
+/// and lock/system keys.
+fn is_printable_key(base: &str) -> bool {
+    if base.len() == 4 && base.starts_with("Key") {
+        return true; // KeyA..KeyZ
+    }
+    if base.len() == 6 && base.starts_with("Digit") {
+        return true; // Digit0..Digit9
+    }
+    if base.starts_with("Numpad") && base != "NumpadEnter" {
+        return true; // Numpad0..9 and the printable operators
+    }
+    matches!(
+        base,
+        "Comma" | "Period" | "Slash" | "Semicolon" | "Quote" | "BracketLeft" | "BracketRight"
+            | "Backslash" | "Backquote" | "Minus" | "Equal" | "IntlBackslash" | "IntlRo" | "IntlYen"
+    )
+}
 
 /// Current base key — user-remappable via `set_hotkey_base`, persisted in
 /// the app config dir (see `hotkey_file`) since registration happens at
@@ -299,7 +322,10 @@ fn validate_hotkey_base(base: &str) -> Result<(), String> {
         return Err("touche invalide".into());
     }
     if HOTKEY_BLOCKLIST.iter().any(|b| b.eq_ignore_ascii_case(base)) {
-        return Err("touche réservée (Échap, copier/coller, chat)".into());
+        return Err("touche réservée (Échap, Entrée, chat)".into());
+    }
+    if is_printable_key(base) {
+        return Err("touche de frappe — elle serait avalée partout, chat compris".into());
     }
     for (accel, _) in hotkey_accels(base) {
         if accel.parse::<Shortcut>().is_err() {
