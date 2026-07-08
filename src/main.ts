@@ -1,5 +1,5 @@
 import { MOCK_RESULTS, TIER_ORDER } from "./mock";
-import { mountOverlay } from "./components/RelicPanel";
+import { mountOverlay, type AnalyzeFailure } from "./components/RelicPanel";
 import { placeTopRight, computeEffectiveMode, watchDisplayChanges } from "./placement";
 import { loadMode, saveMode, loadReduceEffects, loadCompactCompressed, type Mode } from "./settings";
 import { registerHotkeys } from "./hotkeys";
@@ -58,10 +58,10 @@ async function applyEffectiveMode(): Promise<void> {
 /** §5 M5: Ins reads the real clipboard and, if it holds a valid Waystone
  *  (per parseWaystone's "Item Class: Waystones" gate), replaces the
  *  displayed result with the real AnalysisResult — the UI never computes
- *  tierClass/verdict itself (§11), the adapter already has. Falls back to
- *  keeping whatever's currently shown (still plays the pulse, as
- *  acknowledgment) when there's no valid Waystone on the clipboard, e.g.
- *  in plain-browser dev with no Tauri clipboard access. */
+ *  tierClass/verdict itself (§11), the adapter already has. On failure
+ *  (copy/read failed, empty clipboard, or non-Waystone text) the display
+ *  keeps whatever's currently shown and a status chip names the failure —
+ *  the success pulse never plays, so a failed press is unambiguous. */
 async function analyze(simulateCopy = true): Promise<void> {
   if (analyzing) return; // key-repeat guard (§8)
   analyzing = true;
@@ -71,9 +71,14 @@ async function analyze(simulateCopy = true): Promise<void> {
   if (simulateCopy) void revealOverlay();
   const clip = await readClipboardText(simulateCopy);
   let applied: { score: number; tierClass: string; name: string } | null = null;
-  if (clip) {
+  let failure: AnalyzeFailure | null = null;
+  if (!clip) {
+    failure = "clipboard";
+  } else {
     const result = analyzeWaystoneText(clip);
-    if (result) {
+    if (!result) {
+      failure = "not-waystone";
+    } else {
       overlay.setResult(result);
       applied = { score: result.heat.score, tierClass: result.heat.tierClass, name: result.waystone.name };
       if (result.heat.tierClass === "god" && result.waystone.name !== lastNotifiedName) {
@@ -88,8 +93,14 @@ async function analyze(simulateCopy = true): Promise<void> {
   // Support/debugging checkpoint: confirms whether Ins actually applied a
   // real clipboard analysis vs. left the display unchanged (invalid/no
   // Waystone on clipboard) — see docs/release-checklist.md §3.
-  await logAnalyzeAttempt({ hadClipboardText: !!clip, applied, clipPreview: clip?.slice(0, 60) ?? null });
-  overlay.analyze();
+  await logAnalyzeAttempt({ hadClipboardText: !!clip, applied, failure, clipPreview: clip?.slice(0, 60) ?? null });
+  if (failure) {
+    // Only on a real press — the startup-only analyze(false) keeps its
+    // silent mock-data fallback (plain-browser dev has no clipboard).
+    if (simulateCopy) overlay.showAnalyzeError(failure);
+  } else {
+    overlay.analyze();
+  }
   setTimeout(() => (analyzing = false), 450);
 }
 

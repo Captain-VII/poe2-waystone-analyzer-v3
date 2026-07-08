@@ -145,6 +145,7 @@ export async function showWhenPainted(): Promise<void> {
 export async function logAnalyzeAttempt(info: {
   hadClipboardText: boolean;
   applied: { score: number; tierClass: string; name: string } | null;
+  failure?: "clipboard" | "not-waystone" | null;
   clipPreview?: string | null;
 }): Promise<void> {
   if (!("__TAURI_INTERNALS__" in window)) return;

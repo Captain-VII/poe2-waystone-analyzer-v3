@@ -186,6 +186,42 @@
   from { opacity: 0; }
   to { opacity: 1; }
 }
+/* Transient analyze-failure chip (showAnalyzeError) — floats centered just
+   above the header in every mode. pointer-events: none and never reported
+   to interactiveEls(): the click-through whitelist must not grow for a
+   2s-lived, purely-informational element. */
+.status-chip {
+  position: absolute;
+  /* -10px keeps the chip's top edge inside the window's 12px bleed
+     envelope (.overlay is at top: 12px) — -14px would clip. Anchored to
+     the panel's right edge (not centered): the chip can be wider than the
+     Mini panel (240px), and the window envelope only has spare room on
+     the left (it's sized for Full's 580px, overlay pinned top-right). */
+  top: -10px;
+  right: 0;
+  z-index: 30;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  font: 600 11.5px var(--sans);
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.55);
+  white-space: nowrap;
+}
+.status-chip[hidden] { display: none; }
+.status-chip.status-err {
+  color: var(--danger);
+  border-left: 2px solid var(--danger);
+  background: rgba(181, 74, 58, 0.12);
+}
+.status-chip.status-info {
+  color: var(--grey);
+  border-left: 2px solid var(--gold-dim);
+}
+.status-chip.reveal { animation: warn-reveal-fade 0.25s ease; }
+
 .mode-mini .badge { margin-left: auto; }
 
 .mode-mini .bodies { display: none; }

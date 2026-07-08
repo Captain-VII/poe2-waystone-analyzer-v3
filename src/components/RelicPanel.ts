@@ -30,10 +30,19 @@ export interface OverlayOptions {
   onInteractiveChange?(): void;
 }
 
+/** Why an Ins press produced no new result: the copy/read itself failed
+ *  (or the clipboard was empty), vs. the clipboard held text that isn't a
+ *  Waystone (parser's "Item Class: Waystones" gate). */
+export type AnalyzeFailure = "clipboard" | "not-waystone";
+
 export interface OverlayHandle {
   setResult(result: AnalysisResult): void;
   setMode(mode: EffectiveMode): void;
   analyze(): void;
+  /** Shows the transient status chip naming why Ins produced nothing new —
+   *  the failure counterpart of analyze()'s success pulse (which must NOT
+   *  play alongside it, so the two outcomes stay unambiguous). */
+  showAnalyzeError(kind: AnalyzeFailure): void;
   /** §12 Compare mode: renders up to 3 waystones side by side, highlighting
    *  the best Juice Score. Overlays on top of whichever Compact/Full/Mini
    *  body was active; `closeCompare()` restores it. */
@@ -123,6 +132,7 @@ export function mountOverlay(
           <path d="M11 .5 L15 5.5 L11 10.5 L7 5.5 Z" fill="currentColor"/>
           <path d="M1 5.5 H7 M15 5.5 H21" stroke="currentColor" stroke-width="1" opacity=".7"/>
         </svg>
+        <div class="status-chip" data-status hidden><span class="s-ic" data-status-icon></span><span data-status-text></span></div>
         <div class="p-head">
           <svg class="glyph" viewBox="0 0 16 16" aria-hidden="true">
             <path d="M8 1 L14 8 L8 15 L2 8 Z" fill="none" stroke="currentColor" stroke-width="1.4"/>
@@ -232,6 +242,7 @@ export function mountOverlay(
   const miniWarn = q("[data-mini-warn]");
   const scores = [q("[data-score]"), q("[data-score-full]")];
   const chip = q("[data-action]");
+  const statusChip = q("[data-status]");
   const warn = q("[data-warn]");
   const toggleBtn = q("[data-toggle]");
   const footBtn = q("[data-foot]");
@@ -253,6 +264,7 @@ export function mountOverlay(
   let settingsOpen = false;
 
   function setResult(result: AnalysisResult): void {
+    hideStatusChip(); // a success instantly clears a lingering failure chip
     current = result;
     const { heat, waystone } = result;
     for (const t of TIER_CLASSES) panel.classList.toggle(`tier-${t}`, t === heat.tierClass);
@@ -400,6 +412,38 @@ export function mountOverlay(
     if (current.heat.tierClass === "god") spawnSparks();
   }
 
+  // Icon + text + class per failure kind — meaning never rests on color
+  // alone (§6): "clipboard" is a real malfunction (danger red), while
+  // "not-waystone" means the app worked correctly on the wrong item (info).
+  const STATUS_CONTENT: Record<AnalyzeFailure, { icon: string; text: string; cls: string }> = {
+    clipboard: { icon: "⚠", text: "Copie impossible — presse-papiers vide", cls: "status-err" },
+    "not-waystone": { icon: "◆", text: "Pas une Waystone", cls: "status-info" },
+  };
+
+  let statusTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function hideStatusChip(): void {
+    clearTimeout(statusTimer);
+    statusChip.hidden = true;
+  }
+
+  function showAnalyzeError(kind: AnalyzeFailure): void {
+    // Unlike analyze(), an open Settings panel is left alone — the chip
+    // floats above the header, readable either way, and closing Settings
+    // over a failed keystroke would be intrusive.
+    const { icon, text, cls } = STATUS_CONTENT[kind];
+    q("[data-status-icon]").textContent = icon;
+    q("[data-status-text]").textContent = text;
+    statusChip.className = `status-chip ${cls}`;
+    statusChip.hidden = false;
+    syncReducedClass();
+    if (!opts.isReduced()) retrigger(statusChip, "reveal"); // §7 reveal; §10: the chip itself always shows
+    // Auto-hide after 2s; re-invocation resets the timer, so key spam
+    // shows one steady chip instead of flicker.
+    clearTimeout(statusTimer);
+    statusTimer = setTimeout(() => (statusChip.hidden = true), 2000);
+  }
+
   /** §10: mirrors the reduced-motion state onto a class, so CSS-only
    *  transitions (mode morph, halo fade-in, body cross-fade, ...) respect
    *  the user's `reduceEffects` setting too, not just the JS-triggered
@@ -529,5 +573,5 @@ export function mountOverlay(
   applyOpacity(loadOpacity());
   applyScale(loadScale());
   setResult(initial);
-  return { setResult, setMode, analyze, showCompare, closeCompare, panelEl: panel, interactiveEls };
+  return { setResult, setMode, analyze, showAnalyzeError, showCompare, closeCompare, panelEl: panel, interactiveEls };
 }
