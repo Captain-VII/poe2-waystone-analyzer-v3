@@ -31,11 +31,13 @@ export function loadReduceEffects(): boolean {
   return localStorage.getItem(KEYS.reduceEffects) === "true";
 }
 
+export function saveReduceEffects(enabled: boolean): void {
+  localStorage.setItem(KEYS.reduceEffects, String(enabled));
+}
+
 /** §2 height contingency: if 392px Compact overlaps the real game HUD,
  *  compress to ~360px by trimming air only (never drops the score,
- *  verdict chip, or any of the three tablets). Off by default; no
- *  dedicated settings UI exists yet, so this is set via localStorage
- *  (`overlay.compactCompressed`) until one does. */
+ *  verdict chip, or any of the three tablets). Off by default. */
 export function loadCompactCompressed(): boolean {
   return localStorage.getItem(KEYS.compactCompressed) === "true";
 }

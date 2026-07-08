@@ -132,9 +132,8 @@
 }
 
 /* §2 height contingency: 392px → ~359px, trimming air only (never the
-   score, verdict chip, or any of the three tablets). Behind a config flag
-   (loadCompactCompressed()/saveCompactCompressed() in settings.ts) since
-   no game HUD overlap has been confirmed yet — off by default. */
+   score, verdict chip, or any of the three tablets). Toggled from the
+   Settings panel ("Compact Compressed") — off by default. */
 .mode-compact.compact-compressed .panel { height: 359px; }
 .compact-compressed .hero-v { padding: 6px 16px 9px; }
 .compact-compressed .body-compact .score-num { font-size: 42px; }

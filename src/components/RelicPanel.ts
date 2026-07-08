@@ -1,5 +1,11 @@
 import type { AnalysisResult, TierClass } from "../types";
 import type { Mode, EffectiveMode } from "../settings";
+import {
+  loadReduceEffects,
+  saveReduceEffects,
+  loadCompactCompressed,
+  saveCompactCompressed,
+} from "../settings";
 import { renderDangerList, bindDangerListToggle } from "./DangerList";
 import {
   loadShowInsights,
@@ -203,6 +209,20 @@ export function mountOverlay(
                   <span class="set-switch-track"></span>
                 </label>
               </div>
+              <div class="set-row" title="Disables pulse, flare, sparks and transition animations (§10)">
+                <span class="set-lab">Reduce Effects</span>
+                <label class="set-switch">
+                  <input type="checkbox" data-set-reduce />
+                  <span class="set-switch-track"></span>
+                </label>
+              </div>
+              <div class="set-row" title="Trims Compact mode to ~359px if the overlay overlaps your in-game HUD (§2)">
+                <span class="set-lab">Compact Compressed</span>
+                <label class="set-switch">
+                  <input type="checkbox" data-set-compressed />
+                  <span class="set-switch-track"></span>
+                </label>
+              </div>
               <div class="set-row set-col">
                 <div class="set-row">
                   <span class="set-lab">Overlay Opacity</span>
@@ -220,7 +240,6 @@ export function mountOverlay(
               <div class="set-row">
                 <span class="set-lab">Hotkey</span>
                 <span class="set-hotkey"><kbd>Ins</kbd></span>
-                <button class="set-btn set-btn-sm" data-set-hotkey type="button" disabled title="Custom hotkeys coming soon">Change</button>
               </div>
               <div class="set-sep"></div>
               <div class="set-row">
@@ -252,6 +271,8 @@ export function mountOverlay(
   const settingsPanel = q("[data-settings-panel]");
   const setModeBtn = q("[data-set-mode]") as HTMLButtonElement;
   const setInsightsInput = q("[data-set-insights]") as HTMLInputElement;
+  const setReduceInput = q("[data-set-reduce]") as HTMLInputElement;
+  const setCompressedInput = q("[data-set-compressed]") as HTMLInputElement;
   const setOpacityInput = q("[data-set-opacity]") as HTMLInputElement;
   const setOpacityVal = q("[data-set-opacity-val]");
   const setScaleInput = q("[data-set-scale]") as HTMLInputElement;
@@ -554,6 +575,17 @@ export function mountOverlay(
     saveShowInsights(show);
     applyShowInsights(show);
   });
+  setReduceInput.addEventListener("change", () => {
+    saveReduceEffects(setReduceInput.checked);
+    // opts.isReduced() reads the setting live (and ORs the OS media query),
+    // so re-syncing the class is all it takes to apply immediately.
+    syncReducedClass();
+  });
+  setCompressedInput.addEventListener("change", () => {
+    const enabled = setCompressedInput.checked;
+    saveCompactCompressed(enabled);
+    overlayEl.classList.toggle("compact-compressed", enabled);
+  });
   setOpacityInput.addEventListener("input", () => {
     const pct = Number(setOpacityInput.value);
     saveOpacity(pct);
@@ -570,6 +602,11 @@ export function mountOverlay(
   syncReducedClass();
   overlayEl.classList.toggle("compact-compressed", opts.compactCompressed());
   applyShowInsights(loadShowInsights());
+  // Switch states reflect the persisted user settings — for Reduce Effects
+  // that's deliberately the setting alone, not opts.isReduced(), which also
+  // ORs the OS prefers-reduced-motion query the user can't toggle here.
+  setReduceInput.checked = loadReduceEffects();
+  setCompressedInput.checked = loadCompactCompressed();
   applyOpacity(loadOpacity());
   applyScale(loadScale());
   setResult(initial);

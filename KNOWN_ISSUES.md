@@ -227,15 +227,16 @@ exercised against every real multi-monitor/DPI-mismatch hardware
 configuration — if the overlay lands somewhere unexpected after changing
 displays, that's useful to report.
 
-## 7. Reduce-effects and Compact-compression settings have no UI yet
+## 7. ~~Reduce-effects and Compact-compression settings have no UI yet~~ (resolved 2026-07-08)
 
-Two settings exist in the code but have no in-app toggle to change them yet:
-"Reduce effects" (disables pulse/flare/spark animations, keeps all color
-information) and a compressed ~359px Compact layout (for HUDs where the
-default 392px card overlaps something else on screen). Both currently
-require manually editing the app's `localStorage`
-(`overlay.reduceEffects` / `overlay.compactCompressed`, either `"true"` or
-absent) — a settings panel is future work.
+Both settings are now toggles in the in-app Settings panel (gear button):
+"Reduce Effects" (disables pulse/flare/spark animations, keeps all color
+information) and "Compact Compressed" (a ~359px Compact layout for HUDs
+where the default 392px card overlaps something else on screen). They
+apply immediately and persist in `localStorage` as before. The disabled
+"Change hotkey" button was removed from Settings at the same time —
+custom hotkey remapping remains unimplemented (hotkeys are hardcoded on
+the Rust side); the Settings row still displays the fixed `Ins` binding.
 
 ## 8. Compare mode is basic
 
