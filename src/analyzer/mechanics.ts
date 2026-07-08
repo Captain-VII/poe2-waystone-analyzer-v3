@@ -36,14 +36,28 @@ export interface MechanicDef {
 // Per-stat cap used to normalize a raw stat value into a 0-1 "how strong
 // is this" signal. Sized for a WAYSTONE's total stat profile (many mods
 // stacking up to ~200% rarity, ~150% pack size) — used by mechanic scoring
-// (adapter.ts's computeMechanicScores) and synergy bonuses.
+// (adapter.ts's computeMechanicScores) and synergy bonuses. itemRarity/
+// monsterRarity/packSize/monsterEffectiveness/waystoneDropChance are still
+// the original unsourced first-pass numbers (KNOWN_ISSUES #3) — web
+// research 2026-07-08 couldn't confirm or correct them (conflicting/
+// tablet-only data), so they're untouched.
 export const NORMALIZE_CAP: Record<StatKey, number> = {
   itemRarity: 200,
   monsterRarity: 100,
   packSize: 150,
   monsterEffectiveness: 100,
   waystoneDropChance: 100,
-  quantity: 200,
+  // Sourced 2026-07-08 (maxroll.gg "Rolling Waystones and Precursor
+  // Tablets"): a T15 waystone's single Item Quantity mod line tops out at
+  // (25-29)% — mod-parser.ts's `quantity` is a single-line max, never a
+  // sum (extractMods keeps the strongest match, doesn't add), so that IS
+  // the realistic ceiling. The old 200 meant even a perfect 29% roll only
+  // contributed ~14.5% of the normalized signal — confirms and quantifies
+  // KNOWN_ISSUES #3's standing suspicion that this suppressed
+  // quantity-driven mechanic fits (Expedition's priority stat). 35 leaves
+  // headroom above the confirmed real max, same margin TABLET_ROLL_CAP.
+  // quantity=25 already uses over its own ~25% real ceiling.
+  quantity: 35,
 };
 
 // Same idea, sized for a single TABLET roll: a tablet carries one shared-

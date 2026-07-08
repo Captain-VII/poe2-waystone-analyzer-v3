@@ -183,11 +183,48 @@ and synergy multipliers are **hardcoded in `scoring.ts`** and require an
 edit + rebuild — earlier revisions of this entry wrongly claimed they were
 meta.json-editable.
 
-Known calibration doubt: `mechanics.ts`'s `NORMALIZE_CAP.quantity = 200`
-is likely far above what a real waystone can roll (Item Quantity totals are
-small), which keeps quantity-driven mechanic fits (Expedition's priority
-stat) very low. Left as-is for lack of sourced roll data — lower it if a
-real cap turns up.
+**Update (2026-07-08) — the Quantity cap doubt is resolved, sourced:**
+web research (maxroll.gg's "Rolling Waystones and Precursor Tablets")
+confirms a T15 waystone's Item Quantity mod line tops out at **(25-29)%**
+— and `mod-parser.ts`'s `quantity` field is a single-line max, never a
+sum (`extractMods` keeps the strongest match per stat, never adds), so
+that IS the real ceiling a parsed waystone can show. `NORMALIZE_CAP.
+quantity` was 200 — a perfect 29% roll only contributed ~14.5% of the
+normalized signal, confirming and quantifying the suspicion below.
+Lowered to **35** (headroom above the confirmed 29% max, matching
+`TABLET_ROLL_CAP.quantity = 25`'s existing margin over its own ~25% real
+ceiling) — mechanics.ts.
+
+**Still unsourced, NOT changed** (same research pass, results too weak or
+contradictory to act on):
+- **Pack Size**: conflicting numbers between sources (~41-50% max in one
+  guide, ~7-9% per-tier in another) — no clean tier table found. Worth
+  noting: `scoring.ts`'s `PACK_SIZE_REFERENCE = 30` (drives the real Juice
+  Score) and `mechanics.ts`'s `NORMALIZE_CAP.packSize = 150` (drives the
+  Mechanic Match Score) already disagree with each other by 5x — flagged,
+  not touched, since no real number is solid enough to arbitrate between
+  them.
+- **Monster Rarity**: no source gave a cap for the literal "increased
+  Rarity of Monsters" wording `mod-parser.ts` matches. A similarly-named
+  mod ("increased number of Rare Monsters", 55-65%) turned up instead —
+  likely a *different* real PoE2 mod (more rare-monster packs, not rarity
+  of what spawns), so not safely reusable as this stat's cap.
+- **Monster Effectiveness**: only tablet numbers found (9-11% for XP
+  farming builds), nothing for the waystone mod itself.
+- **Waystone Drop Chance**: mechanically more complex than a single-mod
+  cap — combines an innate mod-count-based scaling (a 6-modifier waystone
+  reportedly guarantees a replacement drop) with a dedicated suffix mod;
+  one community post claimed extreme stacked totals (over 1000%) via
+  cumulative crafting/Atlas effects, not comparable to `DROP_CHANCE_
+  REFERENCE = 120`'s single-waystone framing.
+- **Mechanic priority-stat disagreement (informational only):** one
+  source (Switchblade Gaming) ranks Ritual as "item rarity → ritual size"
+  and Expedition as "pack size → rare monster mods" — contradicting the
+  existing 3-source "community consensus 0.5" already cited in
+  `mechanics.ts` (Ritual: monster rarity priority, item rarity explicitly
+  excluded; Expedition: quantity priority). One dissenting source doesn't
+  overturn a 3-source consensus on its own — logged for whoever revisits
+  this with more data, nothing changed.
 
 ## 4. ~~Mechanic-presence detection is a simple keyword match~~ (resolved 2026-07-08)
 
