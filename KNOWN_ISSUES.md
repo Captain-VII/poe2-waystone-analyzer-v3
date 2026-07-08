@@ -248,12 +248,20 @@ can't be captured in the remap flow, because the OS-level global grab means
 the webview never receives its keydown — re-selecting the same key would be
 a no-op anyway.
 
-## 8. Compare mode is basic
+## 8. ~~Compare mode is basic~~ (resolved 2026-07-08)
 
 **Ctrl+Ins** toggles Compare mode (§12): it overlays the last 2-3 distinct
 analyzed waystones side by side (`main.ts`'s `compareList`), highlighting
 the best Juice Score with a star + gold border. It's a no-op until at
-least 2 waystones have been analyzed in the current session (nothing to
-compare yet). There's no way to pin/remove individual entries or freeze the
-list — it's always "your last 2-3 analyses," and it doesn't persist across
-restarts.
+least 2 waystones are in the list (nothing to compare yet).
+
+**Update (2026-07-08):** the original gaps are closed. Each card now has a
+**×** (remove it from the comparison) and a **📌** (pin it: pinned entries
+survive the rolling window when new analyses come in — max 2 pins, so the
+third slot always shows your latest analysis). Re-analyzing a waystone
+already in the list updates its entry in place (pin and position kept)
+instead of duplicating it — this also fixes the list silently filling with
+duplicates of one map, which the old code allowed despite its "distinct"
+comment. The list persists across restarts (`localStorage`, validated on
+load — a corrupted payload falls back to an empty list). Removing the last
+card closes Compare mode and restores the underlying view.

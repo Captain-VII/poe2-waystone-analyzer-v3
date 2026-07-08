@@ -577,6 +577,31 @@
   box-shadow: 0 0 12px rgba(255, 211, 106, 0.35);
   background: rgba(255, 211, 106, 0.06);
 }
+
+/* Per-card pin/remove (#8) — a slim control strip above the name, so the
+   card's centered score column stays untouched. */
+.cmp-ctl {
+  display: flex;
+  justify-content: space-between;
+  margin: -4px -2px 0;
+}
+.cmp-btn {
+  background: none;
+  border: none;
+  padding: 0 2px;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--grey);
+  cursor: pointer;
+  transition: color 120ms ease-out;
+}
+.cmp-btn:hover { color: var(--ivory); }
+.cmp-remove { font-size: 14px; }
+.cmp-remove:hover { color: var(--danger); }
+/* Unpinned: the pin only invites on hover; pinned: always lit gold. */
+.cmp-pin { opacity: 0.35; filter: grayscale(1); }
+.cmp-pin:hover { opacity: 0.8; }
+.cmp-card.pinned .cmp-pin { opacity: 1; filter: none; }
 .cmp-name {
   font-size: 12px;
   font-weight: 600;

@@ -14,7 +14,10 @@ which tablet/mechanic to pair it with — without alt-tabbing out of the game.
 2. Press **Shift+Ins** any time to switch between the compact vertical card
    and the full three-column breakdown.
 3. Press **Ctrl+Ins** to compare your last 2-3 analyzed Waystones side by
-   side, with the best Juice Score starred and highlighted.
+   side, with the best Juice Score starred and highlighted. Each card has a
+   **×** to drop it and a **📌** to pin it (pinned cards survive new
+   analyses; max 2, so one slot always shows your latest). The list is
+   remembered across restarts.
 
 The overlay is click-through everywhere except its own buttons and the
 Full-mode modifier list, so it never blocks a click into the game underneath.

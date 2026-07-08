@@ -1,7 +1,16 @@
 import { MOCK_RESULTS, TIER_ORDER } from "./mock";
 import { mountOverlay, type AnalyzeFailure } from "./components/RelicPanel";
 import { placeTopRight, computeEffectiveMode, watchDisplayChanges } from "./placement";
-import { loadMode, saveMode, loadReduceEffects, loadCompactCompressed, type Mode } from "./settings";
+import {
+  loadMode,
+  saveMode,
+  loadReduceEffects,
+  loadCompactCompressed,
+  loadCompareList,
+  saveCompareList,
+  type Mode,
+  type CompareEntry,
+} from "./settings";
 import { registerHotkeys, getHotkeyBase, setHotkeyBase } from "./hotkeys";
 import { reportInteractiveRegions } from "./interactive-rect";
 import { runDiagnostics, applyDebugOpaqueOverride, sendReport, showWhenPainted, logAnalyzeAttempt } from "./diagnostics";
@@ -18,8 +27,57 @@ let lastNotifiedName: string | null = null; // avoid re-notifying on repeat/no-o
 
 // §12 Compare mode: rolling window of the last distinct real analyses
 // (newest first), capped at 3 — "2 ou 3 waystones cotes a cotes".
-const compareList: AnalysisResult[] = [];
+// KNOWN_ISSUES #8: entries carry a pin flag (pinned survive the roll,
+// max 2 so the third slot always shows the latest analysis), duplicates
+// (same waystone name) update in place, and the list persists across
+// restarts via localStorage.
+const compareList: CompareEntry[] = loadCompareList();
 let compareOpen = false;
+const MAX_COMPARE = 3;
+const MAX_PINS = 2;
+
+/** Newest-first insert with in-place dedupe (re-analyzing a waystone
+ *  refreshes its entry — pin and position kept — instead of duplicating
+ *  it) and pin-aware eviction: past the cap, the oldest UNPINNED entry
+ *  goes. MAX_PINS < MAX_COMPARE guarantees an unpinned candidate exists. */
+function pushCompareEntry(result: AnalysisResult): void {
+  const existing = compareList.find((e) => e.result.waystone.name === result.waystone.name);
+  if (existing) {
+    existing.result = result;
+  } else {
+    compareList.unshift({ result, pinned: false });
+    while (compareList.length > MAX_COMPARE) {
+      const oldestUnpinned = [...compareList].reverse().find((e) => !e.pinned)!;
+      compareList.splice(compareList.indexOf(oldestUnpinned), 1);
+    }
+  }
+  saveCompareList(compareList);
+}
+
+/** Pin/remove handlers for the per-card Compare buttons (RelicPanel). */
+function toggleComparePin(index: number): void {
+  const entry = compareList[index];
+  if (!entry) return;
+  // Cap: un-pinning is always allowed, a third pin is a no-op (the pin
+  // button's tooltip states the 2-pin limit).
+  if (!entry.pinned && compareList.filter((e) => e.pinned).length >= MAX_PINS) return;
+  entry.pinned = !entry.pinned;
+  saveCompareList(compareList);
+  if (compareOpen) overlay.showCompare(compareList);
+}
+
+function removeCompareEntry(index: number): void {
+  if (!compareList[index]) return;
+  compareList.splice(index, 1);
+  saveCompareList(compareList);
+  if (!compareOpen) return;
+  if (compareList.length === 0) {
+    toggleCompare(); // nothing left — restore the underlying body
+  } else {
+    overlay.showCompare(compareList);
+    void reportRegions(); // the grid shrank — shrink its click-through rect too
+  }
+}
 
 const overlay = mountOverlay(document.getElementById("app")!, MOCK_RESULTS[tier], {
   mode,
@@ -34,6 +92,8 @@ const overlay = mountOverlay(document.getElementById("app")!, MOCK_RESULTS[tier]
   // conflict), and persists — see lib.rs's set_hotkey_base. Only offered
   // inside the real overlay; plain-browser dev keeps a display-only row.
   onSetHotkey: "__TAURI_INTERNALS__" in window ? setHotkeyBase : undefined,
+  onComparePin: toggleComparePin,
+  onCompareRemove: removeCompareEntry,
   // Dev-only: clicking the tier badge cycles the mock fixtures, for UI
   // testing without a real clipboard waystone. Disabled in production
   // builds (import.meta.env.DEV is false) — it would otherwise silently
@@ -89,8 +149,7 @@ async function analyze(simulateCopy = true): Promise<void> {
         lastNotifiedName = result.waystone.name;
         void notifyLegendaryWaystone(result.waystone.name, result.heat.score);
       }
-      compareList.unshift(result);
-      compareList.length = Math.min(compareList.length, 3);
+      pushCompareEntry(result);
       if (compareOpen) overlay.showCompare(compareList);
     }
   }

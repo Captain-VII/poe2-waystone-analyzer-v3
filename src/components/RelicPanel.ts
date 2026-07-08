@@ -1,5 +1,5 @@
 import type { AnalysisResult, TierClass } from "../types";
-import type { Mode, EffectiveMode } from "../settings";
+import type { Mode, EffectiveMode, CompareEntry } from "../settings";
 import {
   loadReduceEffects,
   saveReduceEffects,
@@ -40,6 +40,11 @@ export interface OverlayOptions {
    *  user-displayable message. Omitted = remapping unavailable (the
    *  Settings row stays display-only). */
   onSetHotkey?(base: string): Promise<string>;
+  /** KNOWN_ISSUES #8: per-card Compare controls. The list itself lives in
+   *  main.ts (same owner as before) — these just report which card was
+   *  clicked; main.ts mutates, persists, and calls showCompare again. */
+  onComparePin?(index: number): void;
+  onCompareRemove?(index: number): void;
 }
 
 /** Why an Ins press produced no new result: the copy/read itself failed
@@ -56,9 +61,10 @@ export interface OverlayHandle {
    *  play alongside it, so the two outcomes stay unambiguous). */
   showAnalyzeError(kind: AnalyzeFailure): void;
   /** §12 Compare mode: renders up to 3 waystones side by side, highlighting
-   *  the best Juice Score. Overlays on top of whichever Compact/Full/Mini
-   *  body was active; `closeCompare()` restores it. */
-  showCompare(results: AnalysisResult[]): void;
+   *  the best Juice Score, with per-card pin/remove controls (#8). Overlays
+   *  on top of whichever Compact/Full/Mini body was active; `closeCompare()`
+   *  restores it. */
+  showCompare(entries: CompareEntry[]): void;
   closeCompare(): void;
   /** Updates every rendered hotkey label (Settings row, Compact footer,
    *  toggle tooltip) — called once at startup when the persisted base is
@@ -278,6 +284,7 @@ export function mountOverlay(
   const footBtn = q("[data-foot]");
   const colTablets = q("[data-col-tablets]");
   const colInsights = q("[data-col-insights]");
+  const compareGrid = q("[data-compare]");
   const settingsBtn = q("[data-settings]");
   const settingsPanel = q("[data-settings-panel]");
   const setModeBtn = q("[data-set-mode]") as HTMLButtonElement;
@@ -594,19 +601,28 @@ export function mountOverlay(
       });
   }
 
-  /** §12: side-by-side Juice Scores, best one starred + highlighted border.
-   *  Renders over whichever body was active; `closeCompare()` reveals it
-   *  again unchanged (compare doesn't touch `mode`/`effective`). */
-  function showCompare(results: AnalysisResult[]): void {
+  /** §12: side-by-side Juice Scores, best one starred + highlighted border,
+   *  plus per-card pin/remove (#8). Renders over whichever body was active;
+   *  `closeCompare()` reveals it again unchanged (compare doesn't touch
+   *  `mode`/`effective`). */
+  function showCompare(entries: CompareEntry[]): void {
     compareActive = true;
     overlayEl.classList.add("compare-active");
-    const best = results.reduce((a, b) => (b.heat.score > a.heat.score ? b : a), results[0]!);
-    q("[data-compare]").innerHTML = results
-      .map((r) => {
-        const isBest = r === best;
+    const best = entries.reduce((a, b) => (b.result.heat.score > a.result.heat.score ? b : a), entries[0]!);
+    q("[data-compare]").innerHTML = entries
+      .map((e, i) => {
+        const r = e.result;
+        const isBest = e === best;
         return `
-        <div class="cmp-card${isBest ? " best" : ""}">
-          <div class="cmp-name">${esc(r.waystone.name)}${isBest ? " ★" : ""}</div>
+        <div class="cmp-card${isBest ? " best" : ""}${e.pinned ? " pinned" : ""}">
+          <div class="cmp-ctl">
+            <button class="cmp-btn cmp-pin" data-cmp-pin="${i}" type="button"
+              title="${e.pinned ? "Désépingler" : "Épingler (survit aux nouvelles analyses, 2 max)"}"
+              aria-label="${e.pinned ? "Unpin this waystone" : "Pin this waystone"}">📌</button>
+            <button class="cmp-btn cmp-remove" data-cmp-remove="${i}" type="button"
+              title="Retirer de la comparaison" aria-label="Remove this waystone from compare">×</button>
+          </div>
+          <div class="cmp-name" title="${esc(r.waystone.name)}">${esc(r.waystone.name)}${isBest ? " ★" : ""}</div>
           <div class="cmp-sub">T${r.waystone.tier} · ${esc(BADGE_LABEL[r.heat.tierClass])}</div>
           <div class="cmp-score">${r.heat.score.toFixed(1)}</div>
           <div class="cmp-verdict">${esc(r.heat.verdict)}</div>
@@ -627,7 +643,7 @@ export function mountOverlay(
     const els = [toggleBtn, settingsBtn];
     if (opts.onCycleTier) els.push(badge);
     if (settingsOpen) return [...els, settingsPanel]; // whole panel as one rect
-    if (compareActive) return els; // compare body has no other interactive controls
+    if (compareActive) return [...els, compareGrid]; // per-card pin/remove buttons (#8)
     if (effective === "compact") els.push(footBtn);
     // Either full-mode column can overflow-scroll on some DPI/font combos —
     // its scrollbar is unusable unless the column is inside the
@@ -637,6 +653,13 @@ export function mountOverlay(
   }
 
   footBtn.addEventListener("click", opts.onAnalyze);
+  // Delegated: the cards are re-rendered on every showCompare, the grid isn't.
+  compareGrid.addEventListener("click", (ev) => {
+    const btn = (ev.target as HTMLElement).closest<HTMLElement>("[data-cmp-pin],[data-cmp-remove]");
+    if (!btn) return;
+    if (btn.dataset.cmpPin !== undefined) opts.onComparePin?.(Number(btn.dataset.cmpPin));
+    else opts.onCompareRemove?.(Number(btn.dataset.cmpRemove));
+  });
   bindDangerListToggle(q("[data-insights]"));
   if (opts.onCycleTier) {
     const onCycleTier = opts.onCycleTier;
