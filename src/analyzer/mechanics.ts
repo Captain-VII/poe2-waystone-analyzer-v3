@@ -5,6 +5,7 @@
  *  meta.json on top of it. */
 
 import type { ModStats } from "./mod-parser";
+import { MECHANIC_PATTERNS } from "./mechanic-patterns";
 
 export type StatKey = keyof ModStats;
 
@@ -22,9 +23,13 @@ export interface MechanicDef {
   /** Below this Juice Score, this mechanic isn't worth chasing (§10). */
   skipIfBelow: number;
   /** Keyword match flagging the mechanic as already on the map. Tested
-   *  against the ISOLATED mod lines only (parser.ts's extractModifiers),
-   *  never the item name/flavor — see adapter.ts's computeMechanicScores
-   *  call site (KNOWN_ISSUES #4). */
+   *  against `ParsedWaystone.contentText` (every block except the header —
+   *  see parser.ts), never the item name/flavor — see adapter.ts's
+   *  computeMechanicScores call site (KNOWN_ISSUES #4). Sourced from the
+   *  shared `MECHANIC_PATTERNS` (mechanic-patterns.ts) — deliberately NOT
+   *  meta.json-overridable (meta-config.ts's applyOverride never touches
+   *  this field), so the bundled wording always applies regardless of
+   *  user config. */
   detect?: RegExp;
 }
 
@@ -101,7 +106,7 @@ export const MECHANICS: MechanicDef[] = [
     secondaryStats: ["itemRarity", "packSize"],
     recommendedTablets: ["Expedition Tablet", "Standard Precursor Tablet"],
     skipIfBelow: 35,
-    detect: /\bblight\b/i,
+    detect: MECHANIC_PATTERNS.blight,
   },
   // Community consensus 0.5 (switchbladegaming/timesaver/u4gm, 2026-07-06):
   // pack size drives splinter throughput in the fog; rarity (140%+ target)
@@ -112,9 +117,7 @@ export const MECHANICS: MechanicDef[] = [
     secondaryStats: ["itemRarity", "quantity"],
     recommendedTablets: ["Delirium Tablet", "Standard Precursor Tablet"],
     skipIfBelow: 40,
-    // Instilled waystones read "Players in Area are X% Delirious" — the
-    // word "Delirium" never appears on the item, so match both forms.
-    detect: /\bdeliri(?:um|ous)\b/i,
+    detect: MECHANIC_PATTERNS.delirium,
   },
   // Community consensus 0.5 (maxroll/aoeah/timesaver, 2026-07-06): logbook/
   // artifact quantity is the money stat, then runic/rare monster spawns;
@@ -125,7 +128,7 @@ export const MECHANICS: MechanicDef[] = [
     secondaryStats: ["monsterRarity", "packSize"],
     recommendedTablets: ["Expedition Tablet", "Standard Precursor Tablet"],
     skipIfBelow: 35,
-    detect: /\bexpedition\b/i,
+    detect: MECHANIC_PATTERNS.expedition,
   },
   {
     name: "Heist",
@@ -133,7 +136,7 @@ export const MECHANICS: MechanicDef[] = [
     secondaryStats: ["quantity"],
     recommendedTablets: ["Standard Precursor Tablet"],
     skipIfBelow: 30,
-    detect: /\bheist\b|blueprint|contract/i,
+    detect: MECHANIC_PATTERNS.heist,
   },
   {
     name: "Sanctum",
@@ -141,7 +144,7 @@ export const MECHANICS: MechanicDef[] = [
     secondaryStats: ["monsterRarity"],
     recommendedTablets: ["Standard Precursor Tablet"],
     skipIfBelow: 30,
-    detect: /\bsanctum\b|focus relic/i,
+    detect: MECHANIC_PATTERNS.sanctum,
   },
   {
     name: "Legion",
@@ -149,7 +152,7 @@ export const MECHANICS: MechanicDef[] = [
     secondaryStats: ["monsterRarity", "itemRarity"],
     recommendedTablets: ["Standard Precursor Tablet"],
     skipIfBelow: 35,
-    detect: /\blegion\b/i,
+    detect: MECHANIC_PATTERNS.legion,
   },
   {
     name: "Harvest",
@@ -157,7 +160,7 @@ export const MECHANICS: MechanicDef[] = [
     secondaryStats: ["quantity"],
     recommendedTablets: ["Standard Precursor Tablet"],
     skipIfBelow: 30,
-    detect: /\bharvest\b/i,
+    detect: MECHANIC_PATTERNS.harvest,
   },
   {
     name: "Metamorph",
@@ -165,7 +168,7 @@ export const MECHANICS: MechanicDef[] = [
     secondaryStats: ["itemRarity"],
     recommendedTablets: ["Standard Precursor Tablet"],
     skipIfBelow: 30,
-    detect: /\bmetamorph\b|catalyst/i,
+    detect: MECHANIC_PATTERNS.metamorph,
   },
   // Community consensus 0.5 (mobalytics tierlist/mmogah, 2026-07-06): loot
   // comes from rares — rare monster count first, then item quantity and
@@ -176,9 +179,7 @@ export const MECHANICS: MechanicDef[] = [
     secondaryStats: ["quantity", "monsterEffectiveness"],
     recommendedTablets: ["Abyss Tablet", "Standard Precursor Tablet"],
     skipIfBelow: 30,
-    // "Abysses" is the real plural on tablet/waystone mods ("Adds Abysses
-    // to a Map") — \babyss\b alone misses it.
-    detect: /\babyss(?:al|es)?\b/i,
+    detect: MECHANIC_PATTERNS.abyss,
   },
   // Community consensus 0.5 (mobalytics/exile.codex/aoeah, 2026-07-06):
   // tribute scales with magic/rare monster count and pack density — item
@@ -189,7 +190,7 @@ export const MECHANICS: MechanicDef[] = [
     secondaryStats: ["packSize", "monsterEffectiveness"],
     recommendedTablets: ["Ritual Tablet", "Standard Precursor Tablet"],
     skipIfBelow: 35,
-    detect: /\britual\b/i,
+    detect: MECHANIC_PATTERNS.ritual,
   },
   // Community consensus 0.5 (switchbladegaming/aoeah/boostmatch,
   // 2026-07-06): rare monster count first, then ~60-65% combined
@@ -200,7 +201,7 @@ export const MECHANICS: MechanicDef[] = [
     secondaryStats: ["itemRarity", "monsterEffectiveness"],
     recommendedTablets: ["Breach Tablet", "Standard Precursor Tablet"],
     skipIfBelow: 35,
-    detect: /\bbreach(?:es)?\b/i,
+    detect: MECHANIC_PATTERNS.breach,
   },
   {
     name: "Essence",
@@ -208,8 +209,7 @@ export const MECHANICS: MechanicDef[] = [
     secondaryStats: ["itemRarity"],
     recommendedTablets: ["Standard Precursor Tablet"],
     skipIfBelow: 30,
-    // Plural: "Area contains X additional Essences".
-    detect: /\bessences?\b/i,
+    detect: MECHANIC_PATTERNS.essence,
   },
   {
     name: "Incursion",
@@ -217,7 +217,7 @@ export const MECHANICS: MechanicDef[] = [
     secondaryStats: ["packSize"],
     recommendedTablets: ["Standard Precursor Tablet"],
     skipIfBelow: 30,
-    detect: /\bincursion\b|architect'?s? hand/i,
+    detect: MECHANIC_PATTERNS.incursion,
   },
   {
     name: "Bestiary",
@@ -225,7 +225,7 @@ export const MECHANICS: MechanicDef[] = [
     secondaryStats: ["packSize"],
     recommendedTablets: ["Standard Precursor Tablet"],
     skipIfBelow: 30,
-    detect: /\bbestiary\b|beast(?:s)?\b/i,
+    detect: MECHANIC_PATTERNS.bestiary,
   },
   {
     name: "General",
@@ -240,7 +240,7 @@ export const MECHANICS: MechanicDef[] = [
     secondaryStats: ["monsterEffectiveness", "quantity"],
     recommendedTablets: ["Irradiated Tablet", "Standard Precursor Tablet"],
     skipIfBelow: 30,
-    detect: /\birradiat(?:ed|ion)\b/i,
+    detect: MECHANIC_PATTERNS.irradiated,
   },
   {
     name: "Temple",
@@ -248,7 +248,7 @@ export const MECHANICS: MechanicDef[] = [
     secondaryStats: ["packSize", "quantity"],
     recommendedTablets: ["Temple Tablet", "Standard Precursor Tablet"],
     skipIfBelow: 30,
-    detect: /\btemple\b|vaal beacon/i,
+    detect: MECHANIC_PATTERNS.temple,
   },
 ];
 

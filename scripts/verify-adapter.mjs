@@ -504,5 +504,90 @@ for (const [mechanic, modLine] of [
     mechScoreOf(plainNamed, mechanic));
 }
 
+// ============================================================
+// MECHANIC-PATTERN CONSOLIDATION (KNOWN_ISSUES #4 follow-up, 2026-07-08):
+// mechanics.ts's detect/scoring.ts's density+display patterns now share one
+// source (mechanic-patterns.ts) and one text surface (parsed.contentText —
+// every block except the header). This pins the two score-side corrections
+// that come with it: the item NAME can no longer inflate the real Juice
+// Score, and content OUTSIDE the single mod block (e.g. an instilled
+// enchant) is no longer missed.
+// ============================================================
+
+const mkScoreSample = (name, extraLine = "") => `Item Class: Waystones
+Rarity: Rare
+${name}
+Waystone (Tier 15)
+--------
+Waystone Tier: 15
+Item Level: 82
+--------
++100% increased Rarity of Items found in this Area
++50% increased Rarity of Monsters
++30% increased Pack Size
+${extraLine}
+--------`;
+
+// (10) Score-side name fix: identical mods, only the name differs between
+// a mechanic keyword and a plain name → identical heat.score AND no
+// "extra content: ritual" bonus line for the keyword-named one. Both
+// assertions would have failed before this consolidation (evaluateMap used
+// to read the full raw text, name included).
+const scoreRitualNamed = analyzeWaystoneText(mkScoreSample("Ritual Reliquary"));
+const scorePlainNamed = analyzeWaystoneText(mkScoreSample("Forsaken Vault"));
+check("waystone NAME containing a mechanic keyword does not change heat.score",
+  scoreRitualNamed.heat.score === scorePlainNamed.heat.score);
+check("waystone NAME containing a mechanic keyword grants no 'extra content' bonus",
+  !scoreRitualNamed.insights.some((line) => /ritual/i.test(line)));
+
+// (11) Out-of-block content still counts: an instilled "Players in Area are
+// X% Delirious" line living in its OWN block (after the mod block, not
+// inside it) must still raise both the Delirium detect bonus AND the real
+// score's mechanic-density term — extractModifiers() alone (single block)
+// would miss it, which is exactly why contentText spans every non-header
+// block instead of just the isolated mod list.
+const SAMPLE_INSTILLED_SEPARATE_BLOCK = `Item Class: Waystones
+Rarity: Rare
+Fogged Reliquary
+Waystone (Tier 15)
+--------
+Waystone Tier: 15
+Item Level: 82
+--------
++30% increased Pack Size
+--------
+Players in Area are 24% Delirious
+--------`;
+const SAMPLE_NO_INSTILL = `Item Class: Waystones
+Rarity: Rare
+Fogged Reliquary
+Waystone (Tier 15)
+--------
+Waystone Tier: 15
+Item Level: 82
+--------
++30% increased Pack Size
+--------`;
+const instilledSeparate = analyzeWaystoneText(SAMPLE_INSTILLED_SEPARATE_BLOCK);
+const noInstill = analyzeWaystoneText(SAMPLE_NO_INSTILL);
+check("instilled Delirium line in its own block still grants the detect bonus",
+  mechScoreOf(instilledSeparate, "Delirium") > mechScoreOf(noInstill, "Delirium"));
+check("instilled Delirium line in its own block still raises heat.score (density term)",
+  instilledSeparate.heat.score > noInstill.heat.score);
+
+// (12) Anti-drift: Abyss/Essence plural mods now raise heat.score too, not
+// just the mechanic-match bonus — before consolidation, scoring.ts's
+// MECHANIC_SYNERGY_PATTERNS still had the narrow \babyss\b / \bessence\b
+// regexes even after mechanics.ts's detect was widened, so these mods
+// counted for the tablet recommendation but silently NOT for the density
+// term of the actual score.
+const abyssPlain = analyzeWaystoneText(mkScoreSample("Forsaken Vault"));
+const abyssModded = analyzeWaystoneText(mkScoreSample("Forsaken Vault", "Area contains 2 additional Abysses"));
+check("'Area contains 2 additional Abysses' raises heat.score (density term)",
+  abyssModded.heat.score > abyssPlain.heat.score);
+const essenceModded = analyzeWaystoneText(mkScoreSample("Forsaken Vault", "Area contains 2 additional Essences"));
+check("'Area contains 2 additional Essences' raises heat.score (density term)",
+  essenceModded.heat.score > abyssPlain.heat.score);
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}`);
 process.exit(failures === 0 ? 0 : 1);

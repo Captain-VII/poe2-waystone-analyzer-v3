@@ -196,17 +196,43 @@ per mechanic (e.g. `\britual\b` for Ritual) adding a flat +15 to that
 mechanic's match score.
 
 **Update (2026-07-08):** the false-positive surface is closed — detection
-now runs against the **isolated mod lines only** (`parser.ts`'s
-`extractModifiers`, the same clean block `unified-parser.ts` already used
-for stats), never the item name or flavor text. A waystone *named* "Ritual
-Reliquary" no longer hands Ritual an unearned +15 (verified live: its
-recommendation follows the stats; adding the real "Area contains 3
-additional Ritual Altars" mod line flips it to Ritual). Regexes were also
-widened for real plural phrasings ("Abysses", "Essences"), and
-`verify-adapter.mjs` now pins both the name-doesn't-count fix and one real
-mod phrasing per detectable tablet-linked mechanic. Still keyword-based at
-heart — a mechanic phrased in a way that shares no keyword with its regex
-would be missed — but keywords scoped to mod lines no longer misfire.
+now runs against `parser.ts`'s `ParsedWaystone.contentText` (every block
+except the header/name block), never the item name or flavor text. A
+waystone *named* "Ritual Reliquary" no longer hands Ritual an unearned +15.
+Regexes were also widened for real plural phrasings ("Abysses",
+"Essences").
+
+**Update (2026-07-08, same day) — consolidated:** this same keyword logic
+used to be duplicated in 3 places that could silently drift (and had: the
+plural widening above only landed in `mechanics.ts`'s `detect`, not
+`scoring.ts`'s two pattern tables, which fed the *actual Juice Score*'s
+mechanic-density term). All three now read from one shared
+`src/analyzer/mechanic-patterns.ts` (`MECHANIC_PATTERNS` plus the exact
+`SYNERGY_MECHANIC_IDS`/`EXTRA_CONTENT_BONUS` subsets each consumer used),
+typed so a dropped/typo'd id is a compile error, not a silent gap.
+
+This also closed the score-side sibling of the bug above:
+`evaluateMap`/`countActiveMechanics` (scoring.ts) used to read the full raw
+item text, so a waystone *named* "Ritual Reliquary" inflated the real
+score's mechanic-density term (§8's +10 weight, plus the ×1.1-1.6 stacking
+multiplier) even with zero ritual mods — not just the mechanic-match
+display bonus fixed above. Both now read `contentText`. One side effect
+intentionally kept: `contentText` includes every non-header block, not
+just the single isolated mod block, so an instilled enchant line living in
+its own block (e.g. "Players in Area are X% Delirious" outside the mod
+block) now correctly counts toward both the detect bonus and the real
+score — the mod-block-only version from the first 2026-07-08 update could
+have missed it.
+
+`verify-adapter.mjs` (69 checks total) pins: the name-doesn't-count fix on
+both the mechanic-match bonus AND `heat.score` itself; the instilled-
+separate-block case actually being picked up; and that Abyss/Essence
+plurals now move `heat.score`, not just the tablet recommendation. Still
+keyword-based at heart — a mechanic phrased in a way that shares no
+keyword with its regex would be missed, and a unique waystone's flavor
+text (which also lives outside the header block) remains a narrow residual
+false-positive surface — but the three-way drift and the header/name
+surface are both closed.
 
 ## 5. Auto Ctrl+C on Ins
 

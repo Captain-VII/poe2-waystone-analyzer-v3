@@ -212,18 +212,18 @@ function buildKeyFactors(
 /** §7: cross the waystone's own stat profile against each mechanic's
  *  priority/secondary stats (via `scoreMechanicFit`, shared with tablet
  *  ranking below), plus a flat bonus if the mechanic is already naturally
- *  present on the map (§8/§9 "mecanique naturelle") — detected against the
- *  isolated mod lines only, see the call site. Returns scores for all
- *  mechanics, desc sorted.
+ *  present on the map (§8/§9 "mecanique naturelle") — detected against
+ *  `contentText` (every block except the header), see the call site.
+ *  Returns scores for all mechanics, desc sorted.
  *
  *  Sorted by the *unrounded* `scoreMechanicFitRaw`, not the rounded `score`
  *  each entry displays — several mechanics share the same priority stat, so
  *  sorting on the rounded value produced frequent exact ties that silently
  *  fell back to `MECHANICS`' declaration order (array position), biasing
  *  which mechanic/tablet won regardless of the waystone's actual stats. */
-function computeMechanicScores(stats: ModStats, modText: string): MechanicScore[] {
+function computeMechanicScores(stats: ModStats, contentText: string): MechanicScore[] {
   const scores = getActiveMechanics().map((mech) => {
-    const detectBonus = mech.detect?.test(modText) ? 15 : 0;
+    const detectBonus = mech.detect?.test(contentText) ? 15 : 0;
     return {
       mechanic: mech.name,
       score: scoreMechanicFit(stats, mech, detectBonus),
@@ -383,7 +383,11 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
   }
 
   const stats = parseUnified(text);
-  const evaluation = evaluateMap(stats, text);
+  // parsed.contentText (every block except the header) — not the full raw
+  // `text` — so the item's own NAME can never inflate the mechanic-density
+  // term (KNOWN_ISSUES #4's score-side follow-up, 2026-07-08: a waystone
+  // named "Ritual Reliquary" must not count as having Ritual present).
+  const evaluation = evaluateMap(stats, parsed.contentText);
   // Tier/verdict/rating/heat.score read `effectiveScore` (reward synergy,
   // normalized 0-100, clamped — danger never reduces it; danger surfaces
   // display-only via warnings/Insights). `evaluation.breakdown` (below, in
@@ -396,12 +400,13 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
   const dangerLevel = computeDangerLevel(evaluation.dangerHits);
   const display = buildDisplayData(stats, evaluation);
 
-  // Detection runs on the isolated mod lines only (the block after
-  // "Item Level:", same clean surface unified-parser already uses for
-  // stats), never the full raw text — a mechanic keyword in the waystone's
-  // NAME or flavor text must not grant the +15 presence bonus
-  // (KNOWN_ISSUES #4).
-  const mechanicScores = computeMechanicScores(stats, parsed.modifiers.join("\n"));
+  // Same contentText surface as evaluateMap above: covers the mod block
+  // AND any separate enchant/implicit blocks (e.g. an instilled "Players
+  // in Area are X% Delirious" line living outside the single mod block
+  // extractModifiers isolates), while still excluding the header/name —
+  // a mechanic keyword in the waystone's NAME must not grant the +15
+  // presence bonus (KNOWN_ISSUES #4).
+  const mechanicScores = computeMechanicScores(stats, parsed.contentText);
   // Trust fix: only a mechanic with a real PoE2 tablet (see tablets.ts's
   // 2026-07-04 research pass, extended 2026-07-06 — Standard/Overseer are
   // the generic fallback, Breach/Ritual/Delirium/Expedition/Abyss/

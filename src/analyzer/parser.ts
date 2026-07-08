@@ -7,6 +7,15 @@ export interface ParsedWaystone {
   rarity: string;
   corrupted: boolean;
   modifiers: string[];
+  /** Every block except the header (block 0 — Item Class/Rarity/name/
+   *  "Waystone (Tier X)"): the mod block, plus any separate enchant/
+   *  implicit blocks (e.g. instilled "Players in Area are X% Delirious"),
+   *  plus "Corrupted" if present. Used by scoring.ts/adapter.ts for
+   *  mechanic-keyword detection — excludes the item's own NAME (a
+   *  false-positive source: a waystone named "Ritual Reliquary" must not
+   *  count as having Ritual) while still covering mod-like lines that
+   *  `modifiers` alone (single block only) can miss. */
+  contentText: string;
 }
 
 const SEPARATOR = "--------";
@@ -34,6 +43,7 @@ export function parseWaystone(text: string): ParsedWaystone {
     rarity: extractValue(headerLines, "Rarity:"),
     corrupted: blocks.some((b) => b.trim() === "Corrupted"),
     modifiers: extractModifiers(blocks),
+    contentText: blocks.slice(1).join("\n"),
   };
 }
 

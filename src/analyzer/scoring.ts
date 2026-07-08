@@ -27,6 +27,7 @@
  *  `effectiveScore`). */
 
 import { PATTERNS as NUMERIC_PATTERNS, type ModStats } from "./mod-parser";
+import { MECHANIC_PATTERNS, SYNERGY_MECHANIC_IDS, EXTRA_CONTENT_BONUS } from "./mechanic-patterns";
 
 export interface Weights {
   itemRarity: number;
@@ -202,34 +203,31 @@ export const DANGER_SEVERITY_ORDER: Record<DangerSeverity, number> = { reflect: 
 // Positive mods: signals that increase profit/hour beyond what the raw
 // stat numbers already capture. Display-only (see file-level comment) —
 // feeds `bonusDetails`/the UI's "Bonus: ..." insights and heat.breakdown's
-// bonus row, NOT the actual score.
+// bonus row, NOT the actual score. The 4 "extra content: X" entries are
+// derived from the shared EXTRA_CONTENT_BONUS/MECHANIC_PATTERNS
+// (mechanic-patterns.ts) — order preserved (ritual, breach, delirium,
+// expedition after the 2 monster entries) since it drives display order.
 const POSITIVE_MOD_PATTERNS: Record<string, [RegExp, number]> = {
   "more rare monsters": [/(?:increased|additional).*rare\s+monsters/i, 6.0],
   "more magic monsters": [/(?:increased|additional).*magic\s+monsters/i, 4.0],
-  "extra content: ritual": [/\britual\b/i, 10.0],
-  "extra content: breach": [/\bbreach(?:es)?\b/i, 10.0],
-  // "deliri(?:um|ous)": instilled waystones read "Players in Area are X%
-  // Delirious", never the word "Delirium" itself — both must count.
-  "extra content: delirium": [/\bdeliri(?:um|ous)\b/i, 8.0],
-  "extra content: expedition": [/\bexpedition\b/i, 8.0],
+  ...Object.fromEntries(
+    Object.entries(EXTRA_CONTENT_BONUS).map(([id, bonus]) => [
+      `extra content: ${id}`,
+      [MECHANIC_PATTERNS[id as keyof typeof MECHANIC_PATTERNS], bonus] as [RegExp, number],
+    ]),
+  ),
 };
 
 // Distinct league mechanics counted for both the mechanic-density term in
 // `computeBaseScore` and the stacking-synergy multiplier below — running
 // several at once compounds density and reward far more than any single
-// flat per-mechanic bonus could capture.
-const MECHANIC_SYNERGY_PATTERNS: Record<string, RegExp> = {
-  // Instilled waystones read "Players in Area are X% Delirious" — the word
-  // "Delirium" never appears on the item, so match both forms.
-  delirium: /\bdeliri(?:um|ous)\b/i,
-  breach: /\bbreach(?:es)?\b/i,
-  ritual: /\britual\b/i,
-  abyss: /\babyss(?:al)?\b/i,
-  expedition: /\bexpedition\b/i,
-  legion: /\blegion\b/i,
-  essence: /\bessence\b/i,
-  blight: /\bblight\b/i,
-};
+// flat per-mechanic bonus could capture. Sourced from the shared
+// MECHANIC_PATTERNS/SYNERGY_MECHANIC_IDS (mechanic-patterns.ts) — exact
+// membership preserved (delirium, breach, ritual, abyss, expedition,
+// legion, essence, blight).
+const MECHANIC_SYNERGY_PATTERNS: Record<string, RegExp> = Object.fromEntries(
+  SYNERGY_MECHANIC_IDS.map((id) => [id, MECHANIC_PATTERNS[id]]),
+);
 
 function countActiveMechanics(text: string): number {
   if (!text) return 0;
@@ -482,18 +480,24 @@ export interface EvaluationResult {
  *  `effectiveScore`, so existing callers (adapter.ts's tier/verdict/rating,
  *  all already reading `effectiveScore` directly) need no changes.
  *  `breakdown`/`bonusDetails` are still computed from the old flat model,
- *  but purely for UI display now — see the file-level comment. */
+ *  but purely for UI display now — see the file-level comment.
+ *
+ *  `contentText` (parser.ts's `ParsedWaystone.contentText` — every block
+ *  except the header) is what mechanic/positive-mod/danger keyword
+ *  matching runs against, so the item's own NAME can never false-positive
+ *  a match (KNOWN_ISSUES #4's follow-up, 2026-07-08: a waystone named
+ *  "Ritual Reliquary" must not inflate the mechanic-density term). */
 export function evaluateMap(
   stats: ModStats,
-  rawText = "",
+  contentText = "",
   weights: Weights = DEFAULT_WEIGHTS,
   threshold: number = DEFAULT_THRESHOLD,
 ): EvaluationResult {
   const breakdown = breakdownFields(stats, weights, CAPS);
-  const bonusDetails = detectPositiveMods(rawText);
-  const dangerHits = detectDangerHits(rawText);
+  const bonusDetails = detectPositiveMods(contentText);
+  const dangerHits = detectDangerHits(contentText);
 
-  const mechanicCount = countActiveMechanics(rawText);
+  const mechanicCount = countActiveMechanics(contentText);
   const baseScore = computeBaseScore(stats, mechanicCount);
   const synergized = baseScore * synergyMultiplier(mechanicCount) * statSynergyMultiplier(stats, mechanicCount);
   const rewardScore = round2(normalizeToScale(synergized));
