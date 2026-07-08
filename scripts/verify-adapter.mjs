@@ -461,5 +461,48 @@ check("skipIfBelow gates the mechanic recommendation on low-score maps",
   monsterOnly.recommendedMechanic === null &&
   monsterOnly.tablets.every((t) => t.reason.includes("matches General")));
 
+// ============================================================
+// MECHANIC DETECTION (KNOWN_ISSUES #4, 2026-07-08): the +15 presence
+// bonus reads the ISOLATED mod lines only — a mechanic keyword in the
+// waystone's NAME (or any non-mod block) must not grant it.
+// ============================================================
+
+const mkNamedSample = (name, extraMod = "") => `Item Class: Waystones
+Rarity: Rare
+${name}
+Waystone (Tier 15)
+--------
+Waystone Tier: 15
+Item Level: 82
+--------
++30% increased Rarity of Monsters${extraMod ? `\n${extraMod}` : ""}
+--------`;
+const mechScoreOf = (r, name) => r.mechanicScores.find((m) => m.mechanic === name)?.score ?? 0;
+
+// (8) Same mods, name with vs without a mechanic keyword → identical
+// Ritual scores (the fix); a real ritual MOD still raises it (the bonus
+// itself stayed alive).
+const ritualNamed = analyzeWaystoneText(mkNamedSample("Ritual Reliquary"));
+const plainNamed = analyzeWaystoneText(mkNamedSample("Forsaken Vault"));
+const ritualModded = analyzeWaystoneText(mkNamedSample("Forsaken Vault", "Area contains 2 additional Ritual Altars"));
+check("mechanic keyword in the NAME does not grant the detect bonus",
+  mechScoreOf(ritualNamed, "Ritual") === mechScoreOf(plainNamed, "Ritual"));
+check("a real ritual mod line still grants the detect bonus",
+  mechScoreOf(ritualModded, "Ritual") > mechScoreOf(plainNamed, "Ritual"));
+
+// (9) Real PoE2 mod phrasings, one per detectable mechanic with a real
+// tablet (plurals pin the 2026-07-08 regex widening for Abysses/Essences).
+for (const [mechanic, modLine] of [
+  ["Breach", "Area contains 2 additional Breaches"],
+  ["Ritual", "Area contains 3 additional Ritual Altars"],
+  ["Expedition", "Area contains an Expedition Encampment"],
+  ["Abyss", "Area contains 2 additional Abysses"],
+  ["Essence", "Area contains 2 additional Essences"],
+]) {
+  check(`'${modLine}' grants ${mechanic} its detect bonus`,
+    mechScoreOf(analyzeWaystoneText(mkNamedSample("Forsaken Vault", modLine)), mechanic) >
+    mechScoreOf(plainNamed, mechanic));
+}
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}`);
 process.exit(failures === 0 ? 0 : 1);

@@ -212,17 +212,18 @@ function buildKeyFactors(
 /** §7: cross the waystone's own stat profile against each mechanic's
  *  priority/secondary stats (via `scoreMechanicFit`, shared with tablet
  *  ranking below), plus a flat bonus if the mechanic is already naturally
- *  present on the map text (§8/§9 "mecanique naturelle"). Returns scores
- *  for all mechanics, desc sorted.
+ *  present on the map (§8/§9 "mecanique naturelle") — detected against the
+ *  isolated mod lines only, see the call site. Returns scores for all
+ *  mechanics, desc sorted.
  *
  *  Sorted by the *unrounded* `scoreMechanicFitRaw`, not the rounded `score`
  *  each entry displays — several mechanics share the same priority stat, so
  *  sorting on the rounded value produced frequent exact ties that silently
  *  fell back to `MECHANICS`' declaration order (array position), biasing
  *  which mechanic/tablet won regardless of the waystone's actual stats. */
-function computeMechanicScores(stats: ModStats, rawText: string): MechanicScore[] {
+function computeMechanicScores(stats: ModStats, modText: string): MechanicScore[] {
   const scores = getActiveMechanics().map((mech) => {
-    const detectBonus = mech.detect?.test(rawText) ? 15 : 0;
+    const detectBonus = mech.detect?.test(modText) ? 15 : 0;
     return {
       mechanic: mech.name,
       score: scoreMechanicFit(stats, mech, detectBonus),
@@ -395,7 +396,12 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
   const dangerLevel = computeDangerLevel(evaluation.dangerHits);
   const display = buildDisplayData(stats, evaluation);
 
-  const mechanicScores = computeMechanicScores(stats, text);
+  // Detection runs on the isolated mod lines only (the block after
+  // "Item Level:", same clean surface unified-parser already uses for
+  // stats), never the full raw text — a mechanic keyword in the waystone's
+  // NAME or flavor text must not grant the +15 presence bonus
+  // (KNOWN_ISSUES #4).
+  const mechanicScores = computeMechanicScores(stats, parsed.modifiers.join("\n"));
   // Trust fix: only a mechanic with a real PoE2 tablet (see tablets.ts's
   // 2026-07-04 research pass, extended 2026-07-06 — Standard/Overseer are
   // the generic fallback, Breach/Ritual/Delirium/Expedition/Abyss/

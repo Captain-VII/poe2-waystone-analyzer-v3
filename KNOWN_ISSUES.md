@@ -189,12 +189,24 @@ small), which keeps quantity-driven mechanic fits (Expedition's priority
 stat) very low. Left as-is for lack of sourced roll data — lower it if a
 real cap turns up.
 
-## 4. Mechanic-presence detection is a simple keyword match
+## 4. ~~Mechanic-presence detection is a simple keyword match~~ (resolved 2026-07-08)
 
 "Mecanique naturelle presente sur la map" (§2/§8/§9) is detected by a regex
-per mechanic against the raw item text (e.g. `\britual\b` for Ritual) — it
-adds a flat +15 bonus to that mechanic's match score when it hits. This can
-false-positive on flavor text and won't catch mechanics phrased unusually.
+per mechanic (e.g. `\britual\b` for Ritual) adding a flat +15 to that
+mechanic's match score.
+
+**Update (2026-07-08):** the false-positive surface is closed — detection
+now runs against the **isolated mod lines only** (`parser.ts`'s
+`extractModifiers`, the same clean block `unified-parser.ts` already used
+for stats), never the item name or flavor text. A waystone *named* "Ritual
+Reliquary" no longer hands Ritual an unearned +15 (verified live: its
+recommendation follows the stats; adding the real "Area contains 3
+additional Ritual Altars" mod line flips it to Ritual). Regexes were also
+widened for real plural phrasings ("Abysses", "Essences"), and
+`verify-adapter.mjs` now pins both the name-doesn't-count fix and one real
+mod phrasing per detectable tablet-linked mechanic. Still keyword-based at
+heart — a mechanic phrased in a way that shares no keyword with its regex
+would be missed — but keywords scoped to mod lines no longer misfire.
 
 ## 5. Auto Ctrl+C on Ins
 

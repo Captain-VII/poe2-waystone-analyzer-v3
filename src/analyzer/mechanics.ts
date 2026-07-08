@@ -21,7 +21,10 @@ export interface MechanicDef {
   recommendedTablets?: string[];
   /** Below this Juice Score, this mechanic isn't worth chasing (§10). */
   skipIfBelow: number;
-  /** Keyword match against raw modifier text: mechanic already on the map. */
+  /** Keyword match flagging the mechanic as already on the map. Tested
+   *  against the ISOLATED mod lines only (parser.ts's extractModifiers),
+   *  never the item name/flavor — see adapter.ts's computeMechanicScores
+   *  call site (KNOWN_ISSUES #4). */
   detect?: RegExp;
 }
 
@@ -173,7 +176,9 @@ export const MECHANICS: MechanicDef[] = [
     secondaryStats: ["quantity", "monsterEffectiveness"],
     recommendedTablets: ["Abyss Tablet", "Standard Precursor Tablet"],
     skipIfBelow: 30,
-    detect: /\babyss(?:al)?\b/i,
+    // "Abysses" is the real plural on tablet/waystone mods ("Adds Abysses
+    // to a Map") — \babyss\b alone misses it.
+    detect: /\babyss(?:al|es)?\b/i,
   },
   // Community consensus 0.5 (mobalytics/exile.codex/aoeah, 2026-07-06):
   // tribute scales with magic/rare monster count and pack density — item
@@ -203,7 +208,8 @@ export const MECHANICS: MechanicDef[] = [
     secondaryStats: ["itemRarity"],
     recommendedTablets: ["Standard Precursor Tablet"],
     skipIfBelow: 30,
-    detect: /\bessence\b/i,
+    // Plural: "Area contains X additional Essences".
+    detect: /\bessences?\b/i,
   },
   {
     name: "Incursion",
