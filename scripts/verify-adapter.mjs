@@ -122,10 +122,10 @@ check("keyFactors is an array of at most 4 short strings",
 // §11 (superseded 2026-07-06): breakdown rows are the raw loot-signal
 // contributions (rarity/pack size/etc, pre-synergy) and no longer sum to
 // `heat.score` — `heat.score` is now `effectiveScore` (synergy + stretch,
-// normalized 0-100, then the danger penalty), while `breakdown` intentionally
-// still reflects the pre-synergy/pre-danger model so users can see which raw
-// stat drove the result. Just sanity-check the breakdown itself stays a
-// plausible, non-negative composite.
+// normalized 0-100, clamped), while `breakdown` intentionally still
+// reflects the pre-synergy model so users can see which raw stat drove the
+// result. Just sanity-check the breakdown itself stays a plausible,
+// non-negative composite.
 const breakdownSum = result.heat.breakdown.reduce((s, b) => s + b.value, 0);
 check(`breakdown sum is non-negative and finite (${breakdownSum.toFixed(2)})`, breakdownSum >= 0 && Number.isFinite(breakdownSum));
 
@@ -154,14 +154,13 @@ try {
 
 check("score in [0,100]", result.heat.score >= 0 && result.heat.score <= 100);
 
-// Juice Detector v2 (2026-07-06): `score`/`verdict`/`tierClass` now measure
-// real farming value, not loot potential alone — `heat.score` is
-// `effectiveScore`, i.e. reward (synergy + stretch, normalized 0-100) scaled
-// down by the danger penalty (none x1.0, low x0.95, medium x0.85, high x0.7).
-// Danger/annoyance mods still surface via `warning`/`warnings`/`dangerLevel`
-// too, but they are NO LONGER score-neutral — this is an intentional reversal
-// of the original "danger never reduces score" rule (see the
-// "dangerous-but-juicy" regression below, updated to match).
+// 2026-07-08: danger is display-only again — `heat.score` is
+// `effectiveScore`, i.e. reward (synergy + stretch, normalized 0-100,
+// clamped) with NO danger multiplier. Danger/annoyance mods surface via
+// `warning`/`warnings`/`dangerLevel` only, purely to inform the player;
+// they are strictly score-neutral (this reverts the short-lived 2026-07-06
+// x0.7-0.95 danger penalty — see the "dangerous-but-juicy" regression
+// below, updated to pin score-neutrality).
 
 check("recommendedMechanic valid",
   result.recommendedMechanic === null ||
@@ -260,13 +259,11 @@ check("detectDangerHits: non-monster penetration text does NOT match",
     .some((h) => h.id === "elemental-penetration"));
 
 // NOT asserted: "no single breakdown component exceeds the total score."
-// Verified empirically false — scoring.ts's speed-penalty multipliers
-// apply to the post-sum total, but each breakdown row displays its
-// pre-penalty contribution, so a single field (e.g. itemRarity: 4.95) can
-// legitimately exceed a final penalized score (e.g. 3.03) on real input
-// with a "reduced recovery"/"avoid ailments" mod present. Asserting it
-// would fail on correct output, not catch a real regression — a flaky
-// check here is worse than no check.
+// The breakdown rows come from the legacy flat model while `heat.score`
+// comes from the normalized model — the two are decoupled by design, so a
+// single row can legitimately exceed the final score on real input.
+// Asserting it would fail on correct output, not catch a real regression —
+// a flaky check here is worse than no check.
 
 // ============================================================
 // PINNED REGRESSION TESTS — must NEVER break. Each one encodes a
@@ -289,20 +286,19 @@ Monsters reflect 18% of Elemental Damage
 Monsters have 20% increased Accuracy Rating
 --------`;
 const reflect = analyzeWaystoneText(SAMPLE_REFLECT);
-// SAMPLE_REFLECT scores 0 regardless of the v2 danger penalty, since it
-// carries no rarity/pack/etc stats at all (0 x any multiplier is still 0) —
+// SAMPLE_REFLECT carries no rarity/pack/etc stats at all, so it scores 0 —
 // this only pins that reflect still surfaces as a warning. The
-// dangerous-but-juicy regression below is what pins the actual v2 danger
-// penalty math on a map with real loot stats.
+// dangerous-but-juicy regression below is what pins score-neutrality on a
+// map with real loot stats.
 check("reflect produces a warning", reflect.warnings.includes("Reflect Damage"));
 check("reflect warning present", reflect.warning?.toLowerCase().includes("reflect") ?? false);
 
-// Juice Detector v2 (2026-07-06): a map with great loot stats but severe
-// danger must still clearly be worth running (verdict !== SKIP, several
-// warnings survive), but its score must now land measurably below what the
-// same loot stats would score if safe — proving the danger penalty
-// (dangerLevel 'high' => x0.7 on effectiveScore) actually applies. This
-// intentionally supersedes the old "danger never reduces score" rule.
+// 2026-07-08 (danger is informational only): a map with great loot stats
+// but severe danger must still clearly be worth running (verdict !== SKIP,
+// several warnings survive), AND its score must be exactly what the same
+// loot stats would score if safe — danger mods inform the player via the
+// Insights column but never touch the score. This reverts the short-lived
+// 2026-07-06 danger penalty (x0.7 on 'high').
 const SAMPLE_DANGEROUS_BUT_JUICY = `Item Class: Waystones
 Rarity: Rare
 Doomvault
@@ -321,8 +317,8 @@ Monsters have 40% increased Attack, Cast, and Movement Speed
 --------
 Corrupted`;
 const dangerousButJuicy = analyzeWaystoneText(SAMPLE_DANGEROUS_BUT_JUICY);
-// Same loot stats, with the two danger-mod lines removed — isolates the
-// danger penalty's effect instead of pinning a magic-number score, so this
+// Same loot stats, with the two danger-mod lines removed — proves danger
+// mods are score-neutral instead of pinning a magic-number score, so this
 // keeps working across future weight/synergy rebalances.
 const SAMPLE_JUICY_BUT_SAFE = SAMPLE_DANGEROUS_BUT_JUICY
   .split("\n")
@@ -333,9 +329,9 @@ check("dangerous-but-juicy map still clears SKIP despite warnings",
   dangerousButJuicy.heat.score > 20 &&
   dangerousButJuicy.heat.verdict !== "SKIP" &&
   dangerousButJuicy.warnings.length >= 2);
-check("dangerous-but-juicy map scores measurably below its safe equivalent (danger penalty applied)",
+check("dangerous-but-juicy map scores EXACTLY like its safe equivalent (danger is score-neutral)",
   juicyButSafe.dangerLevel === "none" &&
-  dangerousButJuicy.heat.score < juicyButSafe.heat.score);
+  dangerousButJuicy.heat.score === juicyButSafe.heat.score);
 // dangerLevel is a fully separate signal from score/verdict — this map must
 // read as clearly dangerous (reflect present) despite its high Juice Score.
 check("dangerous-but-juicy map has dangerLevel 'high'",
@@ -414,7 +410,7 @@ check("'Players in Area are X% Delirious' grants Delirium its detect bonus",
 
 // (3) "Monsters take X% reduced Extra Damage from Critical Hits" is a
 // DEFENSIVE monster mod — it must not read as monsters critting the player
-// (the false positive applied an unearned x0.85 danger penalty).
+// (the false positive showed an unearned "High Crit Monsters" warning).
 check("detectDangerHits: 'take reduced Extra Damage from Critical Hits' does NOT match",
   !detectDangerHits("Monsters take 40% reduced Extra Damage from Critical Hits")
     .some((h) => h.id === "high-crit-monsters"));

@@ -19,14 +19,12 @@
  *  Abyss/Expedition secondary stats) — only the Juice Score ignores it.
  *
  *  Danger/annoyance mods (reflect, no leech/regen, reduced recovery, fast
- *  monsters, elemental penetration, ...) are detected here too, and surface
- *  for display (`warning`/`warnings`/`dangerLevel`/`dangerLabel`). They also
- *  scale down `effectiveScore` (a dangerous map is worth less per hour to
- *  actually farm) — see `rewardScore` (pre-danger-penalty) vs
- *  `effectiveScore` (post-penalty, what the UI's tier/verdict/rating are
- *  computed from — see adapter.ts) on `EvaluationResult`. Danger
- *  *detection* (`DangerHit[]`/`computeDangerLevel`) is untouched by this —
- *  only `effectiveScore` reads it. */
+ *  monsters, elemental penetration, ...) are detected here too, but surface
+ *  for display ONLY (`warning`/`warnings`/`dangerLevel`/`dangerLabel` — the
+ *  Insights column). They never affect the score: the score measures loot
+ *  value on paper, and danger is the player's call (2026-07-08 decision,
+ *  reverting the short-lived 2026-07-06 ×0.7-0.95 danger multiplier on
+ *  `effectiveScore`). */
 
 import { PATTERNS as NUMERIC_PATTERNS, type ModStats } from "./mod-parser";
 
@@ -68,7 +66,7 @@ export const DEFAULT_WEIGHTS: Weights = {
 export const DEFAULT_THRESHOLD = 20; // below this: SKIP (§9)
 
 // Danger/annoyance mods — detected for display only (`warning`/`warnings`/
-// `dangerLevel`), and to drive the danger penalty on `effectiveScore` below.
+// `dangerLevel`); they never affect the score.
 // `id` is a stable internal key (never shown to the user, never changes with
 // wording/localization); `label` is the current UI-facing text, looked up
 // from `id` only when building `warnings` for display. This split is
@@ -322,15 +320,6 @@ function normalizeToScale(raw: number): number {
   return 100 + OVERFLOW_HEADROOM * (1 - Math.exp(-excess / OVERFLOW_SOFTNESS));
 }
 
-// Real farming efficiency: a dangerous map costs more time/deaths per clear,
-// so it's worth less per hour even at the same raw reward score.
-const DANGER_PENALTY: Record<DangerLevel, number> = {
-  none: 1.0,
-  low: 0.95,
-  medium: 0.85,
-  high: 0.7,
-};
-
 export interface FieldContribution {
   rawValue: number;
   cappedValue: number;
@@ -453,8 +442,8 @@ export interface EvaluationResult {
    *  insights and heat.breakdown's bonus row). Not applied to the score. */
   bonusDetails: BonusDetail[];
   /** Danger/annoyance mods detected on this map (structured, string-free) —
-   *  feeds `warning`/`warnings`/`dangerLevel` display AND the danger penalty
-   *  applied below (`effectiveScore`). */
+   *  feeds `warning`/`warnings`/`dangerLevel` display only; never affects
+   *  any score field. */
   dangerHits: DangerHit[];
   /** The real score: each loot signal normalized against a "god map"
    *  reference (`computeBaseScore`), scaled by mechanic-stacking synergy and
@@ -464,25 +453,19 @@ export interface EvaluationResult {
    *  synergy stacking (see `normalizeToScale`) — `effectiveScore`/`score`
    *  are what's actually clamped to [0, 100]. */
   rewardScore: number;
-  /** `rewardScore` scaled by `DANGER_PENALTY[dangerLevel]`, clamped to
-   *  [0, 100] — "how good is this map to actually farm". Same value as
-   *  `score`. */
+  /** `rewardScore` hard-clamped to [0, 100]. Same value as `score`. Kept as
+   *  its own field for backward compatibility from when it also carried a
+   *  danger multiplier (removed 2026-07-08 — danger is display-only). */
   effectiveScore: number;
-  /** `computeBaseScore`'s output before synergy/soft-cap/danger are applied
+  /** `computeBaseScore`'s output before synergy/soft-cap are applied
    *  — the normalized-but-unscaled signal, for display layers that want to
-   *  show "raw stats vs. synergy vs. danger" as separate numbers (see
+   *  show "raw stats vs. synergy" as separate numbers (see
    *  displayAdapter.ts) instead of re-deriving them from scratch. */
   baseScore: number;
   /** Points gained from `rewardScore` vs. `baseScore` alone — the
    *  mechanic/Pack-Size synergy multipliers' net effect after the soft cap.
    *  Always >= 0 (multipliers are all >= 1, soft cap is monotonic). */
   synergyBonus: number;
-  /** Points lost to the danger multiplier alone, in the same unit space as
-   *  the other score fields (rather than the raw 0-1 multiplier) — computed
-   *  before the [0, 100] clamp, so it never picks up the unrelated overflow
-   *  a `rewardScore` above 100 loses to that clamp. 0 when `dangerLevel` is
-   *  "none". Always >= 0. */
-  dangerPenalty: number;
 }
 
 /** Composite Juice Score (2026-07-06 normalized-model redesign): each loot
@@ -493,13 +476,13 @@ export interface EvaluationResult {
  *  [0, 100] range instead of compressing into ~0-25. From there: a
  *  mechanic-stacking synergy multiplier and a Pack-Size/mechanic synergy
  *  bonus (`rewardScore` — unchanged below 100, only overshoot past 100 gets
- *  smoothed, see `normalizeToScale`), and finally the danger penalty
- *  (`effectiveScore`, hard-clamped to [0, 100] — a "good but risky" map nets
- *  out below a "good and safe" one). `score` = `effectiveScore`, so existing callers
- *  (adapter.ts's tier/verdict/rating, all already reading `effectiveScore`
- *  directly) need no changes. `breakdown`/`bonusDetails` are still computed
- *  from the old flat model, but purely for UI display now — see the
- *  file-level comment. */
+ *  smoothed, see `normalizeToScale`), then a hard clamp to [0, 100]
+ *  (`effectiveScore`). Danger mods never reduce the score — they surface as
+ *  display-only warnings (see the file-level comment). `score` =
+ *  `effectiveScore`, so existing callers (adapter.ts's tier/verdict/rating,
+ *  all already reading `effectiveScore` directly) need no changes.
+ *  `breakdown`/`bonusDetails` are still computed from the old flat model,
+ *  but purely for UI display now — see the file-level comment. */
 export function evaluateMap(
   stats: ModStats,
   rawText = "",
@@ -515,19 +498,12 @@ export function evaluateMap(
   const synergized = baseScore * synergyMultiplier(mechanicCount) * statSynergyMultiplier(stats, mechanicCount);
   const rewardScore = round2(normalizeToScale(synergized));
 
-  const dangerLevel = computeDangerLevel(dangerHits);
-  // Computed before the [0, 100] clamp below, specifically so `dangerPenalty`
-  // (derived from this) isolates the danger multiplier's own effect and
-  // never picks up the unrelated overflow the clamp trims off a rewardScore
-  // that landed above 100 (see `normalizeToScale`).
-  const preClampEffective = rewardScore * DANGER_PENALTY[dangerLevel];
-  const effectiveScore = round2(Math.max(0, Math.min(100, preClampEffective)));
+  const effectiveScore = round2(Math.max(0, Math.min(100, rewardScore)));
 
   const score = effectiveScore;
   const decision = score >= threshold ? "run" : "skip";
 
   const synergyBonus = round2(Math.max(0, rewardScore - baseScore));
-  const dangerPenalty = round2(Math.max(0, rewardScore - preClampEffective));
 
   return {
     score,
@@ -539,6 +515,5 @@ export function evaluateMap(
     effectiveScore,
     baseScore: round2(baseScore),
     synergyBonus,
-    dangerPenalty,
   };
 }

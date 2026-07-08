@@ -1,6 +1,6 @@
 /** Display layer for the Juice Score (2026-07-06): separates CALCULATION
- *  (scoring.ts's `evaluateMap` — normalized 0-100 model, synergy, danger
- *  penalty) from DISPLAY (this file). `heat.breakdown` in adapter.ts shows
+ *  (scoring.ts's `evaluateMap` — normalized 0-100 model, synergy; danger is
+ *  display-only, never in the score) from DISPLAY (this file). `heat.breakdown` in adapter.ts shows
  *  derived point deltas (e.g. "+5.4") that don't mean anything to a player
  *  comparing against in-game mod text — `buildDisplayData` instead surfaces
  *  the REAL parsed stat percentages (e.g. "+39% Item Rarity") as the
@@ -46,11 +46,10 @@ export interface DisplayData {
     effectiveScore: number;
   };
   /** How `score` was arrived at, decomposed for transparency — not a fake
-   *  per-stat number, just the three real stages of the pipeline. */
+   *  per-stat number, just the real stages of the pipeline. */
   breakdown: {
     baseScore: number;
     synergyBonus: number;
-    dangerPenalty: number;
   };
   danger: {
     level: DangerLevel;
@@ -92,7 +91,6 @@ export function buildDisplayData(stats: ModStats, evaluation: EvaluationResult):
     breakdown: {
       baseScore: evaluation.baseScore,
       synergyBonus: evaluation.synergyBonus,
-      dangerPenalty: evaluation.dangerPenalty,
     },
     danger: {
       level: dangerLevel,
