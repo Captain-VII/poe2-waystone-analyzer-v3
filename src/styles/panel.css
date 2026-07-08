@@ -122,7 +122,10 @@
   position: relative;
   z-index: 2;
   transition: height 0.22s ease-in-out;
+  cursor: grab; /* drag-to-reposition handle — its own background, not the buttons inside it */
 }
+.p-head:active { cursor: grabbing; }
+.p-head button { cursor: pointer; } /* overrides the grab cursor for the buttons living inside the header */
 .mode-full .p-head { height: 44px; }
 .mode-mini .p-head { height: 84px; border-radius: 4px; }
 

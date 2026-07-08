@@ -4,6 +4,7 @@
  *  edge, not the window edge. */
 
 import type { Mode, EffectiveMode } from "./settings";
+import { saveCustomPosition } from "./settings";
 
 const PANEL_BLEED = 12;
 
@@ -74,6 +75,87 @@ export async function placeTopRight(): Promise<void> {
     // Give the resulting onMoved() event a tick to arrive before re-arming.
     setTimeout(() => (repositioning = false), 250);
   }
+}
+
+// Resolved once (prepareWindowDrag, called from main.ts's init()) so the
+// header's mousedown handler can call startDragging() synchronously — no
+// `await import()` in between, which some platforms need for the OS-level
+// drag gesture to actually attach to the originating mousedown.
+let dragWindow: ReturnType<typeof import("@tauri-apps/api/window").getCurrentWindow> | null = null;
+
+export async function prepareWindowDrag(): Promise<void> {
+  if (!("__TAURI_INTERNALS__" in window)) return;
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  dragWindow = getCurrentWindow();
+}
+
+/** Drag-to-reposition: called synchronously from the header's mousedown
+ *  handler (RelicPanel.ts) — see the `dragWindow` comment above for why
+ *  this stays a plain sync call instead of importing on demand. No-op if
+ *  `prepareWindowDrag` hasn't resolved yet (startup race) or in
+ *  plain-browser dev. */
+export function startWindowDrag(): void {
+  void dragWindow?.startDragging();
+}
+
+/** Restores a previously-dragged position instead of the default top-right
+ *  anchor — called at startup when `loadCustomPosition()` has a value.
+ *  Falls back to `placeTopRight()` if the saved position would land
+ *  (fully or mostly) off every connected monitor, e.g. a monitor used at
+ *  drag time was later disconnected. */
+export async function restoreCustomPosition(pos: { x: number; y: number }): Promise<boolean> {
+  if (!("__TAURI_INTERNALS__" in window)) return false;
+  const { getCurrentWindow, LogicalPosition, availableMonitors } = await import("@tauri-apps/api/window");
+  const monitors = await availableMonitors();
+
+  // A saved position is usable if at least a meaningful corner of the
+  // window would land on SOME connected monitor — cheap defensive check,
+  // not a precise clamp (placeTopRight's own clamp already handles the
+  // "monitor smaller than window" case for the fallback path).
+  const fits = monitors.some((mon) => {
+    const scale = mon.scaleFactor;
+    const monX = mon.position.x / scale;
+    const monY = mon.position.y / scale;
+    const monW = mon.size.width / scale;
+    const monH = mon.size.height / scale;
+    return pos.x + 40 > monX && pos.x < monX + monW && pos.y + 40 > monY && pos.y < monY + monH;
+  });
+  if (!fits) return false;
+
+  const win = getCurrentWindow();
+  repositioning = true;
+  try {
+    await win.setPosition(new LogicalPosition(pos.x, pos.y));
+  } finally {
+    setTimeout(() => (repositioning = false), 250);
+  }
+  return true;
+}
+
+/** Persists any window move the USER causes (drag) — never one `placeTopRight`/
+ *  `restoreCustomPosition` itself triggers (`repositioning` gate, shared with
+ *  `watchDisplayChanges`). Debounced: a drag fires many onMoved events, only
+ *  the settled position is worth writing. No-op in plain-browser dev.
+ *  Returns a stop function, same shape as `watchDisplayChanges`. */
+export async function watchWindowMoves(): Promise<() => void> {
+  if (!("__TAURI_INTERNALS__" in window)) return () => {};
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  const win = getCurrentWindow();
+
+  let debounce: ReturnType<typeof setTimeout> | undefined;
+  const unlisten = await win.onMoved(({ payload }) => {
+    if (repositioning) return; // our own move, not a user drag
+    clearTimeout(debounce);
+    debounce = setTimeout(async () => {
+      const scale = await win.scaleFactor();
+      saveCustomPosition({ x: payload.x / scale, y: payload.y / scale });
+    }, 300);
+  });
+
+  return () => {
+    clearTimeout(debounce);
+    unlisten();
+  };
 }
 
 interface MonitorSnapshot {

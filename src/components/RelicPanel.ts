@@ -45,6 +45,18 @@ export interface OverlayOptions {
    *  clicked; main.ts mutates, persists, and calls showCompare again. */
   onComparePin?(index: number): void;
   onCompareRemove?(index: number): void;
+  /** Launch-with-Windows toggle (autostart.ts). Rejects on failure — the
+   *  checkbox reverts to its previous state rather than showing a stale
+   *  "on" it didn't actually achieve. Omitted = unavailable (plain-browser
+   *  dev), same convention as onSetHotkey. */
+  onSetAutostart?(enabled: boolean): Promise<void>;
+  /** Drag-to-reposition (placement.ts's startWindowDrag) — fired
+   *  synchronously from the header's mousedown, see that function's doc
+   *  for why. Omitted = unavailable (plain-browser dev). */
+  onDragStart?(): void;
+  /** Settings' "Réinitialiser" position button — clears the saved custom
+   *  position and re-anchors top-right. */
+  onResetPosition?(): void;
 }
 
 /** Why an Ins press produced no new result: the copy/read itself failed
@@ -70,6 +82,10 @@ export interface OverlayHandle {
    *  toggle tooltip) — called once at startup when the persisted base is
    *  fetched from Rust, and after a successful remap. */
   setHotkeyLabel(base: string): void;
+  /** Reflects the real autostart registration state onto the checkbox —
+   *  called once at startup after the async `isEnabled()` check resolves
+   *  (main.ts's init()). */
+  setAutostartChecked(enabled: boolean): void;
   /** Panel element, for click-through rect reporting. */
   panelEl: HTMLElement;
   /** Currently-visible interactive controls (§2: toggle / footer / mod-scroll
@@ -155,7 +171,7 @@ export function mountOverlay(
           <path d="M1 5.5 H7 M15 5.5 H21" stroke="currentColor" stroke-width="1" opacity=".7"/>
         </svg>
         <div class="status-chip" data-status hidden><span class="s-ic" data-status-icon></span><span data-status-text></span></div>
-        <div class="p-head">
+        <div class="p-head" data-head title="Glisser pour déplacer l'overlay">
           <svg class="glyph" viewBox="0 0 16 16" aria-hidden="true">
             <path d="M8 1 L14 8 L8 15 L2 8 Z" fill="none" stroke="currentColor" stroke-width="1.4"/>
             <path d="M8 4.5 L11.2 8 L8 11.5 L4.8 8 Z" fill="currentColor" opacity=".7"/>
@@ -239,6 +255,13 @@ export function mountOverlay(
                   <span class="set-switch-track"></span>
                 </label>
               </div>
+              <div class="set-row" title="Lance l'overlay automatiquement à l'ouverture de session Windows (reste discret : cliquez-à-travers, se cache normalement)">
+                <span class="set-lab">Lancement avec Windows</span>
+                <label class="set-switch">
+                  <input type="checkbox" data-set-autostart />
+                  <span class="set-switch-track"></span>
+                </label>
+              </div>
               <div class="set-row set-col">
                 <div class="set-row">
                   <span class="set-lab">Overlay Opacity</span>
@@ -257,6 +280,10 @@ export function mountOverlay(
                 <span class="set-lab">Hotkey</span>
                 <span class="set-val set-hotkey-msg" data-hotkey-msg hidden></span>
                 <button class="set-hotkey" data-set-hotkey type="button" aria-label="Remap the analyze hotkey"><kbd data-hotkey-kbd>Ins</kbd></button>
+              </div>
+              <div class="set-row" title="Glissez la barre de titre pour déplacer l'overlay ailleurs à l'écran — ce bouton annule et revient au coin haut-droit par défaut">
+                <span class="set-lab">Position</span>
+                <button class="set-btn" data-set-reset-position type="button">Réinitialiser</button>
               </div>
               <div class="set-sep"></div>
               <div class="set-row">
@@ -291,11 +318,14 @@ export function mountOverlay(
   const setInsightsInput = q("[data-set-insights]") as HTMLInputElement;
   const setReduceInput = q("[data-set-reduce]") as HTMLInputElement;
   const setCompressedInput = q("[data-set-compressed]") as HTMLInputElement;
+  const setAutostartInput = q("[data-set-autostart]") as HTMLInputElement;
   const setOpacityInput = q("[data-set-opacity]") as HTMLInputElement;
   const setOpacityVal = q("[data-set-opacity-val]");
   const setScaleInput = q("[data-set-scale]") as HTMLInputElement;
   const setScaleVal = q("[data-set-scale-val]");
   const setHideBtn = q("[data-set-hide]");
+  const setResetPositionBtn = q("[data-set-reset-position]");
+  const headEl = q("[data-head]");
   const hotkeyBtn = q("[data-set-hotkey]") as HTMLButtonElement;
   const hotkeyKbd = q("[data-hotkey-kbd]");
   const hotkeyMsg = q("[data-hotkey-msg]");
@@ -563,6 +593,10 @@ export function mountOverlay(
     if (!capturingHotkey) applyHotkeyLabel();
   }
 
+  function setAutostartChecked(enabled: boolean): void {
+    setAutostartInput.checked = enabled;
+  }
+
   function showHotkeyMsg(text: string, isError: boolean): void {
     hotkeyMsg.textContent = text;
     hotkeyMsg.classList.toggle("err", isError);
@@ -638,10 +672,13 @@ export function mountOverlay(
 
   /** §2: click-through narrows to exactly these regions for the active layout. */
   function interactiveEls(): HTMLElement[] {
-    // §2: toggle / settings / footer / mod-scroll only. The badge is only
-    // interactive in dev builds (mock-tier cycling) — see below.
-    const els = [toggleBtn, settingsBtn];
-    if (opts.onCycleTier) els.push(badge);
+    // §2: header (toggle/settings/badge live inside it, plus its own
+    // background is the drag handle) / footer / mod-scroll only. Without
+    // drag support (plain-browser dev), fall back to the narrower
+    // toggle/settings-only zone the header used to report — the badge is
+    // only interactive there in dev builds anyway (mock-tier cycling).
+    const els = opts.onDragStart ? [headEl] : [toggleBtn, settingsBtn];
+    if (!opts.onDragStart && opts.onCycleTier) els.push(badge);
     if (settingsOpen) return [...els, settingsPanel]; // whole panel as one rect
     if (compareActive) return [...els, compareGrid]; // per-card pin/remove buttons (#8)
     if (effective === "compact") els.push(footBtn);
@@ -686,6 +723,25 @@ export function mountOverlay(
     saveCompactCompressed(enabled);
     overlayEl.classList.toggle("compact-compressed", enabled);
   });
+  if (opts.onSetAutostart) {
+    const onSetAutostart = opts.onSetAutostart;
+    setAutostartInput.addEventListener("change", () => {
+      const enabled = setAutostartInput.checked;
+      // No localStorage mirror here (unlike every other toggle) — the
+      // registry key IS the state. Revert on failure rather than showing
+      // an "on" that didn't actually take (e.g. a permission hiccup).
+      onSetAutostart(enabled).catch((err: unknown) => {
+        setAutostartInput.checked = !enabled;
+        void import("@tauri-apps/api/core").then(({ invoke }) =>
+          invoke("log_frontend_report", {
+            report: `[autostart] set(${enabled}) failed: ${err instanceof Error ? err.message : String(err)}`,
+          }),
+        ).catch(() => {});
+      });
+    });
+  } else {
+    setAutostartInput.disabled = true; // plain-browser dev: display-only
+  }
   setOpacityInput.addEventListener("input", () => {
     const pct = Number(setOpacityInput.value);
     saveOpacity(pct);
@@ -697,6 +753,16 @@ export function mountOverlay(
     applyScale(scale);
   });
   setHideBtn.addEventListener("click", opts.onHide);
+  setResetPositionBtn.addEventListener("click", () => opts.onResetPosition?.());
+  if (opts.onDragStart) {
+    const onDragStart = opts.onDragStart;
+    headEl.addEventListener("mousedown", (ev) => {
+      // Let the badge/toggle/settings buttons handle their own click —
+      // only the header's background starts a drag.
+      if ((ev.target as HTMLElement).closest("button")) return;
+      onDragStart();
+    });
+  }
   if (opts.onSetHotkey) {
     hotkeyBtn.addEventListener("click", () => {
       if (capturingHotkey) {
@@ -725,5 +791,16 @@ export function mountOverlay(
   applyScale(loadScale());
   applyHotkeyLabel();
   setResult(initial);
-  return { setResult, setMode, analyze, showAnalyzeError, showCompare, closeCompare, setHotkeyLabel, panelEl: panel, interactiveEls };
+  return {
+    setResult,
+    setMode,
+    analyze,
+    showAnalyzeError,
+    showCompare,
+    closeCompare,
+    setHotkeyLabel,
+    setAutostartChecked,
+    panelEl: panel,
+    interactiveEls,
+  };
 }

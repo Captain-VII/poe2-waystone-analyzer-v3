@@ -13,6 +13,7 @@ const KEYS = {
   reduceEffects: "overlay.reduceEffects",
   compactCompressed: "overlay.compactCompressed",
   compareList: "overlay.compareList",
+  customPosition: "overlay.customPosition",
 } as const;
 
 export function loadMode(): Mode {
@@ -90,4 +91,43 @@ export function saveCompareList(entries: CompareEntry[]): void {
     // Quota/serialization failure — compare persistence is a convenience,
     // never worth breaking the analyze flow over.
   }
+}
+
+/** Drag-to-reposition (placement.ts): a user-dragged window position,
+ *  logical px, restored instead of the default top-right anchor on
+ *  startup. Cleared (not remapped) on any real display/DPI/monitor change
+ *  — placement.ts's handleDisplayChange falls back to placeTopRight()
+ *  rather than risk placing a stale position off-screen on new geometry. */
+export interface CustomPosition {
+  x: number;
+  y: number;
+}
+
+export function loadCustomPosition(): CustomPosition | null {
+  const raw = localStorage.getItem(KEYS.customPosition);
+  if (!raw) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      typeof (parsed as CustomPosition).x === "number" &&
+      typeof (parsed as CustomPosition).y === "number" &&
+      Number.isFinite((parsed as CustomPosition).x) &&
+      Number.isFinite((parsed as CustomPosition).y)
+    ) {
+      return parsed as CustomPosition;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveCustomPosition(pos: CustomPosition): void {
+  localStorage.setItem(KEYS.customPosition, JSON.stringify(pos));
+}
+
+export function clearCustomPosition(): void {
+  localStorage.removeItem(KEYS.customPosition);
 }

@@ -7,12 +7,15 @@
     "core:default",
     "core:window:allow-set-position",
     "core:window:allow-current-monitor",
+    "core:window:allow-available-monitors",
     "core:window:allow-outer-size",
     "core:window:allow-outer-position",
     "core:window:allow-scale-factor",
+    "core:window:allow-start-dragging",
     "clipboard-manager:allow-read-text",
     "clipboard-manager:allow-write-text",
     "notification:default",
+    "autostart:default",
     {
       "identifier": "fs:allow-read-text-file",
       "allow": [{ "path": "$APPCONFIG/meta.json" }]

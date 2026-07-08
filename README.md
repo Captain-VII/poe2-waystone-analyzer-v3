@@ -57,6 +57,17 @@ The base key (Ins) is remappable: open Settings (gear button), click the
 it automatically. Escape cancels the capture. The choice persists across
 restarts (`hotkey.txt` in the app config dir, next to `meta.json`).
 
+Settings also has a **Launch with Windows** toggle — enables/disables the
+overlay starting automatically at login (Windows registry Run key, no
+elevation needed). It stays discreet if enabled: click-through and hidden
+until you press Ins, same as launching it manually.
+
+The overlay defaults to the top-right corner, but you can **drag it** by
+its title bar to wherever fits your HUD — the new position is remembered
+across restarts. A display/resolution change always re-anchors it top-right
+(never risks leaving it off-screen); Settings' **Position → Réinitialiser**
+button does the same on demand.
+
 ### Reading the overlay
 
 - **Juice Score** — a single 0-100 number measuring real farming value:

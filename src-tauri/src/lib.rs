@@ -490,6 +490,9 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_notification::init())
+        // MacosLauncher::LaunchAgent is ignored on Windows (this app's only
+        // real target) but required at compile time by the plugin's API.
+        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
         .manage(InteractiveRects(Mutex::new(Vec::new())))
         .invoke_handler(tauri::generate_handler![
             set_interactive_rects,

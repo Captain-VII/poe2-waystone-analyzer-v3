@@ -1,6 +1,14 @@
 import { MOCK_RESULTS, TIER_ORDER } from "./mock";
 import { mountOverlay, type AnalyzeFailure } from "./components/RelicPanel";
-import { placeTopRight, computeEffectiveMode, watchDisplayChanges } from "./placement";
+import {
+  placeTopRight,
+  computeEffectiveMode,
+  watchDisplayChanges,
+  prepareWindowDrag,
+  startWindowDrag,
+  restoreCustomPosition,
+  watchWindowMoves,
+} from "./placement";
 import {
   loadMode,
   saveMode,
@@ -8,10 +16,13 @@ import {
   loadCompactCompressed,
   loadCompareList,
   saveCompareList,
+  loadCustomPosition,
+  clearCustomPosition,
   type Mode,
   type CompareEntry,
 } from "./settings";
 import { registerHotkeys, getHotkeyBase, setHotkeyBase } from "./hotkeys";
+import { getAutostartEnabled, setAutostartEnabled } from "./autostart";
 import { reportInteractiveRegions } from "./interactive-rect";
 import { runDiagnostics, applyDebugOpaqueOverride, sendReport, showWhenPainted, logAnalyzeAttempt } from "./diagnostics";
 import { readClipboardText } from "./clipboard";
@@ -94,6 +105,9 @@ const overlay = mountOverlay(document.getElementById("app")!, MOCK_RESULTS[tier]
   onSetHotkey: "__TAURI_INTERNALS__" in window ? setHotkeyBase : undefined,
   onComparePin: toggleComparePin,
   onCompareRemove: removeCompareEntry,
+  onSetAutostart: "__TAURI_INTERNALS__" in window ? setAutostartEnabled : undefined,
+  onDragStart: "__TAURI_INTERNALS__" in window ? startWindowDrag : undefined,
+  onResetPosition: resetPosition,
   // Dev-only: clicking the tier badge cycles the mock fixtures, for UI
   // testing without a real clipboard waystone. Disabled in production
   // builds (import.meta.env.DEV is false) — it would otherwise silently
@@ -199,6 +213,14 @@ async function revealOverlay(): Promise<void> {
   await invoke("reveal_window").catch(() => {});
 }
 
+/** Settings' "Réinitialiser" position button — drops the saved custom
+ *  position and snaps back to the default top-right anchor. No-op in
+ *  plain-browser dev (both calls already guard on Tauri presence). */
+function resetPosition(): void {
+  clearCustomPosition();
+  void placeTopRight();
+}
+
 function toggleMode(): void {
   mode = mode === "compact" ? "full" : "compact";
   saveMode(mode); // user-initiated — updates intendedMode too (§9)
@@ -218,6 +240,12 @@ async function handleDisplayChange(): Promise<void> {
   if (handlingDisplayChange) return; // coalesce bursts of change events
   handlingDisplayChange = true;
   try {
+    // A real display/DPI/monitor change invalidates any dragged position —
+    // remapping a stale absolute position onto new geometry risks landing
+    // off-screen, so always fall back to the self-healing top-right anchor
+    // rather than trying to preserve it (drag-to-reposition, see
+    // placement.ts's restoreCustomPosition doc comment).
+    clearCustomPosition();
     await placeTopRight();
     await applyEffectiveMode(); // also re-reports regions
     setTimeout(reportRegions, 260); // once more after any mode-morph settles
@@ -239,7 +267,13 @@ async function init(): Promise<void> {
     return; // isolate step 1 — paint only, nothing else (no click-through, no hotkeys)
   }
 
-  await placeTopRight(); // position while still hidden — no visible jump on reveal
+  // Drag-to-reposition: restore a previously-dragged spot instead of the
+  // default top-right anchor when one was saved and still fits a connected
+  // monitor (restoreCustomPosition's own check) — while still hidden, no
+  // visible jump on reveal either way.
+  const customPos = loadCustomPosition();
+  const restored = customPos ? await restoreCustomPosition(customPos) : false;
+  if (!restored) await placeTopRight();
   await applyEffectiveMode(); // §2 fallback cascade — may render compact/mini instead of intended
   await sendReport("post-placement");
   await showWhenPainted();
@@ -247,7 +281,10 @@ async function init(): Promise<void> {
   // The overlay mounts (synchronously, above) before the persisted base
   // can be fetched — labels default to Ins, corrected here if remapped.
   overlay.setHotkeyLabel(await getHotkeyBase());
+  overlay.setAutostartChecked(await getAutostartEnabled());
+  await prepareWindowDrag(); // caches the window ref so the header's mousedown can start a drag synchronously
   await watchDisplayChanges(() => void handleDisplayChange());
+  await watchWindowMoves(); // persists a user drag once it settles (KNOWN_ISSUES-adjacent QoL, see placement.ts)
   await sendReport("display-watch-attached");
   // Startup paint only — must NOT simulate Ctrl+C: whatever window has OS
   // focus at this moment (often a dev terminal, not the game) would receive
