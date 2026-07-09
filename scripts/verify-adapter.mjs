@@ -14,6 +14,7 @@ import {
   describeDangerHits,
   detectDangerHits,
   mechanicThresholdPenalty,
+  modCountBonus,
   setActiveMechanics,
   MECHANICS,
 } from "./.adapter-bundle.mjs";
@@ -529,8 +530,14 @@ const plainNamed = analyzeWaystoneText(mkNamedSample("Forsaken Vault"));
 const ritualModded = analyzeWaystoneText(mkNamedSample("Forsaken Vault", "Area contains 2 additional Ritual Altars"));
 check("mechanic keyword in the NAME does not change the Ritual score",
   mechScoreOf(ritualNamed, "Ritual") === mechScoreOf(plainNamed, "Ritual"));
-check("a stat-less 'Ritual Altars' mod line does not change the Ritual score either",
-  mechScoreOf(ritualModded, "Ritual") === mechScoreOf(plainNamed, "Ritual"));
+// 2026-07-10: a stat-less mod line now DOES move every mechanic's score a
+// little — the sourced mod-count bonus (Fubgun: "8 Mod waystones seem to be
+// the best for loot") is deliberately uniform across mechanics. The
+// invariant this pins is narrower now: the WHOLE delta is exactly the
+// mod-count bonus difference (2 mods vs 1), never a fake stat-fit change —
+// Ritual Altars carries no tracked StatKey, so nothing else should move.
+check("a stat-less 'Ritual Altars' mod line only moves the Ritual score via the sourced mod-count bonus",
+  mechScoreOf(ritualModded, "Ritual") - mechScoreOf(plainNamed, "Ritual") === modCountBonus(2) - modCountBonus(1));
 
 // (9) The flip side: a waystone with STRONG Ritual-fitting stats (priority
 // monsterRarity, secondaries packSize/monsterEffectiveness) but zero
@@ -713,9 +720,12 @@ const effectRarity = analyzeWaystoneText(
 check("Breach: effect+rarity waystone gives Breach a strong fit (Fubgun 0.5)",
   fitScoreOf(effectRarity, "Breach") >= 30);
 // ...and no longer on monster rarity ("mostly wasted — rare count is static").
+// 2026-07-10: "no longer feeds it" now means "only the sourced, uniform
+// mod-count bonus (1 mod line here) shows up" — not a literal zero, since
+// that bonus applies regardless of which mechanic or stat is involved.
 const monsterRarityOnly = analyzeWaystoneText(mkStatWaystone(["+80% increased Rarity of Monsters"]));
-check("Breach: monster-rarity-only waystone no longer feeds Breach at all",
-  fitScoreOf(monsterRarityOnly, "Breach") === 0);
+check("Breach: monster-rarity-only waystone no longer feeds Breach at all (beyond the mod-count bonus)",
+  fitScoreOf(monsterRarityOnly, "Breach") === Math.round(modCountBonus(1)));
 
 // Abyss now keys on pack size / monster rarity / item rarity, in that order
 // ("1) pack size 2) monster rarity 3) rarity of items"). Floor only (not a
@@ -728,10 +738,38 @@ const abyssShaped = analyzeWaystoneText(
 );
 check("Abyss: pack-size/monster-rarity/item-rarity waystone gives Abyss a strong fit (Fubgun 0.5)",
   fitScoreOf(abyssShaped, "Abyss") >= 35);
-// ...and quantity (the old secondary) no longer feeds it.
+// ...and quantity (the old secondary) no longer feeds it. Same 2026-07-10
+// mod-count-bonus caveat as the Breach check above.
 const quantityOnly = analyzeWaystoneText(mkStatWaystone(["30% increased Quantity of Items found"]));
-check("Abyss: quantity-only waystone no longer feeds Abyss",
-  fitScoreOf(quantityOnly, "Abyss") === 0);
+check("Abyss: quantity-only waystone no longer feeds Abyss (beyond the mod-count bonus)",
+  fitScoreOf(quantityOnly, "Abyss") === Math.round(modCountBonus(1)));
+
+// ---------------------------------------------------------------------------
+// Mod-count bonus (2026-07-10, adapter.ts's modCountBonus/computeMechanicScores):
+// sourced from Fubgun's "8 Mod waystones seem to be the best for loot" (8 =
+// full bonus) and "...waystones with 6 modifiers..." (6 = a real, sourced,
+// non-zero midpoint) — a linear ramp is the honest fit for two data points.
+{
+  check("modCountBonus: 0 mods → 0", modCountBonus(0) === 0);
+  check("modCountBonus: 8 mods (Fubgun's target) → the full weight", modCountBonus(8) === 8);
+  check("modCountBonus: 6 mods (Fubgun's 'cheapest viable' point) → 3/4 of the full weight",
+    modCountBonus(6) === 6);
+  check("modCountBonus: never exceeds its weight past 8 mods (corrupted implicits, etc.)",
+    modCountBonus(12) === 8);
+  check("modCountBonus: applies uniformly across every mechanic for the same waystone",
+    (() => {
+      const eight = analyzeWaystoneText(mkStatWaystone(Array(8).fill("+5% increased Rarity of Items found in this Area")));
+      const four = analyzeWaystoneText(mkStatWaystone(Array(4).fill("+5% increased Rarity of Items found in this Area")));
+      // Every mechanic's raw score should differ by exactly the bonus delta,
+      // since these fixtures keep the tracked stat (itemRarity) identical
+      // and only the mod COUNT differs (5 dummy stat lines wouldn't parse
+      // distinctly anyway — mod-parser keeps the strongest match per stat).
+      return eight.mechanicScores.every((m) => {
+        const fourScore = four.mechanicScores.find((x) => x.mechanic === m.mechanic).score;
+        return m.score - fourScore === Math.round(modCountBonus(8)) - Math.round(modCountBonus(4));
+      });
+    })());
+}
 
 // ---------------------------------------------------------------------------
 // Mechanic threshold penalty scaffolding (2026-07-10, mechanics.ts's

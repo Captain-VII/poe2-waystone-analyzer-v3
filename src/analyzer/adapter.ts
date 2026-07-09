@@ -211,14 +211,36 @@ function buildKeyFactors(
   return factors.slice(0, 4);
 }
 
+// Sourced from Fubgun's 0.5 strats (pasted into this session 2026-07-10):
+// "8 Mod waystones seem to be the best for loot" (8 = the practical
+// ceiling/target) and "cheapest option is to make your own ... waystones
+// with 6 modifiers and corrupt after" (6 = a real, still-viable-but-not-
+// optimal alternative). Only two sourced data points, no full curve — a
+// straight linear ramp from 0 to the 8-mod ceiling is the honest fit,
+// not more shape than the data supports. Applies uniformly to every
+// mechanic (no sourced reason to think mod count matters differently per
+// mechanic) — unlike the removed flat detect bonus (+15, KNOWN_ISSUES),
+// this is small (max +8, matching EXTRA_CONTENT_BONUS's own upper range)
+// and grounded in an actual quote rather than an arbitrary round number.
+const MOD_COUNT_BONUS_WEIGHT = 8;
+const MOD_COUNT_REFERENCE = 8;
+// Exported for verify-adapter.mjs — lets tests compute the exact expected
+// delta a mod-count change should produce, rather than re-deriving the
+// formula by hand in the test file.
+export function modCountBonus(modCount: number): number {
+  return Math.max(0, Math.min(1, modCount / MOD_COUNT_REFERENCE)) * MOD_COUNT_BONUS_WEIGHT;
+}
+
 /** §7: cross the waystone's own stat profile against each mechanic's
  *  priority/secondary stats (via `scoreMechanicFitRaw`, shared with tablet
- *  ranking below), then apply `mechanicThresholdPenalty` (currently always
- *  1 — see mechanics.ts). Returns scores for all mechanics, desc sorted.
+ *  ranking below), plus a small mod-count bonus (`modCountBonus`, sourced,
+ *  uniform across mechanics) and `mechanicThresholdPenalty` (currently
+ *  always 1 — see mechanics.ts). Returns scores for all mechanics, desc
+ *  sorted.
  *
- *  Purely stat-fit based — "which mechanic do THESE STATS suit" — no
- *  presence-detection bonus mixed in. §8/§9's "mecanique naturelle" bonus
- *  used to live here too (a flat +15 for any mechanic whose keyword
+ *  Otherwise purely stat-fit based — "which mechanic do THESE STATS suit"
+ *  — no presence-detection bonus mixed in. §8/§9's "mecanique naturelle"
+ *  bonus used to live here too (a flat +15 for any mechanic whose keyword
  *  appeared in the text), but it was a single uniform number applied to
  *  16 of 17 mechanics, disconnected from the real Juice Score's own
  *  differentiated, sourced table for the same idea (`EXTRA_CONTENT_BONUS`
@@ -236,14 +258,15 @@ function buildKeyFactors(
  *  sorting on the rounded value produced frequent exact ties that silently
  *  fell back to `MECHANICS`' declaration order (array position), biasing
  *  which mechanic/tablet won regardless of the waystone's actual stats. */
-function computeMechanicScores(stats: ModStats): MechanicScore[] {
+function computeMechanicScores(stats: ModStats, modCount: number): MechanicScore[] {
+  const bonus = modCountBonus(modCount);
   const scores = getActiveMechanics().map((mech) => {
     // Currently always 1 (no bundled mechanic sets minThresholds) — see
     // that field's doc comment in mechanics.ts. Applied only here, never
     // in rankTablets: a threshold is about the WAYSTONE's own stats, not a
     // tablet's small boost roll.
     const penalty = mechanicThresholdPenalty(stats, mech);
-    const raw = scoreMechanicFitRaw(stats, mech) * penalty;
+    const raw = scoreMechanicFitRaw(stats, mech, bonus) * penalty;
     return { mechanic: mech.name, score: Math.round(raw), raw };
   });
   return scores.sort((a, b) => b.raw - a.raw).map(({ mechanic, score }) => ({ mechanic, score }));
@@ -475,7 +498,7 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
   const dangerLevel = computeDangerLevel(evaluation.dangerHits);
   const display = buildDisplayData(stats, evaluation);
 
-  const mechanicScores = computeMechanicScores(stats);
+  const mechanicScores = computeMechanicScores(stats, parsed.modifiers.length);
   // Trust fix: only a mechanic with a real PoE2 tablet (see tablets.ts's
   // 2026-07-04 research pass, extended 2026-07-06 — Standard/Overseer are
   // the generic fallback, Breach/Ritual/Delirium/Expedition/Abyss/

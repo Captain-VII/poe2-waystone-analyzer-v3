@@ -195,6 +195,28 @@ Lowered to **35** (headroom above the confirmed 29% max, matching
 `TABLET_ROLL_CAP.quantity = 25`'s existing margin over its own ~25% real
 ceiling) — mechanics.ts.
 
+**Update (2026-07-10) — mod count now feeds the Mechanic Match Score, sourced:**
+third idea adopted from the same externally-proposed model review (its
+`"mods"` axis, "Map Modifiers"). `waystone.modCount` (`parsed.modifiers.length`)
+was already parsed and shown but never fed into any scoring — dead data,
+like the mechanics removed above. Unlike the threshold idea, this one had
+real sourcing already sitting in this session's own Fubgun quotes: *"8 Mod
+waystones seem to be the best for loot"* (8 = the practical ceiling) and
+*"cheapest option is to make your own ... waystones with 6 modifiers"*
+(6 = a real, sourced, still-viable midpoint). `adapter.ts`'s `modCountBonus`
+is a linear ramp from 0 (no mods) to +8 points (8 mods, matching
+`EXTRA_CONTENT_BONUS`'s own upper range) — a straight line is the honest
+fit for two data points, not a fabricated curve. Applied uniformly to
+every mechanic in `computeMechanicScores` (no sourced reason to think mod
+count matters differently per mechanic) — scoped to the **Mechanic Match
+Score only**, not the real Juice Score (`scoring.ts`), per explicit user
+direction; revisiting the Juice Score itself is a separate, bigger-blast-
+radius decision for later. Verified: three existing checks that asserted
+a mechanic scores *exactly* 0 when none of its tracked stats are present
+correctly started failing (a stat-less mod line legitimately moves the
+score a little now, via mod count) — fixed to assert the exact sourced
+bonus instead of zero, not loosened or deleted.
+
 **Update (2026-07-10) — mechanic threshold scaffolding added, deliberately
 inert (no sourced numbers exist):** while reviewing an externally-proposed
 scoring model, its `"constraints"` block (a per-mechanic minimum stat
