@@ -418,9 +418,12 @@ check("detectDangerHits: players cursed (moderate)",
   detectDangerHits("Players are Cursed with Elemental Weakness")
     .some((h) => h.id === "player-curses" && h.severity === "moderate"));
 
-// (6) White (no-mod) waystone: tablet ranking must run against the actual
-// General profile. Before, raw-score-0 ties fell back to MECHANICS
-// declaration order (Delirium) while the reason label claimed "General".
+// (6) White (no-mod) waystone: the waystone-level verdict must still be
+// "no recommendation" (nothing clears skipIfBelow), but per-tablet ranking
+// (2026-07-10 redesign) is deliberately independent of that verdict — each
+// tablet keeps showing its own honest mechanic (from its `tags`, a fixed
+// property of the tablet, not the blank waystone). Only the two generic
+// tablets (no mechanic-specific tag) fall back to "General".
 const SAMPLE_WHITE = `Item Class: Waystones
 Rarity: Normal
 Waystone
@@ -429,18 +432,48 @@ Waystone (Tier 15)
 Waystone Tier: 15
 Item Level: 82`;
 const white = analyzeWaystoneText(SAMPLE_WHITE);
-check("white waystone: no mechanic recommendation, tablets ranked vs General",
+check("white waystone: no mechanic recommendation, but tablets still show their own honest match",
   white.recommendedMechanic === null &&
   white.tablets.length > 0 &&
-  white.tablets.every((t) => t.reason.includes("matches General")));
+  white.tablets.some((t) => t.reason.includes("matches Delirium")) &&
+  white.tablets.some((t) => t.reason.includes("matches General")));
 
 // (7) §10 skipIfBelow gate: a map whose Juice Score sits below every
 // eligible mechanic's skipIfBelow must not recommend one, even when a
 // mechanic fits well — monsterOnly (score ~21) fits Abyss/Ritual/Breach at
-// ~70, but their thresholds are all 30+.
-check("skipIfBelow gates the mechanic recommendation on low-score maps",
+// ~70, but their thresholds are all 30+. The tablet list is unaffected by
+// this gate (2026-07-10) — same reasoning as check (6).
+check("skipIfBelow gates the waystone-level recommendation, not the tablet list",
   monsterOnly.recommendedMechanic === null &&
-  monsterOnly.tablets.every((t) => t.reason.includes("matches General")));
+  monsterOnly.tablets.some((t) => t.reason.includes("matches Ritual")));
+
+// (7b) Per-tablet independence, direct regression pin (2026-07-10): a
+// waystone whose stats strongly favor Ritual GLOBALLY must not drag
+// Delirium Tablet's own reason along with it — its real boosts (20%
+// increased Pack Size) fit Delirium, not Ritual, so its label must say so
+// regardless of which mechanic wins the waystone overall.
+const SAMPLE_RITUAL_LEANING = `Item Class: Waystones
+Rarity: Rare
+Ritual Grounds
+Waystone (Tier 15)
+--------
+Waystone Tier: 15
+Item Level: 82
+--------
++70% increased Rarity of Monsters
++30% increased Pack Size
+--------`;
+const ritualLeaning = analyzeWaystoneText(SAMPLE_RITUAL_LEANING);
+const tabletReason = (r, name) => r.tablets.find((t) => t.name === name)?.reason ?? "";
+check("Delirium Tablet keeps matching Delirium even on a Ritual-winning waystone",
+  tabletReason(ritualLeaning, "Delirium Tablet").includes("matches Delirium"));
+
+// (7c) Direct proof of decoupling: two different tablets on the SAME
+// waystone show two different mechanics in their reason — impossible under
+// the old single-shared-mechanic design.
+check("two tablets on the same waystone can show two different mechanics",
+  tabletReason(ritualLeaning, "Delirium Tablet").includes("matches Delirium") &&
+  tabletReason(ritualLeaning, "Ritual Tablet").includes("matches Ritual"));
 
 // ============================================================
 // MECHANIC MATCH SCORE IS PURELY STAT-FIT (2026-07-10): the old +15

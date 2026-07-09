@@ -195,6 +195,48 @@ Lowered to **35** (headroom above the confirmed 29% max, matching
 `TABLET_ROLL_CAP.quantity = 25`'s existing margin over its own ~25% real
 ceiling) — mechanics.ts.
 
+**Update (2026-07-10) — tablet ranking was a design flaw, not a tuning
+issue: every tablet was scored against ONE shared mechanic, fixed:**
+after the Delirium fix above, the user flagged a deeper problem in the
+tablet list itself. Confirmed in `adapter.ts`'s `rankTablets`: all 9 active
+tablets were scored against the single globally-`recommendedMechanic` —
+never against their own profile. Concretely, on a Ritual-winning waystone,
+Delirium Tablet (real boosts: `20% increased Pack Size`, a strong Delirium
+fit) displayed **"Delirium Tablet matches Ritual (16/100)"** — its real
+strength against its own mechanic (Delirium, ~72/100) was never shown, and
+`computeSynergyBonus` (already mechanic-independent) could only add up to
+10 points, itself capped at half of the already-suppressed base — a
+compounding effect, not a rounding error.
+
+**Fix**: each tablet now resolves its OWN mechanic from `tablet.tags`
+(the same source `computeSynergyBonus`/`buildSynergyLine`/the primary-vs-
+secondary tier multiplier already used) — Breach/Ritual/Delirium/
+Expedition/Abyss/Irradiated/Temple Tablet each score against their own
+name; Standard/Overseer Precursor (`tags: ["general"]`) score against
+General. An earlier version of this fix searched all 8 tablet-linked
+mechanics for whichever numerically scored highest per tablet — discarded
+after live testing showed it could pick a confusing "match" with no real
+identity behind it (Standard Precursor Tablet's Quantity+Item Rarity
+boosts numerically favored Irradiated over General, purely because
+Irradiated's secondary stats happen to include quantity) — a tablet's
+declared tag is curated identity, not something to rediscover via
+curve-fitting each analysis. The `recommendedTablets` curator pin also now
+applies correctly per tablet (previously it only ever fired for whichever
+tablet matched the global winner).
+
+**Deliberate side effect, confirmed with the user**: a tablet's own match
+is now shown even when the waystone as a whole doesn't clear any
+mechanic's `skipIfBelow` (white waystone, low-score map) — e.g. Delirium
+Tablet still shows "matches Delirium" on a blank waystone, since its
+boosts are fixed regardless of what's being analyzed. The `skipIfBelow`
+gate still governs the separate waystone-level `recommendedMechanic` /
+"Strong X match" verdict, now fully decoupled from the tablet list.
+
+Verified: `verify-adapter.mjs` pins a Ritual-leaning waystone where
+Delirium Tablet still reads "matches Delirium" (not "matches Ritual"),
+and that two different tablets on the same waystone can show two
+different mechanics — impossible under the old design.
+
 **Update (2026-07-09) — the Pack Size / Item Rarity cap mismatch is
 resolved, from real data this time:** the 2026-07-08 update below flagged
 `NORMALIZE_CAP.packSize = 150` vs. `PACK_SIZE_REFERENCE = 30` disagreeing
