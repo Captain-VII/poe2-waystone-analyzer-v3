@@ -214,20 +214,67 @@ recommended (Delirium/Legion, both Pack-Size-priority, now rank near the
 top instead of being suppressed). `monsterRarity`/`monsterEffectiveness`
 were already coincidentally aligned (100=100) and are untouched.
 
+**Update (2026-07-10) — Breach and Abyss recalibrated from Fubgun's 0.5
+atlas strats (the strongest mechanic→stat source obtained so far):** the
+user pointed at Fubgun's Mobalytics "Atlas Tree and Strats" page (patch
+0.5, updated 2026-07-05). The page blocks scraping (403; Wayback
+unavailable) and its per-mechanic tabs are client-side JS — every web
+search returned the same generic intro paragraph regardless of the
+mechanic asked about, so tab contents were **pasted directly by the user
+from their browser**. Changes made in `mechanics.ts`:
+- **Breach**: priority `monsterRarity` → `monsterEffectiveness`,
+  secondaries `[itemRarity, monsterEffectiveness]` → `[itemRarity]`.
+  Quotes: *"you're looking for high item rarity and high monster
+  effectiveness"*, *"if you can only get one, choose monster
+  effectiveness"* — and neither Monster Rarity nor Pack Size appears
+  anywhere in the Breach tab. Converges with an independent aoeah.com
+  mirror: *"pack size is irrelevant — rare monster count is static"*,
+  *"Monster Rarity is mostly wasted for the same reason"* (a Breach's
+  rare count is set by tablets, not map stats). Two sources agreeing on
+  a mechanical reason beats the older monsterRarity-first consensus.
+- **Abyss**: priority `monsterRarity` → `packSize`, secondaries
+  `[quantity, monsterEffectiveness]` → `[monsterRarity, itemRarity]`.
+  The tab gives an explicit ranking, repeated verbatim in BOTH of
+  Fubgun's abyss strats: *"1) pack size in map 2) monster rarity
+  3) rarity of items found 4) monster effectiveness (not as good in this
+  strat because you already have so much)"*. The effectiveness demotion
+  is strat-specific (his mandatory tablet mods already stack it), so it
+  was dropped from the model without being marked "bad".
+- **Ritual / Delirium — confirmed out-of-model, nothing changed**: the
+  Ritual tab mentions none of the six stats (all Tribute/Favours/Omens —
+  mechanic currency, already modeled via `rewards.ts`); the "Deli Rush"
+  tab literally says *"you don't care for any modifier"* — but that's a
+  specialized mirror-rush strat, neither confirming nor refuting
+  Delirium's `packSize` priority for generic fog farming. Inconclusive.
+- **Expedition — deliberately NOT changed**: the only "Waystone:"
+  paragraph in that tab (*"aim for the highest monster effect… pack size
+  is bad"*) is word-for-word the same generic text every web search
+  returned for every mechanic — it reads as the page's shared intro
+  paragraph, not Expedition-specific advice. Future sessions: don't
+  re-treat that paragraph as a new Expedition signal.
+- **Two older doubts weakened by the same source**: boss-rush strat
+  targets *"Waystone Drop Chance… minimum 95%, ideally 105%+"* — first
+  real-usage number in `DROP_CHANCE_REFERENCE = 120`'s single-waystone
+  framing (corroborates the scale; it's a roll target, not a max, so the
+  cap question stays open). And *"make your own 70% effect waystones"*
+  gives Monster Effectiveness its first practical ceiling (~70%
+  self-crafted) — `NORMALIZE_CAP.monsterEffectiveness = 100` is plausible.
+
 **Still unsourced, NOT changed:**
 - **Monster Rarity**: the real waystone in issue #9 confirms the literal
   wording *"Monster Rarity: +18% (augmented)"* is real (in the aggregate
   header-summary block) — so the earlier 2026-07-08 worry that this
   wording might not exist on real items was wrong. What's still unsourced
   is only the CAP (how high can this go) — no number found yet.
-- **Monster Effectiveness**: only tablet numbers found (9-11% for XP
-  farming builds), nothing for the waystone mod itself.
-- **Waystone Drop Chance**: mechanically more complex than a single-mod
-  cap — combines an innate mod-count-based scaling (a 6-modifier waystone
-  reportedly guarantees a replacement drop) with a dedicated suffix mod;
-  one community post claimed extreme stacked totals (over 1000%) via
-  cumulative crafting/Atlas effects, not comparable to `DROP_CHANCE_
-  REFERENCE = 120`'s single-waystone framing.
+- **Monster Effectiveness cap**: ~70% practical self-craft ceiling now
+  known (above), but no confirmed hard max.
+- **Waystone Drop Chance cap**: mechanically more complex than a
+  single-mod cap — combines an innate mod-count-based scaling (a
+  6-modifier waystone reportedly guarantees a replacement drop) with a
+  dedicated suffix mod; one community post claimed extreme stacked totals
+  (over 1000%) via cumulative crafting/Atlas effects, not comparable to
+  `DROP_CHANCE_REFERENCE = 120`'s single-waystone framing. The 95-105%+
+  boss-rush target above corroborates the reference's scale.
 - **Mechanic priority-stat disagreement (informational only):** one
   source (Switchblade Gaming) ranks Ritual as "item rarity → ritual size"
   and Expedition as "pack size → rare monster mods" — contradicting the

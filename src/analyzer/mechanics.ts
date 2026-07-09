@@ -196,13 +196,18 @@ export const MECHANICS: MechanicDef[] = [
     skipIfBelow: 30,
     detect: MECHANIC_PATTERNS.metamorph,
   },
-  // Community consensus 0.5 (mobalytics tierlist/mmogah, 2026-07-06): loot
-  // comes from rares — rare monster count first, then item quantity and
-  // monster effectiveness; pack size is explicitly not recommended.
+  // Fubgun 0.5 atlas strats (mobalytics, user-pasted tab text, 2026-07-10),
+  // explicit ranking repeated verbatim in BOTH of his abyss strats (Jado and
+  // Hilda): "1) pack size in map 2) monster rarity 3) rarity of items found
+  // 4) monster effectiveness (not as good in this strat because you already
+  // have so much)". Replaces the older mobalytics-tierlist/mmogah consensus
+  // (monsterRarity priority, quantity secondary). monsterEffectiveness's
+  // demotion is strat-specific (his mandatory tablet mods already stack it),
+  // so it's merely dropped here, not treated as bad.
   {
     name: "Abyss",
-    priorityStat: "monsterRarity",
-    secondaryStats: ["quantity", "monsterEffectiveness"],
+    priorityStat: "packSize",
+    secondaryStats: ["monsterRarity", "itemRarity"],
     recommendedTablets: ["Abyss Tablet", "Standard Precursor Tablet"],
     skipIfBelow: 30,
     detect: MECHANIC_PATTERNS.abyss,
@@ -218,13 +223,19 @@ export const MECHANICS: MechanicDef[] = [
     skipIfBelow: 35,
     detect: MECHANIC_PATTERNS.ritual,
   },
-  // Community consensus 0.5 (switchbladegaming/aoeah/boostmatch,
-  // 2026-07-06): rare monster count first, then ~60-65% combined
-  // rarity + monster effectiveness; rares carry the value, not white packs.
+  // Fubgun 0.5 atlas strats (mobalytics, user-pasted tab text, 2026-07-10):
+  // waystone line reads "you're looking for high item rarity and high
+  // monster effectiveness", and among tablet mods "if you can only get one,
+  // choose monster effectiveness". Neither Monster Rarity nor Pack Size is
+  // mentioned — converges with the independent aoeah mirror ("pack size is
+  // irrelevant / monster rarity mostly wasted — rare monster count in a
+  // Breach is static", set by tablets, not map stats). Replaces the older
+  // switchbladegaming/aoeah/boostmatch consensus (monsterRarity priority).
+  // Single secondary on purpose — no padding with an explicitly-wasted stat.
   {
     name: "Breach",
-    priorityStat: "monsterRarity",
-    secondaryStats: ["itemRarity", "monsterEffectiveness"],
+    priorityStat: "monsterEffectiveness",
+    secondaryStats: ["itemRarity"],
     recommendedTablets: ["Breach Tablet", "Standard Precursor Tablet"],
     skipIfBelow: 35,
     detect: MECHANIC_PATTERNS.breach,

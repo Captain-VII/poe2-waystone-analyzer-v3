@@ -649,6 +649,43 @@ check("real clipboard: the 5 core stats parse from the aggregate summary block",
   realClipboard.heat.breakdown.find((b) => b.key === "waystoneDropChance")?.value === 105);
 
 // ---------------------------------------------------------------------------
+// Breach/Abyss recalibration (Fubgun 0.5 atlas strats, user-pasted tab text,
+// 2026-07-10 — see mechanics.ts's entry comments for the quotes). These pin
+// the direction of the change, not exact numbers.
+const mkStatWaystone = (modLines) => `Item Class: Waystones
+Rarity: Rare
+Stat Probe
+Waystone (Tier 15)
+--------
+Waystone Tier: 15
+Item Level: 82
+--------
+${modLines.join("\n")}
+--------`;
+const fitScoreOf = (r, name) => r.mechanicScores.find((m) => m.mechanic === name)?.score ?? 0;
+
+// Breach now keys on monster effectiveness + item rarity...
+const effectRarity = analyzeWaystoneText(
+  mkStatWaystone(["+40% Monster Effectiveness", "+60% increased Rarity of Items found in this Area"]),
+);
+check("Breach: effect+rarity waystone gives Breach a strong fit (Fubgun 0.5)",
+  fitScoreOf(effectRarity, "Breach") >= 30);
+// ...and no longer on monster rarity ("mostly wasted — rare count is static").
+const monsterRarityOnly = analyzeWaystoneText(mkStatWaystone(["+80% increased Rarity of Monsters"]));
+check("Breach: monster-rarity-only waystone no longer feeds Breach at all",
+  fitScoreOf(monsterRarityOnly, "Breach") === 0);
+
+// Abyss now keys on pack size first ("1) pack size in map")...
+const packOnly = analyzeWaystoneText(mkStatWaystone(["+25% increased Pack Size"]));
+check("Abyss: pack-size-heavy waystone now ranks Abyss at the top (Fubgun 0.5)",
+  fitScoreOf(packOnly, "Abyss") >= 45 &&
+  packOnly.mechanicScores[0].score === fitScoreOf(packOnly, "Abyss"));
+// ...and quantity (the old secondary) no longer feeds it.
+const quantityOnly = analyzeWaystoneText(mkStatWaystone(["30% increased Quantity of Items found"]));
+check("Abyss: quantity-only waystone no longer feeds Abyss",
+  fitScoreOf(quantityOnly, "Abyss") === 0);
+
+// ---------------------------------------------------------------------------
 // meta-schema.ts (pure parse/merge/diff module behind the in-app meta.json
 // editor) — bundled separately (.meta-bundle.mjs). NOTE: that bundle carries
 // its OWN copy of MECHANICS/DEFAULT_TABLETS; the end-to-end check at the very
@@ -773,21 +810,23 @@ const defOf = (name) => SCHEMA_MECHANICS.find((m) => m.name === name);
   check("meta: editor model exposes the 6 stat options", model.statOptions.length === 6);
 }
 
-// 9. End-to-end through the adapter bundle: raising Delirium's skip gate via
-// a merged table changes the live recommendation, and restoring the bundled
-// defaults brings it back. LAST check block — it mutates the adapter's
-// active table (and restores it).
+// 9. End-to-end through the adapter bundle: raising the CURRENT recommended
+// mechanic's skip gate via a merged table changes the live recommendation,
+// and restoring the bundled defaults brings it back. Deliberately not pinned
+// to a mechanic name — recalibrations legitimately move which mechanic wins
+// SAMPLE; this tests the gating MECHANISM. LAST check block — it mutates the
+// adapter's active table (and restores it).
 {
   const before = analyzeWaystoneText(SAMPLE).recommendedMechanic;
-  const { mechanics } = mergeMetaConfig({ metas: { delirium: { skip_if_below: 99 } } });
+  const { mechanics } = mergeMetaConfig({ metas: { [before.toLowerCase()]: { skip_if_below: 99 } } });
   setActiveMechanics(mechanics);
   const gated = analyzeWaystoneText(SAMPLE).recommendedMechanic;
   setActiveMechanics(MECHANICS);
   const after = analyzeWaystoneText(SAMPLE).recommendedMechanic;
-  check("meta e2e: skip_if_below=99 via merged table drops the Delirium recommendation",
-    before === "Delirium" && gated !== "Delirium");
+  check("meta e2e: skip_if_below=99 via merged table drops the current recommendation",
+    typeof before === "string" && gated !== before);
   check("meta e2e: restoring the bundled defaults restores the recommendation",
-    after === "Delirium");
+    after === before);
 }
 
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}`);
