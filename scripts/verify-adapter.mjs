@@ -16,6 +16,8 @@ import {
   modCountBonus,
   setActiveMechanics,
   MECHANICS,
+  TIER_SCORE,
+  priorityStatTier,
 } from "./.adapter-bundle.mjs";
 
 const SAMPLE = `Item Class: Waystones
@@ -722,40 +724,67 @@ ${modLines.join("\n")}
 --------`;
 const fitScoreOf = (r, name) => r.mechanicScores.find((m) => m.mechanic === name)?.score ?? 0;
 
-// Breach now keys on monster effectiveness + item rarity...
+// Breach now keys on monster effectiveness (secondary itemRarity is
+// declared on the mechanic but no longer feeds scoring, see the tier-based
+// rework below).
 const effectRarity = analyzeWaystoneText(
   mkStatWaystone(["+40% Monster Effectiveness", "+60% increased Rarity of Items found in this Area"]),
 );
-check("Breach: effect+rarity waystone gives Breach a strong fit (Fubgun 0.5)",
+check("Breach: a 40% Monster Effectiveness waystone gives Breach a strong (top-tier) fit (Fubgun 0.5)",
   fitScoreOf(effectRarity, "Breach") >= 30);
 // ...and no longer on monster rarity ("mostly wasted — rare count is static").
-// 2026-07-10: "no longer feeds it" now means "only the sourced, uniform
-// mod-count bonus (1 mod line here) shows up" — not a literal zero, since
-// that bonus applies regardless of which mechanic or stat is involved.
+// 2026-07-10 (revised same day): "no longer feeds it" now means "stuck at
+// the weak-tier baseline plus the sourced, uniform mod-count bonus" — not a
+// literal zero. Every mechanic always has SOME baseline now (TIER_SCORE.weak,
+// the 0-15% band), since a raw-%-of-priority-stat tier read never returns
+// zero the way the old continuous formula could.
 const monsterRarityOnly = analyzeWaystoneText(mkStatWaystone(["+80% increased Rarity of Monsters"]));
-check("Breach: monster-rarity-only waystone no longer feeds Breach at all (beyond the mod-count bonus)",
-  fitScoreOf(monsterRarityOnly, "Breach") === Math.round(modCountBonus(1)));
+check("Breach: monster-rarity-only waystone stays at the weak-tier baseline for Breach (0% Monster Effectiveness)",
+  fitScoreOf(monsterRarityOnly, "Breach") === Math.round(TIER_SCORE.weak + modCountBonus(1)));
 
 // Abyss reverted 2026-07-10 (same day, later — see mechanics.ts's Abyss
 // entry comment): the packSize-priority change above was contradicted by
 // two independent sources (Mobalytics "Abyss Juicing Tablet Tier List",
 // Switchblade Gaming) found while debugging a real waystone where a huge
 // Monster Rarity roll produced a weak Abyss Tablet fit. Abyss now keys on
-// monster rarity / item rarity / quantity, in that order.
-const abyssShaped = analyzeWaystoneText(
-  mkStatWaystone(["+60% increased Rarity of Monsters", "+20% increased Rarity of Items found in this Area"]),
-);
-check("Abyss: monster-rarity/item-rarity waystone gives Abyss a strong fit (reverted, sourced)",
+// monster rarity ALONE (itemRarity/quantity are declared secondaries but,
+// same as Breach above, no longer feed scoring — see the tier rework below).
+const abyssShaped = analyzeWaystoneText(mkStatWaystone(["+60% increased Rarity of Monsters"]));
+check("Abyss: a 60% Monster Rarity waystone gives Abyss a strong (legendary-tier) fit (reverted, sourced)",
   fitScoreOf(abyssShaped, "Abyss") >= 35);
 // ...and pack size (the short-lived priority stat) no longer feeds it at
-// all. Same 2026-07-10 mod-count-bonus caveat as the Breach check above.
+// all — same weak-tier-baseline caveat as the Breach check above.
 const packSizeOnly = analyzeWaystoneText(mkStatWaystone(["+50% increased Pack Size"]));
-check("Abyss: pack-size-only waystone no longer feeds Abyss (beyond the mod-count bonus)",
-  fitScoreOf(packSizeOnly, "Abyss") === Math.round(modCountBonus(1)));
-// quantity is a real (if secondary, 0.2-weighted) Abyss stat again.
+check("Abyss: pack-size-only waystone stays at the weak-tier baseline for Abyss (0% Monster Rarity)",
+  fitScoreOf(packSizeOnly, "Abyss") === Math.round(TIER_SCORE.weak + modCountBonus(1)));
+// quantity was Abyss's secondary pre-rework; it's declared but inert now —
+// a quantity-only waystone must land at the SAME weak-tier baseline as any
+// other stat Abyss doesn't track, not a boosted number (2026-07-10, user's
+// explicit call: "seul le stat prioritaire compte").
 const quantityOnly = analyzeWaystoneText(mkStatWaystone(["30% increased Quantity of Items found"]));
-check("Abyss: quantity-only waystone feeds Abyss beyond just the mod-count bonus (secondary stat)",
-  fitScoreOf(quantityOnly, "Abyss") > Math.round(modCountBonus(1)));
+check("Abyss: quantity-only waystone does NOT feed Abyss beyond the weak-tier baseline (secondary stats are inert now)",
+  fitScoreOf(quantityOnly, "Abyss") === Math.round(TIER_SCORE.weak + modCountBonus(1)));
+
+// ---------------------------------------------------------------------------
+// Tier-based scoring (2026-07-10, revised again the same day — user's own
+// gameplay judgment, not a web guide: "0-15%=nul, 15-25%=ok, 25-50%=top,
+// 50%+=legendaire"). Replaces the previous 0.6/0.2/0.2 weighted-sum formula
+// entirely — only a mechanic's PRIORITY stat's raw % decides its tier now.
+{
+  const at = (pct, statLine) => analyzeWaystoneText(mkStatWaystone([`+${pct}% ${statLine}`]));
+  const RARITY = "increased Rarity of Monsters"; // Ritual/Abyss's priority stat
+  const ritualDef = MECHANICS.find((m) => m.name === "Ritual");
+  check("priorityStatTier: 0% -> weak", priorityStatTier({}, ritualDef) === "weak");
+  check("tier boundary: 14% is weak, 15% is ok (< is exclusive at the tier's own top)",
+    fitScoreOf(at(14, RARITY), "Ritual") === Math.round(TIER_SCORE.weak + modCountBonus(1)) &&
+    fitScoreOf(at(15, RARITY), "Ritual") === Math.round(TIER_SCORE.ok + modCountBonus(1)));
+  check("tier boundary: 24% is ok, 25% is top",
+    fitScoreOf(at(24, RARITY), "Ritual") === Math.round(TIER_SCORE.ok + modCountBonus(1)) &&
+    fitScoreOf(at(25, RARITY), "Ritual") === Math.round(TIER_SCORE.top + modCountBonus(1)));
+  check("tier boundary: 49% is top, 50% is legendary",
+    fitScoreOf(at(49, RARITY), "Ritual") === Math.round(TIER_SCORE.top + modCountBonus(1)) &&
+    fitScoreOf(at(50, RARITY), "Ritual") === Math.round(TIER_SCORE.legendary + modCountBonus(1)));
+}
 
 // ---------------------------------------------------------------------------
 // Tablet fit = waystone fit (2026-07-10 rework, user report + AskUserQuestion

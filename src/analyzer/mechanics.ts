@@ -33,84 +33,57 @@ export interface MechanicDef {
   detect?: RegExp;
 }
 
-// Per-stat cap used to normalize a raw stat value into a 0-1 "how strong
-// is this" signal — used by mechanic scoring (adapter.ts's
-// computeMechanicScores) and synergy bonuses. monsterRarity/
-// monsterEffectiveness are still the original unsourced first-pass numbers
-// (KNOWN_ISSUES #3) — web research 2026-07-08 couldn't confirm or correct
-// them (conflicting/tablet-only data), so they're untouched.
-//
-// itemRarity/packSize (2026-07-09): were 200/150, wildly out of step with
-// scoring.ts's RARITY_REFERENCE=100/PACK_SIZE_REFERENCE=30 — the SAME real
-// god-map references the actual Juice Score uses, already user-validated
-// in the 2026-07-06 scoring audit. Realigned to 100/30 that day.
-//
-// packSize (2026-07-10, revised again): 30 was itself too low — 7 real T15
-// waystones pasted by the user this session show Pack Size from 7% up to
-// 44%, and a real market listing (17 divine, i.e. a genuinely sought-after
-// roll, not a fluke) showed 64%. maxroll.gg ("Rolling Waystones and
-// Precursor Tablets") confirms a T15's base Pack Size mod rolls (41-50)% —
-// already above the old 30 cap on its own. Raised to 100, matching how
-// itemRarity/monsterRarity/monsterEffectiveness are already treated (a
-// round, generous ceiling rather than a tight fit to the highest sample
-// seen so far) — comfortable headroom above the observed 64% max. This
-// deliberately reopens a gap against scoring.ts's PACK_SIZE_REFERENCE=30
-// (still 30, untouched — that's the real Juice Score, user-validated
-// 2026-07-06, out of scope for this pass): NORMALIZE_CAP now diverges from
-// REFERENCE again, same shape of disagreement the 2026-07-09 fix closed,
-// but this time NORMALIZE_CAP has the stronger, fresher sourcing. Flagged,
-// not silently reintroduced — see KNOWN_ISSUES #3.
-//
-// The single NORMALIZE_CAP set is now also used for tablet fit
-// (`adapter.ts`'s `rankTablets`, 2026-07-10 rework): tablets are scored
-// against the WAYSTONE's own stats, not a tablet's own small boost roll
-// (the old TABLET_ROLL_CAP + tablet.boosts approach — removed, see
-// KNOWN_ISSUES.md), so there is only ever one scale to keep sourced.
-//
-// waystoneDropChance (2026-07-10): same bug, same session — those same 7
-// real waystones show Drop Chance from 80% up to 140%, already exceeding
-// the old cap of 100 (and even scoring.ts's own DROP_CHANCE_REFERENCE=120).
-// No external "mod tops out at X%" citation exists for this stat (unlike
-// quantity/packSize), so 150 is an empirical choice: headroom above the
-// highest confirmed real roll (140%), same margin logic as quantity's
-// 29%-observed → 35-cap. Also diverges from DROP_CHANCE_REFERENCE=120,
-// same flagged trade-off as packSize above.
-export const NORMALIZE_CAP: Record<StatKey, number> = {
-  itemRarity: 100,
-  monsterRarity: 100,
-  packSize: 100,
-  monsterEffectiveness: 100,
-  waystoneDropChance: 150,
-  // Sourced 2026-07-08 (maxroll.gg "Rolling Waystones and Precursor
-  // Tablets"): a T15 waystone's single Item Quantity mod line tops out at
-  // (25-29)% — mod-parser.ts's `quantity` is a single-line max, never a
-  // sum (extractMods keeps the strongest match, doesn't add), so that IS
-  // the realistic ceiling. The old 200 meant even a perfect 29% roll only
-  // contributed ~14.5% of the normalized signal — confirms and quantifies
-  // KNOWN_ISSUES #3's standing suspicion that this suppressed
-  // quantity-driven mechanic fits (Expedition's priority stat). 35 leaves
-  // headroom above the confirmed real max.
-  quantity: 35,
-};
+/** 4-tier read of how strong a raw stat % is (2026-07-10, user's own
+ *  gameplay judgment — not a web guide this time, see KNOWN_ISSUES.md):
+ *  "0-15% = nul, 15-25% = ok, 25-50% = top, 50%+ = ultra/juicy/legendaire".
+ *  Replaces the previous continuous per-stat cap/normalization entirely —
+ *  see `scoreMechanicFitRaw`'s doc comment for what this superseded. */
+export type StatTier = "weak" | "ok" | "top" | "legendary";
 
-/** Crosses a waystone's parsed stat profile against a mechanic's
- *  priority/secondary stats: priority weighted
- *  0.6, up to two secondary stats at 0.2 each, scaled to 0-100. `extraBonus`
- *  folds in anything additive-and-clamped (mechanic "naturally present on
- *  the map" detection, or a tablet-name pin) without duplicating the
- *  weighting math at each call site.
- *
- *  Unrounded — several mechanics share the same priority/secondary stats,
- *  so a rounded score produces frequent exact ties; callers that need to
- *  *rank/sort* mechanics or tablets should compare this raw value (see
- *  adapter.ts's computeMechanicScores/rankTablets), not the rounded
- *  `scoreMechanicFit` below, or ties silently fall back to array
- *  declaration order instead of reflecting the actual stat profile. */
+const TIER_BOUNDS: { belowPercent: number; tier: StatTier }[] = [
+  { belowPercent: 15, tier: "weak" },
+  { belowPercent: 25, tier: "ok" },
+  { belowPercent: 50, tier: "top" },
+  { belowPercent: Infinity, tier: "legendary" },
+];
+
+/** Which tier a mechanic's PRIORITY stat falls into, given a stat profile
+ *  (a waystone's parsed mods). Secondary stats no longer factor in at all
+ *  (simplification, user's explicit call — `secondaryStats` stays on
+ *  `MechanicDef`/meta.json only as user-facing/editable data, unused by
+ *  scoring now). */
+export function priorityStatTier(profile: Partial<Record<StatKey, number>>, mech: MechanicDef): StatTier {
+  const value = profile[mech.priorityStat] ?? 0;
+  return TIER_BOUNDS.find((b) => value < b.belowPercent)!.tier;
+}
+
+// Representative 0-100 point value per tier — exists only so every caller
+// that still needs a number (sorting mechanicScores, the tablet fit shown
+// on hover, `scoreToRating`'s letter, the 0-100 AnalysisResult contract)
+// keeps working unchanged. Never re-derived from a continuous formula
+// anymore — a tier IS the score now. Chosen so "top"+`modCountBonus` (max
+// +8) still clears the existing `keyFactors` "Strong X match" bar (score
+// >= 50) on its own, matching top/legendary intuitively reading as strong.
+// Exported so verify-adapter.mjs can compute exact expected scores instead
+// of re-hardcoding these numbers in the test file (same reasoning as
+// adapter.ts's exported `modCountBonus`).
+export const TIER_SCORE: Record<StatTier, number> = { weak: 10, ok: 25, top: 55, legendary: 80 };
+
+/** Old doc (kept for context, formula replaced 2026-07-10): used to cross a
+ *  waystone's stat profile against a mechanic's priority/secondary stats
+ *  (priority weighted 0.6, up to two secondaries at 0.2 each, continuous
+ *  0-100). Removed after repeated conflicting-web-guide rework left the
+ *  weights feeling arbitrary and hard to reason about (KNOWN_ISSUES.md) —
+ *  replaced by `priorityStatTier`'s 4-tier read of the priority stat ALONE,
+ *  sourced from the user's own gameplay judgment rather than another guide.
+ *  Same call signature as before (`profile, mech, extraBonus`) so callers
+ *  (`computeMechanicScores`/`rankTablets` in adapter.ts) didn't need to
+ *  change. `extraBonus` still folds in anything additive-and-clamped
+ *  (mod-count bonus, a tablet-name pin). Unrounded on purpose — ties are
+ *  still possible (several mechanics can land in the same tier), broken by
+ *  `extraBonus`/`rewardScore` at the call site, not here. */
 export function scoreMechanicFitRaw(profile: Partial<Record<StatKey, number>>, mech: MechanicDef, extraBonus = 0): number {
-  const normalized = (key: StatKey) => Math.min(1, (profile[key] ?? 0) / NORMALIZE_CAP[key]);
-  let score = 0.6 * normalized(mech.priorityStat);
-  for (const sec of mech.secondaryStats.slice(0, 2)) score += 0.2 * normalized(sec);
-  score = score * 100 + extraBonus;
+  const score = TIER_SCORE[priorityStatTier(profile, mech)] + extraBonus;
   return Math.max(0, Math.min(100, score));
 }
 

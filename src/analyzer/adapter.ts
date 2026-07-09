@@ -21,7 +21,7 @@ import {
   type Weights,
 } from "./scoring";
 import { buildDisplayData, formatPercent } from "./displayAdapter";
-import { getActiveMechanics, scoreMechanicFitRaw, type MechanicDef } from "./mechanics";
+import { getActiveMechanics, scoreMechanicFitRaw, priorityStatTier, type MechanicDef, type StatTier } from "./mechanics";
 import { getActiveTablets, type TabletDef } from "./tablets";
 import { describeReward } from "./rewards";
 import type { AnalysisResult, DangerHitView, MechanicScore, Modifier, Rating, TabletVerdict, TierClass, Verdict } from "../types";
@@ -134,19 +134,20 @@ function classifyVerdict(score: number, tier: number): Verdict {
   return "RUN";
 }
 
-// 2026-07-10 (user request): the tablet row no longer shows its raw fit
-// number/bar — a 3-tier "Run/Why not/Don't run" verdict reads faster at a
-// glance, mirroring the SKIP/RUN/GARDER vocabulary already used for the
-// waystone-level verdict above. Own thresholds, not classifyVerdict's (30/
-// 50+tier) — the two scales measure different things (a tablet's own
-// waystone-fit vs. the whole map's loot potential) and a tablet has no
-// "tier" to gate on. Boundaries are a display-bucketing choice, same kind
-// of judgment call as `scoreToRating`'s 20/40/60/80 bands above, not a
-// sourced game-mechanic claim.
-function tabletVerdict(fit: number): TabletVerdict {
-  if (fit < 30) return "dont-run";
-  if (fit < 55) return "why-not";
-  return "run";
+// 2026-07-10 (user request, revised same day): the tablet row no longer
+// shows its raw fit number/bar — a 3-tier "Run/Why not/Don't run" verdict
+// reads faster at a glance, mirroring the SKIP/RUN/GARDER vocabulary
+// already used for the waystone-level verdict above. Originally bucketed
+// on the numeric `fit` (30/55 thresholds); revised the same day to read
+// straight off the tablet's own mechanic's `priorityStatTier` instead —
+// the same 4-tier read (weak/ok/top/legendary) the Mechanic Match Score
+// now uses, collapsed to 3: weak -> dont-run, ok -> why-not, top and
+// legendary both -> run (the top/legendary distinction still shows up in
+// the numeric fit on hover, just not as a separate row-level verdict).
+function tabletVerdict(tier: StatTier): TabletVerdict {
+  if (tier === "weak") return "dont-run";
+  if (tier === "ok") return "why-not";
+  return "run"; // top or legendary
 }
 
 const FIELD_LABELS: Record<keyof Weights, string> = {
@@ -324,7 +325,7 @@ function buildTabletBreakdown(statFit: number, rewardScore: number): { label: st
 function rankTablets(
   stats: ModStats,
   modCount: number,
-): { tablet: TabletDef; fit: number; mechanic: string; breakdown: { label: string; value?: number }[] }[] {
+): { tablet: TabletDef; fit: number; mechanic: string; verdict: TabletVerdict; breakdown: { label: string; value?: number }[] }[] {
   const activeMechanics = getActiveMechanics();
   const tagToMechanic = new Map(
     [...TABLET_LINKED_MECHANICS]
@@ -341,11 +342,12 @@ function rankTablets(
       const statFit = scoreMechanicFitRaw(stats, mech, bonus + pinBonus);
       const fitRaw = Math.max(0, Math.min(100, statFit + tablet.rewardScore));
       const fit = Math.round(fitRaw);
+      const verdict = tabletVerdict(priorityStatTier(stats, mech));
       const breakdown = buildTabletBreakdown(statFit, tablet.rewardScore);
-      return { tablet, fit, fitRaw, mechanic: mech.name, breakdown };
+      return { tablet, fit, fitRaw, mechanic: mech.name, verdict, breakdown };
     })
     .sort((a, b) => b.fitRaw - a.fitRaw)
-    .map(({ tablet, fit, mechanic, breakdown }) => ({ tablet, fit, mechanic, breakdown }));
+    .map(({ tablet, fit, mechanic, verdict, breakdown }) => ({ tablet, fit, mechanic, verdict, breakdown }));
 }
 
 function sumBoosts(boosts: TabletDef["boosts"]): number {
@@ -409,13 +411,13 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
   // 5 rows (was 4): the tablet list is now a uniform icon/verdict scan list
   // with no per-row reason/rewards lines, so five rows cost less height
   // than the old three did.
-  const tablets = ranked.slice(0, 5).map(({ tablet, fit, mechanic, breakdown }) => ({
+  const tablets = ranked.slice(0, 5).map(({ tablet, fit, mechanic, verdict, breakdown }) => ({
     name: tablet.name,
     delta: Math.round((sumBoosts(tablet.boosts) / 10) * 10) / 10,
     reason: `${tablet.name} matches ${mechanic} (${fit}/100)`,
     rating: scoreToRating(fit),
     fit,
-    verdict: tabletVerdict(fit),
+    verdict,
     rewards: tablet.rewards && tablet.rewards.length > 0 ? tablet.rewards.map(describeReward) : undefined,
     breakdown,
   }));
@@ -462,4 +464,4 @@ export { computeDangerLevel, dangerHitsToWarnings, detectDangerHits };
 // lets the script activate a merged mechanic table inside THIS bundle's
 // module instance (the separate meta-schema bundle has its own copy of
 // MECHANICS, so its setActive* wouldn't affect analyzeWaystoneText here).
-export { setActiveMechanics, MECHANICS } from "./mechanics";
+export { setActiveMechanics, MECHANICS, TIER_SCORE, priorityStatTier } from "./mechanics";

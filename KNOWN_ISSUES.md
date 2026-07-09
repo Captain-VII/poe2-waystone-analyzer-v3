@@ -513,6 +513,57 @@ are unaffected — those just mirror the item's own tooltip. A single
 flag flip (`true`) restores it once the rework has been validated
 against more real waystones in actual gameplay.
 
+**Update (2026-07-10, same day, later still) — the continuous weighted-sum
+formula was replaced entirely by a 4-tier read of ONE stat, sourced from
+the user's own gameplay judgment (not a web guide, for once):** after
+watching the tablet-ranking fix above land, the user named the actual
+recurring pain directly — "à chaque nouvelle source web, les poids
+bougent, le système est trop complexe, et il n'y a pas de vérité fiable."
+Rather than adopt yet another external model, they proposed their own
+rule: *"pour le score de base, toutes les mécaniques font : de 0% à 15%
+= nul, de 15% à 25% = ok, de 25% à 50% = top, et au-delà de 50% =
+ultra/juicy/légendaire."* Confirmed via two follow-up questions that this
+should (a) drive BOTH the Mechanic Match Score and the tablet verdict, and
+(b) look at the mechanic's **priority stat alone** — secondary stats no
+longer factor into scoring at all.
+
+**What changed** (`mechanics.ts`):
+- `scoreMechanicFitRaw`'s old body (priority weighted 0.6, up to two
+  secondaries at 0.2 each, each normalized against `NORMALIZE_CAP`) is
+  gone. New `priorityStatTier(profile, mech)` reads ONLY `profile[mech.
+  priorityStat]` against the four thresholds above and returns one of
+  `"weak" | "ok" | "top" | "legendary"` (`StatTier`). A representative
+  0-100 point value per tier (`TIER_SCORE`: 10/25/55/80) keeps every
+  existing 0-100 consumer (mechanicScores sort order, `Tablet.fit`,
+  `scoreToRating`'s letter, `modCountBonus`/`recommendedTablets` pin
+  additions) working unchanged — `scoreMechanicFitRaw` keeps its old name
+  and call signature (`profile, mech, extraBonus`) precisely so
+  `computeMechanicScores`/`rankTablets` in adapter.ts needed zero call-site
+  changes, only its internals moved.
+- `NORMALIZE_CAP` is gone — its whole reason to exist (converting a raw %
+  into a continuous 0-1 signal) no longer applies. Its sourcing history
+  (real waystone Pack Size/Drop Chance ranges, maxroll.gg citations) is
+  preserved above in this same section for the record, even though the
+  constant itself is retired.
+- `MechanicDef.secondaryStats` **stays on the type and stays meta.json-
+  editable** (the Settings panel's secondary-stat dropdowns still work as
+  UI) — it's simply unused by scoring now. Flagging this explicitly since
+  it's a real, disclosed side effect of the user's "priority stat alone"
+  call: editing a mechanic's secondary stats in the meta editor no longer
+  changes anything about how that mechanic scores.
+- Tablet verdict (`adapter.ts`'s `tabletVerdict`, added earlier the same
+  day) now takes the `StatTier` directly instead of bucketing the numeric
+  `fit`: weak -> Don't run, ok -> Why not, top and legendary both -> Run
+  (per the user's explicit 4-to-3 collapse — the top/legendary distinction
+  still shows up in the fit number on hover, just not as a separate
+  row-level verdict).
+
+**Consequence worth watching**: every mechanic now has a non-zero
+baseline score (`TIER_SCORE.weak = 10`, plus the mod-count bonus) even
+when its priority stat is completely absent — the old formula could hit
+a true zero. `verify-adapter.mjs`'s "no longer feeds X at all" checks were
+updated to assert the weak-tier baseline instead of zero, not loosened.
+
 ## 4. ~~Mechanic-presence detection is a simple keyword match~~ (resolved 2026-07-08)
 
 "Mecanique naturelle presente sur la map" (§2/§8/§9) is detected by a regex
