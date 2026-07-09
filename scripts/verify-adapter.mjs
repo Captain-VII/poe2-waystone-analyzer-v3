@@ -697,17 +697,16 @@ check("Breach: monster-rarity-only waystone no longer feeds Breach at all",
   fitScoreOf(monsterRarityOnly, "Breach") === 0);
 
 // Abyss now keys on pack size / monster rarity / item rarity, in that order
-// ("1) pack size 2) monster rarity 3) rarity of items"). Compared against
-// Heist (priority itemRarity, no packSize at all) rather than asserting
-// sole rank-0 — Legion shares this exact priority+secondary set (it already
-// did before yesterday's Abyss recalibration), so a real high-pack-size map
-// legitimately ties Abyss and Legion at the top; that's correct, not a bug.
+// ("1) pack size 2) monster rarity 3) rarity of items"). Floor only (not a
+// sole-rank-0 assertion): every remaining tablet-linked mechanic (2026-07-10
+// — the 9 tablet-less ones were removed) has a cap-100 priority stat, so a
+// heavy pack-size profile legitimately ties Abyss with any of them; that's
+// correct, not a bug.
 const abyssShaped = analyzeWaystoneText(
   mkStatWaystone(["+50% increased Pack Size", "+30% increased Rarity of Monsters", "+20% increased Rarity of Items found in this Area"]),
 );
 check("Abyss: pack-size/monster-rarity/item-rarity waystone gives Abyss a strong fit (Fubgun 0.5)",
-  fitScoreOf(abyssShaped, "Abyss") >= 35 &&
-  fitScoreOf(abyssShaped, "Abyss") > fitScoreOf(abyssShaped, "Heist"));
+  fitScoreOf(abyssShaped, "Abyss") >= 35);
 // ...and quantity (the old secondary) no longer feeds it.
 const quantityOnly = analyzeWaystoneText(mkStatWaystone(["30% increased Quantity of Items found"]));
 check("Abyss: quantity-only waystone no longer feeds Abyss",
@@ -752,11 +751,11 @@ const defOf = (name) => SCHEMA_MECHANICS.find((m) => m.name === name);
 
 // 3. Diff-only write: an edit equal to the hardcoded default produces no entry.
 {
-  const blight = defOf("Blight");
-  const out = buildMetaFile(null, new Map([["blight", {
-    priorityStat: blight.priorityStat,
-    secondaryStats: [...blight.secondaryStats],
-    skipIfBelow: blight.skipIfBelow,
+  const breach = defOf("Breach");
+  const out = buildMetaFile(null, new Map([["breach", {
+    priorityStat: breach.priorityStat,
+    secondaryStats: [...breach.secondaryStats],
+    skipIfBelow: breach.skipIfBelow,
   }]]), new Map());
   check("meta: edit identical to defaults writes no metas entry", out.metas === undefined);
 }
@@ -799,7 +798,7 @@ const defOf = (name) => SCHEMA_MECHANICS.find((m) => m.name === name);
   const seedLike = { metas: {} };
   // Exact serialization labels, so the seed entries are true copies of the defaults.
   const label = (k) => ({ itemRarity: "Item Rarity", monsterRarity: "Monster Rarity", packSize: "Pack Size", monsterEffectiveness: "Monster Effectiveness", waystoneDropChance: "Waystone Drop Chance", quantity: "Quantity" })[k];
-  for (const name of ["Blight", "Delirium", "Expedition", "General"]) {
+  for (const name of ["Breach", "Delirium", "Expedition", "General"]) {
     const d = defOf(name);
     seedLike.metas[name.toLowerCase()] = {
       priority_stat: label(d.priorityStat),
@@ -810,7 +809,7 @@ const defOf = (name) => SCHEMA_MECHANICS.find((m) => m.name === name);
   }
   const out = buildMetaFile(seedLike, new Map([["ritual", { priorityStat: "monsterRarity", secondaryStats: ["packSize", "monsterEffectiveness"], skipIfBelow: 45 }]]), new Map());
   check("meta: default-duplicating seed entries are purged on save (anti-drift)",
-    out.metas.blight === undefined && out.metas.delirium === undefined &&
+    out.metas.breach === undefined && out.metas.delirium === undefined &&
     out.metas.expedition === undefined && out.metas.general === undefined);
   check("meta: the real edit is the only entry left after the purge",
     deepEq(Object.keys(out.metas), ["ritual"]) && out.metas.ritual.skip_if_below === 45);

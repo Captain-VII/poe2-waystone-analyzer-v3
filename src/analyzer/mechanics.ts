@@ -141,15 +141,18 @@ export function scoreMechanicFit(
   return Math.round(scoreMechanicFitRaw(profile, mech, extraBonus, caps));
 }
 
+// Only mechanics with a real PoE2 tablet are modeled here (2026-07-10 —
+// see TABLET_LINKED_MECHANICS in adapter.ts for the same list): Blight,
+// Heist, Sanctum, Legion, Harvest, Metamorph, Essence, Incursion, and
+// Bestiary were previously scored too (mechanicScores kept all 17) even
+// though they could never surface as a tablet recommendation — dead
+// weight the user asked to cut. Blight/Legion/Essence's keyword patterns
+// stay in mechanic-patterns.ts: they still feed the real Juice Score's
+// mechanic-density term (scoring.ts's SYNERGY_MECHANIC_IDS), a separate,
+// still-useful signal unrelated to tablet-matching. The other six
+// (Heist/Sanctum/Harvest/Metamorph/Incursion/Bestiary) had no other
+// consumer and were removed from mechanic-patterns.ts too.
 export const MECHANICS: MechanicDef[] = [
-  {
-    name: "Blight",
-    priorityStat: "monsterEffectiveness",
-    secondaryStats: ["itemRarity", "packSize"],
-    recommendedTablets: ["Expedition Tablet", "Standard Precursor Tablet"],
-    skipIfBelow: 35,
-    detect: MECHANIC_PATTERNS.blight,
-  },
   // Community consensus 0.5 (switchbladegaming/timesaver/u4gm, 2026-07-06):
   // pack size drives splinter throughput in the fog; rarity (140%+ target)
   // and quantity (20-25%) scale what each fog kill is worth.
@@ -171,46 +174,6 @@ export const MECHANICS: MechanicDef[] = [
     recommendedTablets: ["Expedition Tablet", "Standard Precursor Tablet"],
     skipIfBelow: 35,
     detect: MECHANIC_PATTERNS.expedition,
-  },
-  {
-    name: "Heist",
-    priorityStat: "itemRarity",
-    secondaryStats: ["quantity"],
-    recommendedTablets: ["Standard Precursor Tablet"],
-    skipIfBelow: 30,
-    detect: MECHANIC_PATTERNS.heist,
-  },
-  {
-    name: "Sanctum",
-    priorityStat: "itemRarity",
-    secondaryStats: ["monsterRarity"],
-    recommendedTablets: ["Standard Precursor Tablet"],
-    skipIfBelow: 30,
-    detect: MECHANIC_PATTERNS.sanctum,
-  },
-  {
-    name: "Legion",
-    priorityStat: "packSize",
-    secondaryStats: ["monsterRarity", "itemRarity"],
-    recommendedTablets: ["Standard Precursor Tablet"],
-    skipIfBelow: 35,
-    detect: MECHANIC_PATTERNS.legion,
-  },
-  {
-    name: "Harvest",
-    priorityStat: "itemRarity",
-    secondaryStats: ["quantity"],
-    recommendedTablets: ["Standard Precursor Tablet"],
-    skipIfBelow: 30,
-    detect: MECHANIC_PATTERNS.harvest,
-  },
-  {
-    name: "Metamorph",
-    priorityStat: "monsterEffectiveness",
-    secondaryStats: ["itemRarity"],
-    recommendedTablets: ["Standard Precursor Tablet"],
-    skipIfBelow: 30,
-    detect: MECHANIC_PATTERNS.metamorph,
   },
   // Fubgun 0.5 atlas strats (mobalytics, user-pasted tab text, 2026-07-10),
   // explicit ranking repeated verbatim in BOTH of his abyss strats (Jado and
@@ -255,30 +218,6 @@ export const MECHANICS: MechanicDef[] = [
     recommendedTablets: ["Breach Tablet", "Standard Precursor Tablet"],
     skipIfBelow: 35,
     detect: MECHANIC_PATTERNS.breach,
-  },
-  {
-    name: "Essence",
-    priorityStat: "monsterRarity",
-    secondaryStats: ["itemRarity"],
-    recommendedTablets: ["Standard Precursor Tablet"],
-    skipIfBelow: 30,
-    detect: MECHANIC_PATTERNS.essence,
-  },
-  {
-    name: "Incursion",
-    priorityStat: "itemRarity",
-    secondaryStats: ["packSize"],
-    recommendedTablets: ["Standard Precursor Tablet"],
-    skipIfBelow: 30,
-    detect: MECHANIC_PATTERNS.incursion,
-  },
-  {
-    name: "Bestiary",
-    priorityStat: "monsterRarity",
-    secondaryStats: ["packSize"],
-    recommendedTablets: ["Standard Precursor Tablet"],
-    skipIfBelow: 30,
-    detect: MECHANIC_PATTERNS.bestiary,
   },
   {
     name: "General",

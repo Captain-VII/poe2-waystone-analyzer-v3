@@ -94,10 +94,12 @@ export function describeDangerHits(hits: DangerHit[]): DangerHitView[] {
 /** Mechanics with a real, tablet-linked story in PoE2 (tablets.ts, verified
  *  2026-07-04 against poe2wiki.net/maxroll.gg/odealo.com + poe2db.tw,
  *  extended 2026-07-06 with Irradiated/Temple) — the only mechanics allowed
- *  to become `recommendedMechanic` (see below). The other 9 mechanics in
- *  mechanics.ts (Blight, Heist, Sanctum, Legion, Harvest, Metamorph,
- *  Essence, Incursion, Bestiary) have no real tablet at all and must never
- *  drive a tablet recommendation. Exported for verify-adapter.mjs's
+ *  to become `recommendedMechanic` (see below). As of 2026-07-10 this is
+ *  also every mechanic `mechanics.ts` still tracks (Blight/Heist/Sanctum/
+ *  Legion/Harvest/Metamorph/Essence/Incursion/Bestiary were removed — no
+ *  real tablet, dead weight), so the filter below is now a no-op safety
+ *  net rather than an active exclusion — kept for whenever a mechanic
+ *  without a tablet gets added back. Exported for verify-adapter.mjs's
  *  regression assertion, not just used internally here. */
 export const TABLET_LINKED_MECHANICS = new Set([
   "Breach",
@@ -449,10 +451,9 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
   // 2026-07-04 research pass, extended 2026-07-06 — Standard/Overseer are
   // the generic fallback, Breach/Ritual/Delirium/Expedition/Abyss/
   // Irradiated/Temple are the seven mechanic-specific ones) may become the
-  // waystone-level `recommendedMechanic` verdict below. The other 9
-  // mechanics in mechanics.ts are still scored (mechanicScores keeps all
-  // 17 — the data contract verify-adapter.mjs asserts on) but must never
-  // surface as this waystone's overall recommendation.
+  // waystone-level `recommendedMechanic` verdict below. Since 2026-07-10,
+  // that's every mechanic mechanics.ts tracks — the 9 tablet-less ones
+  // were removed outright rather than scored-but-never-recommendable.
   //
   // §10 gate: a mechanic may only become `recommendedMechanic` if it
   // actually scored (> 0) AND the map's Juice Score clears that mechanic's
