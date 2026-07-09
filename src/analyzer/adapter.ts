@@ -374,7 +374,31 @@ function computeSynergyBonus(stats: ModStats, tablet: TabletDef): number {
  *  Sorted by the unrounded fit (`fitRaw`), not the rounded `fit` each tablet
  *  displays — same rounding-tie problem `computeMechanicScores` has, just
  *  one level down. `fitRaw` is stripped before returning. */
-function rankTablets(stats: ModStats): { tablet: TabletDef; fit: number; mechanic: string }[] {
+const round1 = (n: number): number => Math.round(n * 10) / 10;
+
+/** "Why this score" decomposition for one tablet — see `Tablet.breakdown`'s
+ *  doc comment for the additive-vs-qualitative contract. Built from values
+ *  `rankTablets` already computes; this function only decides which of
+ *  them are worth a line and how to phrase the two multiplicative ones. */
+function buildTabletBreakdown(
+  statFit: number,
+  rewardScore: number,
+  synergyBonus: number,
+  confidence: TabletDef["confidence"],
+  confidenceMult: number,
+  isPrimaryTier: boolean,
+): { label: string; value?: number }[] {
+  const rows: { label: string; value?: number }[] = [{ label: "Stat fit", value: round1(statFit) }];
+  if (rewardScore > 0) rows.push({ label: "Reward", value: round1(rewardScore) });
+  if (synergyBonus > 0) rows.push({ label: "Synergy", value: round1(synergyBonus) });
+  if (confidenceMult < 1) rows.push({ label: `Confidence: ${confidence} (×${confidenceMult})` });
+  if (!isPrimaryTier) rows.push({ label: `Secondary mechanic (×${SECONDARY_MECHANIC_MULTIPLIER})` });
+  return rows;
+}
+
+function rankTablets(
+  stats: ModStats,
+): { tablet: TabletDef; fit: number; mechanic: string; breakdown: { label: string; value?: number }[] }[] {
   const activeMechanics = getActiveMechanics();
   const tagToMechanic = new Map(
     [...TABLET_LINKED_MECHANICS]
@@ -403,15 +427,15 @@ function rankTablets(stats: ModStats): { tablet: TabletDef; fit: number; mechani
       const synergyBonus = Math.min(scaledSynergy, SYNERGY_CAP);
       const adjusted = Math.max(0, Math.min(100, baseFit + synergyBonus));
       const confidenceMult = getConfidenceMultiplier(tablet.confidence);
-      const tierMult = tablet.tags?.some((t) => PRIMARY_MECHANIC_TAGS.has(t))
-        ? 1
-        : SECONDARY_MECHANIC_MULTIPLIER;
+      const isPrimaryTier = tablet.tags?.some((t) => PRIMARY_MECHANIC_TAGS.has(t)) ?? false;
+      const tierMult = isPrimaryTier ? 1 : SECONDARY_MECHANIC_MULTIPLIER;
       const fitRaw = Math.max(0, Math.min(100, adjusted * confidenceMult * tierMult));
       const fit = Math.round(fitRaw);
-      return { tablet, fit, fitRaw, mechanic: mech.name };
+      const breakdown = buildTabletBreakdown(statFit, tablet.rewardScore, synergyBonus, tablet.confidence, confidenceMult, isPrimaryTier);
+      return { tablet, fit, fitRaw, mechanic: mech.name, breakdown };
     })
     .sort((a, b) => b.fitRaw - a.fitRaw)
-    .map(({ tablet, fit, mechanic }) => ({ tablet, fit, mechanic }));
+    .map(({ tablet, fit, mechanic, breakdown }) => ({ tablet, fit, mechanic, breakdown }));
 }
 
 function sumBoosts(boosts: TabletDef["boosts"]): number {
@@ -475,7 +499,7 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
   // 5 rows (was 4): the tablet list is now a uniform icon/score/bar scan
   // list with no per-row reason/rewards lines, so five rows cost less
   // height than the old three did.
-  const tablets = ranked.slice(0, 5).map(({ tablet, fit, mechanic }, i) => ({
+  const tablets = ranked.slice(0, 5).map(({ tablet, fit, mechanic, breakdown }, i) => ({
     name: tablet.name,
     delta: Math.round((sumBoosts(tablet.boosts) / 10) * 10) / 10,
     reason: `${tablet.name} matches ${mechanic} (${fit}/100)`,
@@ -483,6 +507,7 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
     fit,
     synergy: i === 0 ? buildSynergyLine(tablet) : undefined,
     rewards: tablet.rewards && tablet.rewards.length > 0 ? tablet.rewards.map(describeReward) : undefined,
+    breakdown,
   }));
   // Trust fix: never show a mechanic recommendation with no tablet paired to
   // it — that reads as a broken/misleading suggestion in the UI.

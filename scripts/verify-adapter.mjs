@@ -116,6 +116,24 @@ check("heat.rating is one of the five valid letters", RATINGS.includes(result.he
 check("every tablet has a valid rating", result.tablets.every((t) => RATINGS.includes(t.rating)));
 check("tablet rewards, when present, are non-empty label+value pairs",
   result.tablets.every((t) => t.rewards === undefined || (t.rewards.length > 0 && t.rewards.every((r) => typeof r.label === "string" && typeof r.value === "number"))));
+
+// Breakdown (2026-07-10): every tablet gets a non-empty "why this score"
+// decomposition — always at least a "Stat fit" row (buildTabletBreakdown
+// never omits it), rows have a label and an optional numeric value only
+// (never NaN/null — value-less qualitative rows omit the key entirely).
+check("every tablet has a non-empty breakdown with a Stat fit row",
+  result.tablets.every((t) =>
+    Array.isArray(t.breakdown) && t.breakdown.length > 0 &&
+    t.breakdown[0].label === "Stat fit" && typeof t.breakdown[0].value === "number"));
+check("breakdown rows are well-formed (label + optional finite value)",
+  result.tablets.every((t) => t.breakdown.every((r) =>
+    typeof r.label === "string" && r.label.length > 0 &&
+    (r.value === undefined || (typeof r.value === "number" && Number.isFinite(r.value))))));
+// Delirium Tablet declares real rewards (rewards.ts) — its breakdown must
+// surface that as a "Reward" line, not silently drop it.
+const deliriumTabletRow = result.tablets.find((t) => t.name === "Delirium Tablet");
+check("Delirium Tablet's breakdown includes a Reward row (it has real rewards)",
+  deliriumTabletRow === undefined || deliriumTabletRow.breakdown.some((r) => r.label === "Reward"));
 check("keyFactors is an array of at most 4 short strings",
   Array.isArray(result.keyFactors) && result.keyFactors.length <= 4 && result.keyFactors.every((f) => typeof f === "string"));
 

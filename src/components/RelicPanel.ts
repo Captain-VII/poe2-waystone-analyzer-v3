@@ -449,9 +449,18 @@ export function mountOverlay(
       el.title = `Rating: ${heat.rating} (${heat.score.toFixed(1)})`;
     }
 
+    // "Stat fit: 45" / "Reward: +9" / a value-less qualitative note like
+    // "Confidence: medium (×0.92)" — see Tablet.breakdown's doc comment for
+    // the additive-vs-qualitative contract this formatting follows.
+    const formatBreakdownRow = (row: { label: string; value?: number }): string => {
+      if (row.value === undefined) return row.label;
+      const prefix = row.label === "Stat fit" || row.value < 0 ? "" : "+";
+      return `${row.label}: ${prefix}${row.value}`;
+    };
+
     // One uniform scan-row per tablet: icon · NAME · fit score · fit bar
     // (0-100 → bar width). No per-row reason/rating/rewards lines anymore —
-    // the single synergy footer under the list carries the "why" instead.
+    // the hover title and the top pick's footer carry the "why" instead.
     const tabletRow = (t: AnalysisResult["tablets"][number]) => {
       // Every real tablet name ends in "Tablet" (Expedition Tablet, Standard
       // Precursor Tablet, ...) — that word carries no distinguishing info in
@@ -459,20 +468,29 @@ export function mountOverlay(
       // (display only; t.name stays in the hover title).
       const shortName = t.name.replace(/\s+(Precursor\s+)?Tablet$/i, "");
       const icon = TABLET_ICONS[shortName.toLowerCase()] ?? "◆";
+      // Multi-line native tooltip: the opaque "matches X (Y/100)" reason,
+      // then one line per breakdown row — every one of the 5 rows gets this
+      // on hover, not just the top pick's always-visible footer below.
+      const title = [t.reason, ...(t.breakdown ?? []).map(formatBreakdownRow)].join("\n");
       return `
-        <div class="trow" title="${esc(t.reason)}">
+        <div class="trow" title="${esc(title)}">
           <span class="t-ic">${icon}</span>
           <span class="t-name" title="${esc(t.name)}">${esc(shortName)}</span>
           <span class="t-fit">${t.fit}</span>
           <div class="tbar"><i style="width:${Math.min(Math.max(t.fit, 0), 100)}%"></i></div>
         </div>`;
     };
-    // "Pack size + Rarity = Breach loot" — the top pick's synergy note,
-    // adapter-computed (tablets[0].synergy); footer hidden when absent
-    // (Standard/Overseer/General have no mechanic-specific synergy).
-    const synergyFooter = result.tablets[0]?.synergy
-      ? `<div class="t-syn"><span class="t-syn-ic">⚡</span>${esc(result.tablets[0].synergy)}</div>`
-      : "";
+    // Top pick's footer: its synergy note ("Pack size + Rarity = Breach
+    // loot", adapter-computed, absent for Standard/Overseer/General) and its
+    // breakdown, joined so the top tablet's "why" is visible without a
+    // hover — the other 4 rows only get it via their own tooltip above.
+    // Always non-empty (buildTabletBreakdown always includes "Stat fit"),
+    // so this footer now always renders for the top tablet.
+    const top = result.tablets[0];
+    const topSynergy = top?.synergy ? `<span class="t-syn-ic">⚡</span>${esc(top.synergy)}` : "";
+    const topBreakdown = top?.breakdown && top.breakdown.length > 0 ? esc(top.breakdown.map(formatBreakdownRow).join(" · ")) : "";
+    const footerInner = [topSynergy, topBreakdown].filter(Boolean).join(topSynergy && topBreakdown ? " — " : "");
+    const synergyFooter = footerInner ? `<div class="t-syn">${footerInner}</div>` : "";
     const tabletsHtml = result.tablets.slice(0, 5).map(tabletRow).join("") + synergyFooter;
     q("[data-tablets]").innerHTML = tabletsHtml;
     q("[data-tablets-full]").innerHTML = tabletsHtml;

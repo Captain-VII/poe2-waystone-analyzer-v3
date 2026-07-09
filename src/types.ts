@@ -103,6 +103,18 @@ export interface Tablet {
    *  fit score. Omitted/empty when the tablet declares no `rewards` — the
    *  overlay only renders a rewards line when this is non-empty. */
   rewards?: { label: string; value: number }[];
+  /** "Why this score" decomposition — additive contributions only
+   *  (statFit + reward + synergy ≈ `fit` before the final confidence/tier
+   *  multiplier), never the multiplier itself: a `×0.8` scaling factor
+   *  isn't a point contribution, and listing it as one would misrepresent
+   *  the math. A multiplier below 1 instead adds a trailing qualitative
+   *  row with `value` omitted — `label` carries the full note (e.g.
+   *  "Confiance moyenne ×0.92") and the overlay renders it without a
+   *  number. Rows with a zero/absent source (no reward, no synergy) are
+   *  omitted entirely, same convention as `rewards` above. Computed in
+   *  adapter.ts (rankTablets) from values it already calculates but used
+   *  to discard. */
+  breakdown?: { label: string; value?: number }[];
 }
 
 export interface AnalysisResult {
