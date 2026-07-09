@@ -589,5 +589,64 @@ const essenceModded = analyzeWaystoneText(mkScoreSample("Forsaken Vault", "Area 
 check("'Area contains 2 additional Essences' raises heat.score (density term)",
   essenceModded.heat.score > abyssPlain.heat.score);
 
+// ============================================================
+// REAL CLIPBOARD FORMAT (2026-07-09): a live paste from the game — the
+// hand-written SAMPLE fixtures above never matched this shape (no
+// "Waystone Tier:" line; a separate aggregate-stats block; each rolled
+// mod prefixed with a `{ Prefix/Suffix Modifier "Name" (Tier: N) }` label
+// line) — pins the parser.ts fix for both.
+// ============================================================
+
+const SAMPLE_REAL_CLIPBOARD = `Item Class: Waystones
+Rarity: Rare
+Dream Gambit
+Waystone (Tier 15)
+--------
+Revives Available: 0 (augmented)
+Item Rarity: +27% (augmented)
+Pack Size: +16% (augmented)
+Monster Rarity: +18% (augmented)
+Monster Effectiveness: +28% (augmented)
+Waystone Drop Chance: +105% (augmented)
+--------
+Item Level: 81
+--------
+{ Prefix Modifier "Frostbitten" (Tier: 1) }
+Monsters deal 18(15-19)% of Damage as Extra Cold
+{ Prefix Modifier "Fleeting" (Tier: 1) }
+Monsters have 10(10-15)% increased Attack, Cast and Movement Speed
+{ Prefix Modifier "Venomous" (Tier: 1) }
+Monsters have 29(27-33)% chance to Poison on Hit
+{ Suffix Modifier "of the Unwavering" (Tier: 1) }
+Monsters have 74(70-79)% increased Ailment Threshold
+Monsters have 67(60-69)% increased Stun Threshold
+{ Suffix Modifier "of Buffering" (Tier: 1) }
+Monsters gain 12(12-25)% of maximum Life as Extra maximum Energy Shield
+{ Suffix Modifier "Flaming" (Tier: 1) }
+Area has patches of Ignited Ground
+{ Suffix Modifier "of Enduring" (Tier: 1) }
+Monsters are Armoured
+--------
+Can be used in a Map Device, allowing you to enter a Map. Waystones can only be used once.
+--------
+Corrupted`;
+const realClipboard = analyzeWaystoneText(SAMPLE_REAL_CLIPBOARD);
+
+check("real clipboard: tier parses from the header (15), not 0",
+  realClipboard.waystone.tier === 15);
+check("real clipboard: no '{ ... Modifier ... }' label line leaks into modifiers",
+  !realClipboard.modifiers.some((m) => /^\{.*Modifier\b.*\}$/i.test(m.text)));
+// 8 real stat lines: Cold dmg, Speed, Poison, Ailment Threshold, Stun
+// Threshold, ES gain, Ignited Ground, Armoured — the 8 label lines above
+// them must be gone, not just uncounted.
+check("real clipboard: modCount reflects only real stat lines (8), not label lines too",
+  realClipboard.waystone.modCount === 8);
+check("real clipboard: the 5 core stats parse from the aggregate summary block",
+  realClipboard.heat.breakdown.find((b) => b.key === "itemRarity")?.value === 27 &&
+  realClipboard.heat.breakdown.find((b) => b.key === "monsterRarity")?.value === 18 &&
+  realClipboard.heat.breakdown.find((b) => b.key === "packSize")?.value === 16 &&
+  realClipboard.heat.breakdown.find((b) => b.key === "monsterEffectiveness")?.value === 28 &&
+  realClipboard.heat.breakdown.find((b) => b.key === "waystoneDropChance")?.value === 105);
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}`);
 process.exit(failures === 0 ? 0 : 1);

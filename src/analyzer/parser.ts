@@ -64,6 +64,19 @@ function extractName(lines: string[]): string {
 }
 
 function extractTier(blocks: string[]): number {
+  // Real PoE2 clipboard text (verified against a live copy, 2026-07-09) has
+  // no "Waystone Tier:" line at all — only the header's own base-type line,
+  // "Waystone (Tier N)", carries it. That line is always present (it's the
+  // item's base type), so it's tried first; the old "Waystone Tier:"
+  // line-scan is kept as a tolerant fallback in case some other context
+  // still emits it — costs nothing, never fires against real text today.
+  for (const block of blocks) {
+    const headerMatch = block.match(/Waystone\s*\(Tier\s*(\d+)\)/i);
+    if (headerMatch) {
+      const n = Number(headerMatch[1]);
+      if (Number.isFinite(n)) return n;
+    }
+  }
   for (const block of blocks) {
     for (const rawLine of block.split(/\r?\n/)) {
       const line = rawLine.trim();
@@ -76,6 +89,12 @@ function extractTier(blocks: string[]): number {
   return 0;
 }
 
+// Real PoE2 clipboard text prefixes every rolled modifier with a label line
+// like `{ Prefix Modifier "Frostbitten" (Tier: 1) }` — pure metadata, no
+// stat. Left in, it inflates modCount and shows up as a meaningless row in
+// the Full-mode modifier list (verified against a live copy, 2026-07-09).
+const MOD_LABEL_LINE = /^\{\s*(?:Prefix|Suffix|Implicit|Enchant)\s+Modifier\b.*\}$/i;
+
 function extractModifiers(blocks: string[]): string[] {
   // The modifier list is the block that follows "Item Level: X".
   for (let i = 0; i < blocks.length; i++) {
@@ -86,7 +105,8 @@ function extractModifiers(blocks: string[]): string[] {
     return candidate
       .split(/\r?\n/)
       .map((l) => l.trim())
-      .filter((l) => l.length > 0);
+      .filter((l) => l.length > 0)
+      .filter((l) => !MOD_LABEL_LINE.test(l));
   }
   return [];
 }

@@ -34,17 +34,29 @@ export interface MechanicDef {
 }
 
 // Per-stat cap used to normalize a raw stat value into a 0-1 "how strong
-// is this" signal. Sized for a WAYSTONE's total stat profile (many mods
-// stacking up to ~200% rarity, ~150% pack size) — used by mechanic scoring
-// (adapter.ts's computeMechanicScores) and synergy bonuses. itemRarity/
-// monsterRarity/packSize/monsterEffectiveness/waystoneDropChance are still
-// the original unsourced first-pass numbers (KNOWN_ISSUES #3) — web
-// research 2026-07-08 couldn't confirm or correct them (conflicting/
-// tablet-only data), so they're untouched.
+// is this" signal — used by mechanic scoring (adapter.ts's
+// computeMechanicScores) and synergy bonuses. monsterRarity/
+// monsterEffectiveness/waystoneDropChance are still the original unsourced
+// first-pass numbers (KNOWN_ISSUES #3) — web research 2026-07-08 couldn't
+// confirm or correct them (conflicting/tablet-only data), so they're
+// untouched.
+//
+// itemRarity/packSize (2026-07-09): were 200/150, wildly out of step with
+// scoring.ts's RARITY_REFERENCE=100/PACK_SIZE_REFERENCE=30 — the SAME real
+// god-map references the actual Juice Score uses, already user-validated
+// in the 2026-07-06 scoring audit. That mismatch meant the exact same real
+// stat value counted very differently for the score vs. for the Mechanic
+// Match Score/tablet recommendation (a real waystone's 16% Pack Size was
+// 53% of the score's reference but only 11% of this cap) — confirmed via a
+// live clipboard paste to directly cause "the recommended tablet doesn't
+// match what the score says" (user report, 2026-07-09). Realigned to the
+// same references the score already uses, rather than importing another
+// unsourced guess — monsterRarity/monsterEffectiveness below were already
+// coincidentally aligned with their god-map references (100=100).
 export const NORMALIZE_CAP: Record<StatKey, number> = {
-  itemRarity: 200,
+  itemRarity: 100,
   monsterRarity: 100,
-  packSize: 150,
+  packSize: 30,
   monsterEffectiveness: 100,
   waystoneDropChance: 100,
   // Sourced 2026-07-08 (maxroll.gg "Rolling Waystones and Precursor

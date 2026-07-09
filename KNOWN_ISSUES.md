@@ -195,20 +195,31 @@ Lowered to **35** (headroom above the confirmed 29% max, matching
 `TABLET_ROLL_CAP.quantity = 25`'s existing margin over its own ~25% real
 ceiling) — mechanics.ts.
 
-**Still unsourced, NOT changed** (same research pass, results too weak or
-contradictory to act on):
-- **Pack Size**: conflicting numbers between sources (~41-50% max in one
-  guide, ~7-9% per-tier in another) — no clean tier table found. Worth
-  noting: `scoring.ts`'s `PACK_SIZE_REFERENCE = 30` (drives the real Juice
-  Score) and `mechanics.ts`'s `NORMALIZE_CAP.packSize = 150` (drives the
-  Mechanic Match Score) already disagree with each other by 5x — flagged,
-  not touched, since no real number is solid enough to arbitrate between
-  them.
-- **Monster Rarity**: no source gave a cap for the literal "increased
-  Rarity of Monsters" wording `mod-parser.ts` matches. A similarly-named
-  mod ("increased number of Rare Monsters", 55-65%) turned up instead —
-  likely a *different* real PoE2 mod (more rare-monster packs, not rarity
-  of what spawns), so not safely reusable as this stat's cap.
+**Update (2026-07-09) — the Pack Size / Item Rarity cap mismatch is
+resolved, from real data this time:** the 2026-07-08 update below flagged
+`NORMALIZE_CAP.packSize = 150` vs. `PACK_SIZE_REFERENCE = 30` disagreeing
+5x but left both alone for lack of a solid external number. A live
+clipboard paste (real T15 waystone, see issue #9) settled it differently:
+that waystone's Pack Size (16%) is real, ordinary, and NOT an outlier, so
+the fix isn't "find the true external cap" — it's that `NORMALIZE_CAP`
+and the god-map `REFERENCE` constants are both trying to express the same
+"how strong is this stat" scale and must agree with each other, whichever
+exact number is right. `NORMALIZE_CAP.itemRarity`/`packSize` (200/150)
+are now **100/30**, matching `RARITY_REFERENCE`/`PACK_SIZE_REFERENCE` —
+the same references the actual Juice Score already uses, already
+user-validated in the 2026-07-06 audit. Confirmed via that real waystone:
+Pack Size going from 53%-of-score-reference but only 11%-of-mechanic-fit-
+cap to 53%/53% visibly changed which mechanic (and tablet) got
+recommended (Delirium/Legion, both Pack-Size-priority, now rank near the
+top instead of being suppressed). `monsterRarity`/`monsterEffectiveness`
+were already coincidentally aligned (100=100) and are untouched.
+
+**Still unsourced, NOT changed:**
+- **Monster Rarity**: the real waystone in issue #9 confirms the literal
+  wording *"Monster Rarity: +18% (augmented)"* is real (in the aggregate
+  header-summary block) — so the earlier 2026-07-08 worry that this
+  wording might not exist on real items was wrong. What's still unsourced
+  is only the CAP (how high can this go) — no number found yet.
 - **Monster Effectiveness**: only tablet numbers found (9-11% for XP
   farming builds), nothing for the waystone mod itself.
 - **Waystone Drop Chance**: mechanically more complex than a single-mod
@@ -344,3 +355,47 @@ duplicates of one map, which the old code allowed despite its "distinct"
 comment. The list persists across restarts (`localStorage`, validated on
 load — a corrupted payload falls back to an empty list). Removing the last
 card closes Compare mode and restores the underlying view.
+
+## 9. ~~Parser assumed a clipboard format real PoE2 text doesn't use~~ (resolved 2026-07-09)
+
+Every fixture this app was ever tested against — `scripts/verify-adapter.mjs`'s
+hand-written `SAMPLE`, `docs/` writeups, the original `poe2-waystone-analyzer-v2`
+port — assumed a simpler item-text shape than what the game actually pastes.
+A real clipboard copy (user-provided, live T15 waystone, 2026-07-09) exposed
+two structural mismatches nothing had caught before:
+
+1. **No "Waystone Tier:" line exists.** Real text has an aggregate summary
+   block instead (`Item Rarity: +27% (augmented)`, `Pack Size: +16%
+   (augmented)`, etc., plus an unrelated `Revives Available:` line) — the
+   tier number only ever appears in the header's own base-type line,
+   `Waystone (Tier 15)`. `parser.ts`'s `extractTier()` scanned only for the
+   line that doesn't exist, silently returning **0** — every real waystone
+   displayed **"T0"** in the overlay, permanently. Fixed: tier is now
+   parsed from the header line first (the line-scan for the old assumed
+   format stays as a harmless fallback).
+2. **Every rolled modifier is prefixed with a label line** —
+   `{ Prefix Modifier "Frostbitten" (Tier: 1) }` — that carries no stat,
+   just the mod's internal name/tier. Left in, it inflated `modCount`
+   (counted as real mod lines) and would render as a meaningless row like
+   `{ Prefix Modifier "Frostbitten" (Tier: 1) }` in the Full-mode modifier
+   list. Fixed: `extractModifiers()` now filters out
+   `{ Prefix/Suffix/Implicit/Enchant Modifier ... }` label lines.
+
+The 5 core stats themselves (Item Rarity/Monster Rarity/Pack Size/Monster
+Effectiveness/Waystone Drop Chance) already parsed correctly on real text —
+`mod-parser.ts`'s tolerant fallback regex scans the *full* raw text, so it
+picked up the aggregate summary block's clean `"Stat: +NN% (augmented)"`
+lines even though the "primary" (clean modifier-block-only) parse pass
+never saw them. Only tier and modCount/display were actually broken.
+
+Also resolved in the same pass, once real data was available: the
+Pack-Size/Item-Rarity `NORMALIZE_CAP` mismatch from issue #3 — see that
+entry's 2026-07-09 update.
+
+**Not investigated further:** whether this is a genuinely NEW clipboard
+format (a patch changed it since this app was first built) or whether it
+was simply never tested against real text before now — doesn't change the
+fix either way. `scripts/verify-adapter.mjs` now pins the exact real text
+provided (tier, modCount, clean modifier list, correct stat values) so a
+future format change would be caught the same way this one should have
+been.

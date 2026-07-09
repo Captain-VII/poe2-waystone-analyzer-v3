@@ -8,13 +8,13 @@
     },
     "delirium": {
       "priority_stat": "Pack Size",
-      "secondary_stats": ["Item Rarity", "Monster Rarity"],
+      "secondary_stats": ["Item Rarity", "Quantity"],
       "recommended_tablets": ["Delirium Tablet", "Standard Precursor Tablet"],
       "skip_if_below": 40
     },
     "expedition": {
-      "priority_stat": "Monster Effectiveness",
-      "secondary_stats": ["Pack Size", "Waystone Drop Chance"],
+      "priority_stat": "Quantity",
+      "secondary_stats": ["Monster Rarity", "Pack Size"],
       "recommended_tablets": ["Expedition Tablet", "Standard Precursor Tablet"],
       "skip_if_below": 35
     },
