@@ -500,8 +500,11 @@ export function mountOverlay(
 
     // One uniform scan-row per tablet: icon · NAME · Run/Why not/Don't run.
     // No per-row reason/rating/rewards lines, and no raw fit number/bar
-    // (2026-07-10) — the hover title and the top pick's footer carry the
-    // exact numbers instead, the row itself reads at a glance.
+    // (2026-07-10) — the hover title carries the exact numbers instead, the
+    // row itself reads at a glance. No always-visible footer either
+    // (removed same day, once the list grew past 5 rows and needed a
+    // scrollbar — the user's call: not worth the space for a number "dont
+    // les gens se foutent" once it's one hover away like every other row).
     const tabletRow = (t: AnalysisResult["tablets"][number]) => {
       // Every real tablet name ends in "Tablet" (Expedition Tablet, Standard
       // Precursor Tablet, ...) — that word carries no distinguishing info in
@@ -510,8 +513,7 @@ export function mountOverlay(
       const shortName = t.name.replace(/\s+(Precursor\s+)?Tablet$/i, "");
       const icon = TABLET_ICONS[shortName.toLowerCase()] ?? "◆";
       // Multi-line native tooltip: the opaque "matches X (Y/100)" reason,
-      // then one line per breakdown row — every one of the 5 rows gets this
-      // on hover, not just the top pick's always-visible footer below.
+      // then one line per breakdown row — every row gets this on hover.
       const title = [t.reason, ...(t.breakdown ?? []).map(formatBreakdownRow)].join("\n");
       return `
         <div class="trow" title="${esc(title)}">
@@ -520,18 +522,11 @@ export function mountOverlay(
           <span class="t-verdict t-verdict-${t.verdict}">${TABLET_VERDICT_LABEL[t.verdict]}</span>
         </div>`;
     };
-    // Top pick's footer: its breakdown, visible without a hover — the other
-    // rows only get it via their own tooltip above. Always non-empty
-    // (buildTabletBreakdown always includes "Stat fit"), so this footer
-    // always renders for the top tablet.
-    const top = result.tablets[0];
-    const topBreakdown = top?.breakdown && top.breakdown.length > 0 ? esc(top.breakdown.map(formatBreakdownRow).join(" · ")) : "";
-    const synergyFooter = topBreakdown ? `<div class="t-syn">${topBreakdown}</div>` : "";
     // Compact keeps a top-5 cutoff (fixed-height card, no scroll budget) —
     // Full shows every active tablet (2026-07-10, user request), its
     // column already scrolls on overflow (`.col`, full.css).
-    q("[data-tablets]").innerHTML = result.tablets.slice(0, 5).map(tabletRow).join("") + synergyFooter;
-    q("[data-tablets-full]").innerHTML = result.tablets.map(tabletRow).join("") + synergyFooter;
+    q("[data-tablets]").innerHTML = result.tablets.slice(0, 5).map(tabletRow).join("");
+    q("[data-tablets-full]").innerHTML = result.tablets.map(tabletRow).join("");
 
     // The column-1 label width (~104px) fits every breakdown label except
     // these two — shortened display-only (full name still on hover), same

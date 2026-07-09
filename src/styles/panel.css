@@ -321,19 +321,6 @@
 /* Top pick stands out by name color only — rows stay uniform height. */
 .trow:first-child .t-name { color: var(--gold-hi); }
 
-/* Synergy footer under the list: "⚡ Pack size + Rarity = Breach loot". */
-.t-syn {
-  margin-top: 5px;
-  padding-top: 5px;
-  border-top: 1px solid rgba(184, 135, 53, 0.35);
-  font-size: 10px;
-  color: var(--grey);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.t-syn .t-syn-ic { color: var(--gold-hi); margin-right: 4px; }
-
 /* cross-fading mode layouts inside the morphing panel (§7 mode morph) */
 .bodies {
   position: relative;

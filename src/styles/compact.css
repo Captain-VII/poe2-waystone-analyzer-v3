@@ -62,13 +62,12 @@
   flex: none;
   padding: 6px 16px 0;
 }
-/* The 5-row tablet list + synergy footer is ~20px taller than the old
-   3-row layout; these Compact-only trims (rows 21→20px, footer air 5→3px,
-   plus the hero/warn trims below) reclaim it so the Ins footer stays
-   inside the card's fixed 392px height. Full keeps panel.css's roomier
-   defaults — its column has its own scroll budget. */
+/* The 5-row tablet list is ~20px taller than the old 3-row layout; this
+   Compact-only trim (rows 21→20px, plus the hero/warn trims below)
+   reclaims it so the Ins footer stays inside the card's fixed 392px
+   height. Full keeps panel.css's roomier default — its column has its
+   own scroll budget. */
 .tabs-v .trow { height: 20px; }
-.tabs-v .t-syn { margin-top: 3px; padding-top: 3px; }
 
 .warn-strip {
   display: flex;

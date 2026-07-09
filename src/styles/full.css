@@ -53,13 +53,6 @@
 .body-full .score-num { font-size: 29px; }
 .body-full .halo { width: 100px; height: 100px; }
 
-/* The tablets column is narrower than the Compact card — let the synergy
-   footer wrap to 2 lines instead of ellipsizing away its point. */
-[data-col-tablets] .t-syn {
-  white-space: normal;
-  line-height: 1.35;
-}
-
 /* ---- column 1: heat breakdown ---- */
 .score-row {
   display: flex;
