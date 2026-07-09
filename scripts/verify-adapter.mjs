@@ -13,6 +13,9 @@ import {
   dangerHitsToWarnings,
   describeDangerHits,
   detectDangerHits,
+  mechanicThresholdPenalty,
+  setActiveMechanics,
+  MECHANICS,
 } from "./.adapter-bundle.mjs";
 
 const SAMPLE = `Item Class: Waystones
@@ -731,6 +734,54 @@ check("Abyss: quantity-only waystone no longer feeds Abyss",
   fitScoreOf(quantityOnly, "Abyss") === 0);
 
 // ---------------------------------------------------------------------------
+// Mechanic threshold penalty scaffolding (2026-07-10, mechanics.ts's
+// `minThresholds`/`mechanicThresholdPenalty`): built per user request after
+// a targeted web search + re-checking Fubgun's own strat text (already
+// pasted this session) found zero credible sourced numeric thresholds for
+// any PoE2 mechanic — so no bundled mechanic sets `minThresholds` yet. These
+// checks exercise the MECHANISM via synthetic mechanics, not real tuning.
+{
+  const noThresh = { name: "T", priorityStat: "packSize", secondaryStats: [], skipIfBelow: 0 };
+  check("threshold: no minThresholds set → penalty is always 1",
+    mechanicThresholdPenalty({ packSize: 0 }, noThresh) === 1 &&
+    mechanicThresholdPenalty({ packSize: 999 }, noThresh) === 1);
+
+  const oneThresh = { ...noThresh, minThresholds: { packSize: 20 } };
+  check("threshold: profile clearing the bar → penalty is 1 (no cliff at the boundary)",
+    mechanicThresholdPenalty({ packSize: 20 }, oneThresh) === 1 &&
+    mechanicThresholdPenalty({ packSize: 40 }, oneThresh) === 1);
+  check("threshold: profile at zero → penalty is 0",
+    mechanicThresholdPenalty({ packSize: 0 }, oneThresh) === 0);
+  check("threshold: profile at half the bar → penalty ramps linearly to 0.5, not a hard cliff",
+    mechanicThresholdPenalty({ packSize: 10 }, oneThresh) === 0.5);
+
+  const twoThresh = { ...noThresh, minThresholds: { packSize: 20, monsterRarity: 10 } };
+  check("threshold: one stat clears, the other doesn't → only the failing stat penalizes",
+    mechanicThresholdPenalty({ packSize: 20, monsterRarity: 5 }, twoThresh) === 0.5);
+  check("threshold: both stats fail → penalties compound multiplicatively",
+    Math.abs(mechanicThresholdPenalty({ packSize: 10, monsterRarity: 5 }, twoThresh) - 0.25) < 1e-9);
+
+  check("threshold: no bundled mechanic has minThresholds set yet (nothing sourced)",
+    MECHANICS.every((m) => m.minThresholds === undefined));
+
+  // End-to-end through the adapter bundle, same restore-after pattern as the
+  // meta e2e check further down: a synthetic threshold on Delirium's
+  // priority stat visibly suppresses its mechanicScores entry below the
+  // bar, and clears again once the bar is met — then defaults are restored.
+  const thresholdedDelirium = MECHANICS.map((m) => (m.name === "Delirium" ? { ...m, minThresholds: { packSize: 30 } } : m));
+  const lowPack = mkStatWaystone(["+10% increased Pack Size"]);
+  const before = analyzeWaystoneText(lowPack).mechanicScores.find((m) => m.mechanic === "Delirium").score;
+  setActiveMechanics(thresholdedDelirium);
+  const afterBelow = analyzeWaystoneText(lowPack).mechanicScores.find((m) => m.mechanic === "Delirium").score;
+  const afterAbove = analyzeWaystoneText(mkStatWaystone(["+30% increased Pack Size"])).mechanicScores.find((m) => m.mechanic === "Delirium").score;
+  setActiveMechanics(MECHANICS);
+  check("threshold e2e: a synthetic Delirium threshold suppresses its score below the bar",
+    afterBelow < before);
+  check("threshold e2e: the same waystone above the bar is unaffected (penalty back to 1)",
+    afterAbove === analyzeWaystoneText(mkStatWaystone(["+30% increased Pack Size"])).mechanicScores.find((m) => m.mechanic === "Delirium").score);
+}
+
+// ---------------------------------------------------------------------------
 // meta-schema.ts (pure parse/merge/diff module behind the in-app meta.json
 // editor) — bundled separately (.meta-bundle.mjs). NOTE: that bundle carries
 // its OWN copy of MECHANICS/DEFAULT_TABLETS; the end-to-end check at the very
@@ -744,7 +795,6 @@ import {
   MECHANICS as SCHEMA_MECHANICS,
   DEFAULT_TABLETS as SCHEMA_TABLETS,
 } from "./.meta-bundle.mjs";
-import { setActiveMechanics, MECHANICS } from "./.adapter-bundle.mjs";
 
 const deepEq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const defOf = (name) => SCHEMA_MECHANICS.find((m) => m.name === name);

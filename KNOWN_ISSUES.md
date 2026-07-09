@@ -195,6 +195,43 @@ Lowered to **35** (headroom above the confirmed 29% max, matching
 `TABLET_ROLL_CAP.quantity = 25`'s existing margin over its own ~25% real
 ceiling) — mechanics.ts.
 
+**Update (2026-07-10) — mechanic threshold scaffolding added, deliberately
+inert (no sourced numbers exist):** while reviewing an externally-proposed
+scoring model, its `"constraints"` block (a per-mechanic minimum stat
+threshold — "below this Pack Size, Abyss barely functions") looked like a
+genuinely useful idea, matching a real property of these mechanics (some
+league mechanics need a minimum density/investment to "turn on"). Before
+writing any code, went looking for a real sourced number to back it —
+a targeted web search across Abyss/Delirium/Breach/Ritual/Expedition guides
+(Switchblade Gaming, maxroll.gg, mobalytics.gg) found **zero credible
+numeric thresholds** for any of the six tracked stats; every source is
+qualitative ("more density is better", "don't skip Delirium even if the
+map looks sparse" — the latter actually arguing AGAINST a Delirium
+threshold existing at all). Re-checked Fubgun's own strat text (already
+pasted into this session for the Breach/Abyss recalibration above) for the
+same thing — the only real threshold he states anywhere is a **map tier**
+requirement for Ritual ("won't get good omens below lvl 79", i.e. T15),
+not a percentage on any of the six stats.
+
+Given that, built the mechanism without inventing numbers: `mechanics.ts`'s
+`MechanicDef.minThresholds` (optional, per-stat, real-%-scale) and
+`mechanicThresholdPenalty()` — a smooth linear ramp (1 at/above the
+threshold, 0 at zero, no hard cliff, matching the existing synergy-bonus
+taper's "no hard cutoff" principle) rather than a binary cutoff, with
+multiple thresholded stats compounding multiplicatively. Wired into
+`computeMechanicScores` (the waystone-level Mechanic Match Score) only —
+deliberately NOT into `rankTablets`' tablet-vs-mechanic fit, since a
+threshold is about whether the WAYSTONE's own stats clear a bar, not
+whether a tablet's own small boost roll does.
+
+**No bundled mechanic sets `minThresholds` today** — `mechanicThresholdPenalty`
+returns exactly `1` (no-op) for all 8 real mechanics, pinned by a
+verify-adapter.mjs check that fails the moment that stops being true. The
+mechanism is exercised only via synthetic mechanics in tests. This is
+scaffolding: ready to receive a real number the moment one is sourced
+(a guide, a datamine, or your own observed gameplay breakpoint), without
+another scoring-architecture change — not a shipped tuning change.
+
 **Update (2026-07-10) — tablet ranking was a design flaw, not a tuning
 issue: every tablet was scored against ONE shared mechanic, fixed:**
 after the Delirium fix above, the user flagged a deeper problem in the

@@ -31,6 +31,22 @@ export interface MechanicDef {
    *  this field), so the bundled wording always applies regardless of
    *  user config. */
   detect?: RegExp;
+  /** Real-world "this mechanic barely functions below X" breakpoints (e.g.
+   *  a hypothetical "Abyss needs at least 20% Pack Size to spawn well") —
+   *  keyed by the SAME real % scale the stat is parsed at (mod-parser.ts),
+   *  not a normalized 0-1 fraction. Deliberately unset on every mechanic
+   *  below: research this session (web search + Fubgun's own strat text,
+   *  2026-07-10) found zero credible sourced numeric thresholds for any
+   *  PoE2 mechanic — every guide is qualitative ("more density is better")
+   *  with no cutoff value. This field exists so a real one can be added
+   *  the moment it's sourced (a real waystone/gameplay observation, or a
+   *  future guide), without another scoring-architecture change — see
+   *  `mechanicThresholdPenalty` for how it would be applied, and
+   *  KNOWN_ISSUES.md for the research trail. Only meaningful against a
+   *  WAYSTONE's own stat profile (`computeMechanicScores`) — never applied
+   *  to a tablet's own small boost roll (`rankTablets`), which isn't the
+   *  thing a "does this mechanic function here" threshold is about. */
+  minThresholds?: Partial<Record<StatKey, number>>;
 }
 
 // Per-stat cap used to normalize a raw stat value into a 0-1 "how strong
@@ -139,6 +155,30 @@ export function scoreMechanicFit(
   caps: Record<StatKey, number> = NORMALIZE_CAP,
 ): number {
   return Math.round(scoreMechanicFitRaw(profile, mech, extraBonus, caps));
+}
+
+/** 0-1 multiplier from `mech.minThresholds` — 1 (no-op) whenever a mechanic
+ *  has no thresholds set, or every thresholded stat already clears its own
+ *  bar. A stat below its threshold ramps the multiplier down LINEARLY from
+ *  1 (at the threshold) to 0 (at zero) rather than a hard cliff — same
+ *  "smooth, no hard cutoff" principle `rankTablets`' synergy taper already
+ *  uses, so a map that's just barely under a bar isn't punished as hard as
+ *  one with none of the stat at all. Multiple thresholded stats compound
+ *  multiplicatively (each below-bar stat drags the score down further, not
+ *  just the worst one) — deliberately strict: a mechanic needing several
+ *  conditions should be penalized for missing more than one, not capped at
+ *  a single penalty. Currently always 1 in practice: no bundled mechanic
+ *  sets `minThresholds` yet (see that field's doc comment) — exercised only
+ *  by verify-adapter.mjs's synthetic-mechanic tests until real data lands. */
+export function mechanicThresholdPenalty(profile: Partial<Record<StatKey, number>>, mech: MechanicDef): number {
+  if (!mech.minThresholds) return 1;
+  let penalty = 1;
+  for (const [key, threshold] of Object.entries(mech.minThresholds) as [StatKey, number][]) {
+    if (threshold <= 0) continue;
+    const value = profile[key] ?? 0;
+    if (value < threshold) penalty *= Math.max(0, value / threshold);
+  }
+  return penalty;
 }
 
 // Only mechanics with a real PoE2 tablet are modeled here (2026-07-10 —

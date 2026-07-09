@@ -23,8 +23,8 @@ import {
 import { buildDisplayData, formatPercent } from "./displayAdapter";
 import {
   getActiveMechanics,
-  scoreMechanicFit,
   scoreMechanicFitRaw,
+  mechanicThresholdPenalty,
   NORMALIZE_CAP,
   TABLET_ROLL_CAP,
   type MechanicDef,
@@ -212,8 +212,9 @@ function buildKeyFactors(
 }
 
 /** §7: cross the waystone's own stat profile against each mechanic's
- *  priority/secondary stats (via `scoreMechanicFit`, shared with tablet
- *  ranking below). Returns scores for all mechanics, desc sorted.
+ *  priority/secondary stats (via `scoreMechanicFitRaw`, shared with tablet
+ *  ranking below), then apply `mechanicThresholdPenalty` (currently always
+ *  1 — see mechanics.ts). Returns scores for all mechanics, desc sorted.
  *
  *  Purely stat-fit based — "which mechanic do THESE STATS suit" — no
  *  presence-detection bonus mixed in. §8/§9's "mecanique naturelle" bonus
@@ -236,11 +237,15 @@ function buildKeyFactors(
  *  fell back to `MECHANICS`' declaration order (array position), biasing
  *  which mechanic/tablet won regardless of the waystone's actual stats. */
 function computeMechanicScores(stats: ModStats): MechanicScore[] {
-  const scores = getActiveMechanics().map((mech) => ({
-    mechanic: mech.name,
-    score: scoreMechanicFit(stats, mech),
-    raw: scoreMechanicFitRaw(stats, mech),
-  }));
+  const scores = getActiveMechanics().map((mech) => {
+    // Currently always 1 (no bundled mechanic sets minThresholds) — see
+    // that field's doc comment in mechanics.ts. Applied only here, never
+    // in rankTablets: a threshold is about the WAYSTONE's own stats, not a
+    // tablet's small boost roll.
+    const penalty = mechanicThresholdPenalty(stats, mech);
+    const raw = scoreMechanicFitRaw(stats, mech) * penalty;
+    return { mechanic: mech.name, score: Math.round(raw), raw };
+  });
   return scores.sort((a, b) => b.raw - a.raw).map(({ mechanic, score }) => ({ mechanic, score }));
 }
 
@@ -552,4 +557,4 @@ export { computeDangerLevel, dangerHitsToWarnings, detectDangerHits };
 // lets the script activate a merged mechanic table inside THIS bundle's
 // module instance (the separate meta-schema bundle has its own copy of
 // MECHANICS, so its setActive* wouldn't affect analyzeWaystoneText here).
-export { setActiveMechanics, MECHANICS } from "./mechanics";
+export { setActiveMechanics, MECHANICS, mechanicThresholdPenalty } from "./mechanics";
