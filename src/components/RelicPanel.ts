@@ -1,5 +1,6 @@
 import type { AnalysisResult, TierClass } from "../types";
 import type { Mode, EffectiveMode, CompareEntry, SessionStatsView } from "../settings";
+import type { MechanicEdit, MetaEditorModel } from "../analyzer/meta-schema";
 import {
   loadReduceEffects,
   saveReduceEffects,
@@ -61,6 +62,18 @@ export interface OverlayOptions {
    *  stats to start a fresh farming session (main.ts owns the storage and
    *  calls setSessionStats back with the emptied view). */
   onResetStats?(): void;
+  /** Settings' Méta editor (meta.json). main.ts owns all IO: every action
+   *  re-reads the file, writes a diff-only rebuild, hot-reloads the
+   *  analyzer tables, and returns a fresh model to render. A rejected
+   *  promise means the write failed — the panel shows the error and
+   *  re-renders from its last good model. Omitted = plain-browser dev
+   *  (no Tauri fs) → the whole section is removed from the DOM. */
+  metaEditor?: {
+    load(): Promise<MetaEditorModel>;
+    saveMechanic(name: string, edit: MechanicEdit): Promise<MetaEditorModel>;
+    setTabletEnabled(name: string, enabled: boolean): Promise<MetaEditorModel>;
+    reset(): Promise<MetaEditorModel>;
+  };
 }
 
 /** Why an Ins press produced no new result: the copy/read itself failed
@@ -311,6 +324,39 @@ export function mountOverlay(
                 <span class="set-lab">Stats</span>
                 <button class="set-btn" data-stat-reset type="button">Réinitialiser</button>
               </div>
+              <div class="set-group" data-meta-section>
+                <div class="set-sep"></div>
+                <div class="sec-h" title="Personnalise les recommandations par mécanique (meta.json). Seules les valeurs différentes des défauts sont écrites dans le fichier.">Méta</div>
+                <span class="set-val set-meta-msg" data-meta-msg hidden></span>
+                <div class="set-row">
+                  <span class="set-lab">Mécanique</span>
+                  <select class="set-select" data-meta-mech aria-label="Mécanique à personnaliser"></select>
+                </div>
+                <div class="set-row">
+                  <span class="set-lab">Stat prioritaire</span>
+                  <select class="set-select" data-meta-priority aria-label="Stat prioritaire"></select>
+                </div>
+                <div class="set-row">
+                  <span class="set-lab">Secondaire 1</span>
+                  <select class="set-select" data-meta-sec1 aria-label="Première stat secondaire"></select>
+                </div>
+                <div class="set-row">
+                  <span class="set-lab">Secondaire 2</span>
+                  <select class="set-select" data-meta-sec2 aria-label="Seconde stat secondaire"></select>
+                </div>
+                <div class="set-row set-col" title="Sous ce Juice Score, la mécanique n'est pas recommandée">
+                  <div class="set-row">
+                    <span class="set-lab">Skip si score sous</span>
+                    <span class="set-val" data-meta-skip-val></span>
+                  </div>
+                  <input class="set-slider" type="range" min="0" max="100" step="1" data-meta-skip aria-label="Seuil de skip" />
+                </div>
+                <div class="set-group" data-meta-tablets></div>
+                <div class="set-row" title="Réécrit meta.json vide : toutes les mécaniques et tablettes reviennent aux défauts du code">
+                  <span class="set-lab">Méta</span>
+                  <button class="set-btn" data-meta-reset type="button">Rétablir les défauts</button>
+                </div>
+              </div>
               <div class="set-sep"></div>
               <div class="set-row">
                 <span class="set-lab">Hide Overlay</span>
@@ -355,6 +401,16 @@ export function mountOverlay(
   const statAvgEl = q("[data-stat-avg]");
   const statBestEl = q("[data-stat-best]");
   const statResetBtn = q("[data-stat-reset]");
+  const metaSection = q("[data-meta-section]");
+  const metaMechSel = q("[data-meta-mech]") as HTMLSelectElement;
+  const metaPrioritySel = q("[data-meta-priority]") as HTMLSelectElement;
+  const metaSec1Sel = q("[data-meta-sec1]") as HTMLSelectElement;
+  const metaSec2Sel = q("[data-meta-sec2]") as HTMLSelectElement;
+  const metaSkipInput = q("[data-meta-skip]") as HTMLInputElement;
+  const metaSkipVal = q("[data-meta-skip-val]");
+  const metaTabletsEl = q("[data-meta-tablets]");
+  const metaMsg = q("[data-meta-msg]");
+  const metaResetBtn = q("[data-meta-reset]") as HTMLButtonElement;
   const headEl = q("[data-head]");
   const hotkeyBtn = q("[data-set-hotkey]") as HTMLButtonElement;
   const hotkeyKbd = q("[data-hotkey-kbd]");
@@ -595,9 +651,122 @@ export function mountOverlay(
     settingsOpen = !settingsOpen;
     if (!settingsOpen) stopHotkeyCapture(); // a half-finished capture must not outlive its UI
     if (settingsOpen && compareActive) closeCompare();
+    if (settingsOpen) void loadMetaEditor(); // fresh model on every open — a hand-edit of the file mid-session shows up
     overlayEl.classList.toggle("settings-open", settingsOpen);
     settingsBtn.classList.toggle("active", settingsOpen);
     opts.onInteractiveChange?.();
+  }
+
+  /** Méta editor (meta.json). One set of controls navigated by a mechanic
+   *  select — the model comes from opts.metaEditor (main.ts), every change
+   *  saves immediately (like every other Settings control), and a rejected
+   *  save shows the error and re-renders from the last good model. */
+  let metaModel: MetaEditorModel | null = null;
+  let selectedMech = "";
+  let metaMsgTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function showMetaMsg(text: string, opts2: { persistent?: boolean } = {}): void {
+    metaMsg.textContent = text;
+    metaMsg.classList.add("err");
+    metaMsg.hidden = false;
+    clearTimeout(metaMsgTimer);
+    if (!opts2.persistent) metaMsgTimer = setTimeout(() => (metaMsg.hidden = true), 3000);
+  }
+
+  function setMetaControlsDisabled(disabled: boolean): void {
+    for (const el of [metaMechSel, metaPrioritySel, metaSec1Sel, metaSec2Sel, metaSkipInput, metaResetBtn]) {
+      el.disabled = disabled;
+    }
+    for (const input of metaTabletsEl.querySelectorAll("input")) input.disabled = disabled;
+  }
+
+  async function loadMetaEditor(): Promise<void> {
+    if (!opts.metaEditor) return;
+    setMetaControlsDisabled(true);
+    try {
+      metaModel = await opts.metaEditor.load();
+      renderMetaEditor();
+    } catch {
+      showMetaMsg("Lecture de meta.json impossible");
+    } finally {
+      setMetaControlsDisabled(false);
+    }
+  }
+
+  function statOptionsHtml(model: MetaEditorModel, selected: string, withNone: boolean): string {
+    const none = withNone ? `<option value=""${selected === "" ? " selected" : ""}>—</option>` : "";
+    return none + model.statOptions
+      .map((s) => `<option value="${s.key}"${s.key === selected ? " selected" : ""}>${s.label}</option>`)
+      .join("");
+  }
+
+  function renderMetaEditor(): void {
+    const model = metaModel;
+    if (!model) return;
+    if (!model.mechanics.some((m) => m.name === selectedMech)) {
+      selectedMech = model.mechanics[0]?.name ?? "";
+    }
+    metaMechSel.innerHTML = model.mechanics
+      .map((m) => `<option value="${m.name}"${m.name === selectedMech ? " selected" : ""}>${m.name}${m.isOverridden ? " •" : ""}</option>`)
+      .join("");
+    const mech = model.mechanics.find((m) => m.name === selectedMech);
+    if (!mech) return;
+    metaPrioritySel.innerHTML = statOptionsHtml(model, mech.effective.priorityStat, false);
+    metaSec1Sel.innerHTML = statOptionsHtml(model, mech.effective.secondaryStats[0] ?? "", true);
+    metaSec2Sel.innerHTML = statOptionsHtml(model, mech.effective.secondaryStats[1] ?? "", true);
+    metaSkipInput.value = String(mech.effective.skipIfBelow);
+    metaSkipVal.textContent = String(mech.effective.skipIfBelow);
+    metaTabletsEl.innerHTML = model.tablets
+      .map(
+        (t, i) => `<div class="set-row">
+          <span class="set-lab set-lab-tablet">${t.name}${t.isCustom ? " (custom)" : ""}</span>
+          <label class="set-switch"><input type="checkbox" data-meta-tablet-idx="${i}"${t.enabled ? " checked" : ""} /><span class="set-switch-track"></span></label>
+        </div>`,
+      )
+      .join("");
+    for (const input of metaTabletsEl.querySelectorAll<HTMLInputElement>("input[data-meta-tablet-idx]")) {
+      input.addEventListener("change", () => {
+        const tablet = model.tablets[Number(input.dataset.metaTabletIdx)];
+        if (tablet) void metaAction((ed) => ed.setTabletEnabled(tablet.name, input.checked));
+      });
+    }
+    if (model.fileCorrupt) {
+      showMetaMsg("meta.json illisible — le prochain changement le réécrira", { persistent: true });
+    } else if (!metaMsg.classList.contains("err") || metaMsg.hidden) {
+      metaMsg.hidden = true;
+    }
+  }
+
+  /** Runs one editor action; on failure the last good model is re-rendered
+   *  (reverting whatever the control optimistically showed). */
+  async function metaAction(
+    run: (ed: NonNullable<OverlayOptions["metaEditor"]>) => Promise<MetaEditorModel>,
+  ): Promise<void> {
+    if (!opts.metaEditor) return;
+    setMetaControlsDisabled(true);
+    try {
+      metaModel = await run(opts.metaEditor);
+      metaMsg.hidden = true; // a successful write clears any stale corrupt/error banner
+      renderMetaEditor();
+    } catch {
+      showMetaMsg("Écriture de meta.json impossible");
+      renderMetaEditor();
+    } finally {
+      setMetaControlsDisabled(false);
+    }
+  }
+
+  function collectMechanicEdit(): void {
+    const mech = metaModel?.mechanics.find((m) => m.name === selectedMech);
+    if (!mech) return;
+    const secondaryStats = [metaSec1Sel.value, metaSec2Sel.value].filter((v) => v !== "");
+    void metaAction((ed) =>
+      ed.saveMechanic(mech.name, {
+        priorityStat: metaPrioritySel.value as MechanicEdit["priorityStat"],
+        secondaryStats: secondaryStats as MechanicEdit["secondaryStats"],
+        skipIfBelow: Number(metaSkipInput.value),
+      }),
+    );
   }
 
   /** Hotkey remap (KNOWN_ISSUES #7). Click the binding → capture the next
@@ -792,6 +961,21 @@ export function mountOverlay(
   setHideBtn.addEventListener("click", opts.onHide);
   setResetPositionBtn.addEventListener("click", () => opts.onResetPosition?.());
   statResetBtn.addEventListener("click", () => opts.onResetStats?.());
+  if (opts.metaEditor) {
+    metaMechSel.addEventListener("change", () => {
+      selectedMech = metaMechSel.value;
+      renderMetaEditor(); // navigation only — nothing saved
+    });
+    metaPrioritySel.addEventListener("change", collectMechanicEdit);
+    metaSec1Sel.addEventListener("change", collectMechanicEdit);
+    metaSec2Sel.addEventListener("change", collectMechanicEdit);
+    // Live value while dragging, one write on release.
+    metaSkipInput.addEventListener("input", () => (metaSkipVal.textContent = metaSkipInput.value));
+    metaSkipInput.addEventListener("change", collectMechanicEdit);
+    metaResetBtn.addEventListener("click", () => void metaAction((ed) => ed.reset()));
+  } else {
+    metaSection.remove(); // plain-browser dev — no Tauri fs to edit
+  }
   if (opts.onDragStart) {
     const onDragStart = opts.onDragStart;
     headEl.addEventListener("mousedown", (ev) => {

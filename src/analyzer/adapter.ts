@@ -489,3 +489,8 @@ export { DEFAULT_THRESHOLD };
 // not used by the overlay UI (which only ever sees the AnalysisResult
 // contract fields: warning/warnings/dangerLevel/dangerLabel).
 export { computeDangerLevel, dangerHitsToWarnings, detectDangerHits };
+// Re-exported for verify-adapter.mjs's meta-merge end-to-end check only —
+// lets the script activate a merged mechanic table inside THIS bundle's
+// module instance (the separate meta-schema bundle has its own copy of
+// MECHANICS, so its setActive* wouldn't affect analyzeWaystoneText here).
+export { setActiveMechanics, MECHANICS } from "./mechanics";

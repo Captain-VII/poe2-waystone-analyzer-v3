@@ -10,7 +10,11 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 /// Bundled starting point for the user-editable meta.json (cahier des
 /// charges §10) — copied into the app config dir on first run only, never
-/// overwriting a file the user has since edited.
+/// overwriting a file the user has since edited. Deliberately EMPTY since
+/// the in-app Méta editor exists: a seed that duplicated the hardcoded
+/// defaults pinned them, silently diverging when the code's tuning evolved
+/// (the 2026-07-08 stale-meta.json bug). Empty = pure defaults, and the
+/// editor writes only genuine customizations (diff-only).
 const DEFAULT_META_JSON: &str = include_str!("../default-meta.json");
 
 /// Logical window size — the single source of truth, also passed to

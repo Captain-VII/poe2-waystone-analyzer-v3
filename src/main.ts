@@ -31,7 +31,8 @@ import { reportInteractiveRegions } from "./interactive-rect";
 import { runDiagnostics, applyDebugOpaqueOverride, sendReport, showWhenPainted, logAnalyzeAttempt } from "./diagnostics";
 import { readClipboardText } from "./clipboard";
 import { analyzeWaystoneText } from "./analyzer/adapter";
-import { loadMetaConfig } from "./analyzer/meta-config";
+import { loadMetaConfig, readRawMetaFile, saveMetaFile, resetMetaFile } from "./analyzer/meta-config";
+import { buildEditorModel, buildMetaFile, type MechanicEdit, type MetaEditorModel } from "./analyzer/meta-schema";
 import { notifyLegendaryWaystone } from "./notify";
 import type { AnalysisResult, TierClass } from "./types";
 
@@ -111,6 +112,33 @@ function resetSessionStats(): void {
   overlay.setSessionStats(summarizeSessionStats(sessionStats));
 }
 
+// Méta editor (Settings panel): each action re-reads the raw file, rebuilds
+// the diff-only content (meta-schema.ts's buildMetaFile), writes, hot-reloads
+// the active tables, and returns a fresh model — a concurrent hand-edit of
+// the file is never clobbered beyond the field being changed.
+async function metaModelFromDisk(): Promise<MetaEditorModel> {
+  const { raw, corrupt } = await readRawMetaFile();
+  return buildEditorModel(raw, corrupt);
+}
+
+const metaEditor = {
+  load: metaModelFromDisk,
+  async saveMechanic(name: string, edit: MechanicEdit): Promise<MetaEditorModel> {
+    const { raw } = await readRawMetaFile();
+    await saveMetaFile(buildMetaFile(raw, new Map([[name.toLowerCase(), edit]]), new Map()));
+    return metaModelFromDisk();
+  },
+  async setTabletEnabled(name: string, enabled: boolean): Promise<MetaEditorModel> {
+    const { raw } = await readRawMetaFile();
+    await saveMetaFile(buildMetaFile(raw, new Map(), new Map([[name.toLowerCase(), enabled]])));
+    return metaModelFromDisk();
+  },
+  async reset(): Promise<MetaEditorModel> {
+    await resetMetaFile();
+    return metaModelFromDisk();
+  },
+};
+
 const overlay = mountOverlay(document.getElementById("app")!, MOCK_RESULTS[tier], {
   mode,
   isReduced: () =>
@@ -130,6 +158,7 @@ const overlay = mountOverlay(document.getElementById("app")!, MOCK_RESULTS[tier]
   onDragStart: "__TAURI_INTERNALS__" in window ? startWindowDrag : undefined,
   onResetPosition: resetPosition,
   onResetStats: resetSessionStats,
+  metaEditor: "__TAURI_INTERNALS__" in window ? metaEditor : undefined,
   // Dev-only: clicking the tier badge cycles the mock fixtures, for UI
   // testing without a real clipboard waystone. Disabled in production
   // builds (import.meta.env.DEV is false) — it would otherwise silently

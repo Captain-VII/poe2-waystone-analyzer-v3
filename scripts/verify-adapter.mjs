@@ -648,5 +648,147 @@ check("real clipboard: the 5 core stats parse from the aggregate summary block",
   realClipboard.heat.breakdown.find((b) => b.key === "monsterEffectiveness")?.value === 28 &&
   realClipboard.heat.breakdown.find((b) => b.key === "waystoneDropChance")?.value === 105);
 
+// ---------------------------------------------------------------------------
+// meta-schema.ts (pure parse/merge/diff module behind the in-app meta.json
+// editor) — bundled separately (.meta-bundle.mjs). NOTE: that bundle carries
+// its OWN copy of MECHANICS/DEFAULT_TABLETS; the end-to-end check at the very
+// bottom therefore goes through the adapter bundle's setActiveMechanics.
+import {
+  parseMetaFile,
+  mergeMetaConfig,
+  buildMetaFile,
+  serializeMetaFile,
+  buildEditorModel,
+  MECHANICS as SCHEMA_MECHANICS,
+  DEFAULT_TABLETS as SCHEMA_TABLETS,
+} from "./.meta-bundle.mjs";
+import { setActiveMechanics, MECHANICS } from "./.adapter-bundle.mjs";
+
+const deepEq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const defOf = (name) => SCHEMA_MECHANICS.find((m) => m.name === name);
+
+// 1. Unknown stat name (the silent-typo hazard) falls back to the default.
+{
+  const { mechanics } = mergeMetaConfig({ metas: { delirium: { priority_stat: "Pak Size" } } });
+  const deli = mechanics.find((m) => m.name === "Delirium");
+  check("meta: unknown stat name in priority_stat falls back to the default",
+    deli.priorityStat === defOf("Delirium").priorityStat);
+}
+
+// 2. Merge is idempotent, and merging an empty file yields the pure defaults.
+{
+  const p = parseMetaFile('{"metas":{"blight":{"skip_if_below":50}}}');
+  check("meta: merge is deterministic/idempotent",
+    deepEq(mergeMetaConfig(p).mechanics, mergeMetaConfig(p).mechanics));
+  const empty = mergeMetaConfig({});
+  check("meta: merging {} yields the bundled defaults untouched",
+    deepEq(empty.mechanics, SCHEMA_MECHANICS) && deepEq(empty.tablets, SCHEMA_TABLETS));
+}
+
+// 3. Diff-only write: an edit equal to the hardcoded default produces no entry.
+{
+  const blight = defOf("Blight");
+  const out = buildMetaFile(null, new Map([["blight", {
+    priorityStat: blight.priorityStat,
+    secondaryStats: [...blight.secondaryStats],
+    skipIfBelow: blight.skipIfBelow,
+  }]]), new Map());
+  check("meta: edit identical to defaults writes no metas entry", out.metas === undefined);
+}
+
+// 4. Round-trip: build -> serialize -> parse -> merge gives back the edit,
+// and every untouched mechanic stays at its default.
+{
+  const edit = { priorityStat: "itemRarity", secondaryStats: ["quantity"], skipIfBelow: 55 };
+  const text = serializeMetaFile(buildMetaFile(null, new Map([["delirium", edit]]), new Map()));
+  const { mechanics } = mergeMetaConfig(parseMetaFile(text));
+  const deli = mechanics.find((m) => m.name === "Delirium");
+  check("meta: build->serialize->parse->merge round-trips the edited values",
+    deli.priorityStat === "itemRarity" && deepEq(deli.secondaryStats, ["quantity"]) && deli.skipIfBelow === 55);
+  check("meta: round-trip leaves every other mechanic at its default",
+    mechanics.filter((m) => m.name !== "Delirium").every((m, i) => {
+      const d = SCHEMA_MECHANICS.filter((x) => x.name !== "Delirium")[i];
+      return m.priorityStat === d.priorityStat && deepEq(m.secondaryStats, d.secondaryStats) && m.skipIfBelow === d.skipIfBelow;
+    }));
+}
+
+// 5. Hand-written content survives an unrelated edit: a custom tablet, an
+// unknown top-level key, and a recommended_tablets that genuinely diverges.
+{
+  const existing = {
+    notes: "mon pense-bête",
+    metas: { breach: { recommended_tablets: ["Ritual Tablet"] } },
+    tablets: [{ name: "Ma Tablette", mods: ["10% increased Pack Size"], rewards: [{ type: "generic", score: 5 }] }],
+  };
+  const out = buildMetaFile(existing, new Map([["delirium", { priorityStat: "packSize", secondaryStats: [], skipIfBelow: 60 }]]), new Map());
+  check("meta: unknown top-level key survives an unrelated edit", out.notes === "mon pense-bête");
+  check("meta: genuinely divergent recommended_tablets survives",
+    deepEq(out.metas.breach.recommended_tablets, ["Ritual Tablet"]));
+  check("meta: hand-added custom tablet survives byte-for-byte",
+    deepEq(out.tablets, existing.tablets));
+}
+
+// 6. Anti-drift: entries that just duplicate the defaults (the old bundled
+// seed did exactly this — the 2026-07-08 stale-file bug) are purged on save.
+{
+  const seedLike = { metas: {} };
+  // Exact serialization labels, so the seed entries are true copies of the defaults.
+  const label = (k) => ({ itemRarity: "Item Rarity", monsterRarity: "Monster Rarity", packSize: "Pack Size", monsterEffectiveness: "Monster Effectiveness", waystoneDropChance: "Waystone Drop Chance", quantity: "Quantity" })[k];
+  for (const name of ["Blight", "Delirium", "Expedition", "General"]) {
+    const d = defOf(name);
+    seedLike.metas[name.toLowerCase()] = {
+      priority_stat: label(d.priorityStat),
+      secondary_stats: d.secondaryStats.map(label),
+      recommended_tablets: [...(d.recommendedTablets ?? [])],
+      skip_if_below: d.skipIfBelow,
+    };
+  }
+  const out = buildMetaFile(seedLike, new Map([["ritual", { priorityStat: "monsterRarity", secondaryStats: ["packSize", "monsterEffectiveness"], skipIfBelow: 45 }]]), new Map());
+  check("meta: default-duplicating seed entries are purged on save (anti-drift)",
+    out.metas.blight === undefined && out.metas.delirium === undefined &&
+    out.metas.expedition === undefined && out.metas.general === undefined);
+  check("meta: the real edit is the only entry left after the purge",
+    deepEq(Object.keys(out.metas), ["ritual"]) && out.metas.ritual.skip_if_below === 45);
+}
+
+// 7. Tablet toggle round-trip: disable writes a minimal entry, the merge
+// honors it, re-enable removes the entry entirely.
+{
+  const disabled = buildMetaFile(null, new Map(), new Map([["breach tablet", false]]));
+  check("meta: disabling a default tablet writes only {name, enabled:false}",
+    deepEq(disabled.tablets, [{ name: "Breach Tablet", enabled: false }]));
+  const merged = mergeMetaConfig(disabled).tablets.find((t) => t.name === "Breach Tablet");
+  check("meta: the merge carries the disabled flag", merged.enabled === false);
+  const reenabled = buildMetaFile(disabled, new Map(), new Map([["breach tablet", true]]));
+  check("meta: re-enabling removes the entry (file returns to minimal)",
+    reenabled.tablets === undefined);
+}
+
+// 8. Editor model: overridden flag tracks real divergence only.
+{
+  const model = buildEditorModel(parseMetaFile('{"metas":{"delirium":{"skip_if_below":60}}}'), false);
+  check("meta: editor model flags only the genuinely overridden mechanic",
+    model.mechanics.find((m) => m.name === "Delirium").isOverridden === true &&
+    model.mechanics.filter((m) => m.name !== "Delirium").every((m) => !m.isOverridden));
+  check("meta: editor model exposes the 6 stat options", model.statOptions.length === 6);
+}
+
+// 9. End-to-end through the adapter bundle: raising Delirium's skip gate via
+// a merged table changes the live recommendation, and restoring the bundled
+// defaults brings it back. LAST check block — it mutates the adapter's
+// active table (and restores it).
+{
+  const before = analyzeWaystoneText(SAMPLE).recommendedMechanic;
+  const { mechanics } = mergeMetaConfig({ metas: { delirium: { skip_if_below: 99 } } });
+  setActiveMechanics(mechanics);
+  const gated = analyzeWaystoneText(SAMPLE).recommendedMechanic;
+  setActiveMechanics(MECHANICS);
+  const after = analyzeWaystoneText(SAMPLE).recommendedMechanic;
+  check("meta e2e: skip_if_below=99 via merged table drops the Delirium recommendation",
+    before === "Delirium" && gated !== "Delirium");
+  check("meta e2e: restoring the bundled defaults restores the recommendation",
+    after === "Delirium");
+}
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}`);
 process.exit(failures === 0 ? 0 : 1);

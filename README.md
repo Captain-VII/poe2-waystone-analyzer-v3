@@ -117,6 +117,15 @@ An editable `meta.json` lives in the app's config directory (seeded on
 first run from `src-tauri/default-meta.json`). Edit it and restart the
 overlay to pick up changes — no rebuild needed.
 
+**Most of it is editable in-app now**: the Settings panel's **Méta**
+section covers each mechanic's priority/secondary stats and skip
+threshold, plus enabling/disabling tablets — with dropdowns (no typo
+risk), immediate effect (no restart), and a "Rétablir les défauts"
+button. The editor writes only values that differ from the built-in
+defaults and preserves anything else you hand-wrote in the file
+(custom tablets, `recommended_tablets`, unknown keys). Hand-editing
+remains the way to add custom tablets/rewards.
+
 **Adding a tablet** doesn't need a code change either: add an entry to
 `meta.json`'s `"tablets"` array with a name and its mods written as plain
 PoE2-style text — the same tolerant mod parser used for waystones reads

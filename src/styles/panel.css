@@ -469,6 +469,65 @@
   background: linear-gradient(90deg, transparent, rgba(184, 135, 53, 0.3) 15%, rgba(184, 135, 53, 0.3) 85%, transparent);
 }
 
+/* Grouping container inside .settings-scroll (the Méta editor) — restores
+   the parent flex column's 10px rhythm for its own children, since a plain
+   wrapper div would collapse them into one ungapped flex item. */
+.set-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Native select restyled to match .set-btn's gold-on-dark chrome. The
+   dropdown popup itself is native — its options get an explicit dark
+   background below (WebView2 renders a glaring white popup otherwise). */
+.set-select {
+  flex: none;
+  appearance: none;
+  font-family: var(--sans);
+  font-size: 11px;
+  color: var(--gold-hi);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(184, 135, 53, 0.4);
+  border-radius: 3px;
+  padding: 5px 22px 5px 9px;
+  max-width: 165px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M1 1l3 3 3-3' fill='none' stroke='%23b88735' stroke-width='1.4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  transition: color 120ms ease-out, border-color 120ms ease-out;
+}
+.set-select:hover:not(:disabled),
+.set-select:focus-visible { color: var(--ivory); border-color: var(--gold-hi); outline: none; }
+.set-select:disabled { color: var(--grey); cursor: not-allowed; opacity: 0.6; }
+.set-select option {
+  background: #17120d;
+  color: var(--ivory);
+}
+
+/* Tablet toggle labels can be long ("Standard Precursor Tablet") — let them
+   ellipsize instead of pushing the switch out of the row. */
+.set-lab-tablet {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1;
+}
+
+.set-meta-msg {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+.set-meta-msg[hidden] { display: none; }
+.set-meta-msg.err { color: var(--danger); }
+
 /* The binding is a button (click → capture the next keydown, see
    RelicPanel's onHotkeyCaptureKey) styled as a bare kbd chip — the chrome
    lives on the kbd, not the button. */
