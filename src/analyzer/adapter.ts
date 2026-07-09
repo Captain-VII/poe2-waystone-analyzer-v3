@@ -211,25 +211,34 @@ function buildKeyFactors(
 
 /** §7: cross the waystone's own stat profile against each mechanic's
  *  priority/secondary stats (via `scoreMechanicFit`, shared with tablet
- *  ranking below), plus a flat bonus if the mechanic is already naturally
- *  present on the map (§8/§9 "mecanique naturelle") — detected against
- *  `contentText` (every block except the header), see the call site.
- *  Returns scores for all mechanics, desc sorted.
+ *  ranking below). Returns scores for all mechanics, desc sorted.
+ *
+ *  Purely stat-fit based — "which mechanic do THESE STATS suit" — no
+ *  presence-detection bonus mixed in. §8/§9's "mecanique naturelle" bonus
+ *  used to live here too (a flat +15 for any mechanic whose keyword
+ *  appeared in the text), but it was a single uniform number applied to
+ *  16 of 17 mechanics, disconnected from the real Juice Score's own
+ *  differentiated, sourced table for the same idea (`EXTRA_CONTENT_BONUS`
+ *  in mechanic-patterns.ts: Ritual/Breach +10, Delirium/Expedition +8, the
+ *  other 12 get nothing) — and it was large enough to make Delirium (whose
+ *  keyword is common on real maps) cluster near 70 regardless of how well
+ *  its stats actually fit (user report, 2026-07-10). Removed rather than
+ *  reweighted: the "mechanic already active" signal isn't lost, it's just
+ *  no longer blended into this specific metric — it still surfaces via the
+ *  real Juice Score's own `Bonus: extra content: X (+N)` insight line
+ *  (scoring.ts/mechanic-patterns.ts, unaffected by this change).
  *
  *  Sorted by the *unrounded* `scoreMechanicFitRaw`, not the rounded `score`
  *  each entry displays — several mechanics share the same priority stat, so
  *  sorting on the rounded value produced frequent exact ties that silently
  *  fell back to `MECHANICS`' declaration order (array position), biasing
  *  which mechanic/tablet won regardless of the waystone's actual stats. */
-function computeMechanicScores(stats: ModStats, contentText: string): MechanicScore[] {
-  const scores = getActiveMechanics().map((mech) => {
-    const detectBonus = mech.detect?.test(contentText) ? 15 : 0;
-    return {
-      mechanic: mech.name,
-      score: scoreMechanicFit(stats, mech, detectBonus),
-      raw: scoreMechanicFitRaw(stats, mech, detectBonus),
-    };
-  });
+function computeMechanicScores(stats: ModStats): MechanicScore[] {
+  const scores = getActiveMechanics().map((mech) => ({
+    mechanic: mech.name,
+    score: scoreMechanicFit(stats, mech),
+    raw: scoreMechanicFitRaw(stats, mech),
+  }));
   return scores.sort((a, b) => b.raw - a.raw).map(({ mechanic, score }) => ({ mechanic, score }));
 }
 
@@ -400,13 +409,7 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
   const dangerLevel = computeDangerLevel(evaluation.dangerHits);
   const display = buildDisplayData(stats, evaluation);
 
-  // Same contentText surface as evaluateMap above: covers the mod block
-  // AND any separate enchant/implicit blocks (e.g. an instilled "Players
-  // in Area are X% Delirious" line living outside the single mod block
-  // extractModifiers isolates), while still excluding the header/name —
-  // a mechanic keyword in the waystone's NAME must not grant the +15
-  // presence bonus (KNOWN_ISSUES #4).
-  const mechanicScores = computeMechanicScores(stats, parsed.contentText);
+  const mechanicScores = computeMechanicScores(stats);
   // Trust fix: only a mechanic with a real PoE2 tablet (see tablets.ts's
   // 2026-07-04 research pass, extended 2026-07-06 — Standard/Overseer are
   // the generic fallback, Breach/Ritual/Delirium/Expedition/Abyss/

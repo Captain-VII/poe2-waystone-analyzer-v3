@@ -214,6 +214,66 @@ recommended (Delirium/Legion, both Pack-Size-priority, now rank near the
 top instead of being suppressed). `monsterRarity`/`monsterEffectiveness`
 were already coincidentally aligned (100=100) and are untouched.
 
+**Update (2026-07-10) — Delirium's Mechanic Match Score clustering near 70
+was two compounding bugs, both now fixed:** user report — Delirium's fit
+score tended to sit near 70/100 across most real waystones while other
+mechanics spread out more, feeling like "too big a multiplier" somewhere.
+Root-caused with real data (7 T15 waystones the user pasted this session)
+rather than guessing:
+1. **`NORMALIZE_CAP.packSize` (30, set 2026-07-09) was itself too low.**
+   The 7 real waystones show Pack Size from 7% to 44%, and a real market
+   listing (17 divine — a genuinely sought-after roll, not a fluke) showed
+   **64%**. maxroll.gg ("Rolling Waystones and Precursor Tablets") confirms
+   a T15's base Pack Size mod rolls **(41-50)%** — already above the old
+   30 cap on its own, meaning most real waystones were saturating (or
+   nearly saturating) Delirium's 0.6-weighted priority term regardless of
+   how the map actually compared to others. Raised to **100**, matching
+   how `itemRarity`/`monsterRarity`/`monsterEffectiveness` are already
+   treated (a round, generous ceiling rather than a tight fit to the
+   highest sample seen so far) — comfortable headroom above the observed
+   64% max.
+2. **The same waystones exposed an identical bug on Waystone Drop
+   Chance**: values from 80% to **140%** against a cap of 100 (never
+   touched by the 2026-07-09 pass, which only fixed itemRarity/packSize).
+   No external "mod tops out at X%" citation exists for this one, so the
+   new cap (**150**) is an empirical choice: headroom above the highest
+   confirmed real roll (140%), same margin logic as quantity's
+   29%-observed → 35-cap.
+3. **The flat +15 "mechanic already present" bonus in
+   `adapter.ts`'s `computeMechanicScores`** applied uniformly to 16 of 17
+   mechanics whenever their keyword appeared in the item text — while the
+   real Juice Score already had a *differentiated, sourced* table for the
+   same idea (`EXTRA_CONTENT_BONUS`: Ritual/Breach +10, Delirium/Expedition
+   +8, the other 12 get nothing). Delirium's keyword is common on real
+   maps (instilled "Players in Area are X% Delirious" lines, or actually
+   farming Delirium encounters), so this flat, oversized, non-differentiated
+   bonus was firing often and stacking on top of the already-inflated
+   priority term from bug #1. **Removed entirely** from the Mechanic Match
+   Score rather than reweighted to match `EXTRA_CONTENT_BONUS` — the user's
+   call, after confirming most of the "stuck near 70" pattern already
+   disappeared once the cap was fixed: any fixed number here is still
+   arbitrary, and the underlying "mechanic already present" signal isn't
+   lost, it still surfaces via the real Juice Score's own
+   `Bonus: extra content: X (+N)` insight line. This is a deliberate
+   deviation from the cahier des charges' §8/§9 "mecanique naturelle"
+   intent for the *Match Score* specifically — sanctioned by the user, not
+   a silent scope change; the Juice Score itself is untouched and still
+   honors §8/§9.
+
+**Scope boundary, explicitly not resolved here:** this pass only touches
+`mechanics.ts`'s `NORMALIZE_CAP` (feeds the Mechanic Match Score / tablet
+ranking). It deliberately does NOT touch `scoring.ts`'s god-map
+`REFERENCE` constants (`PACK_SIZE_REFERENCE = 30`, `DROP_CHANCE_REFERENCE
+= 120`), which drive the actual displayed Juice Score and were
+user-validated in the 2026-07-06 audit — reopening those would be a
+bigger, separate decision. This means `NORMALIZE_CAP` and `REFERENCE` now
+disagree again for `packSize` (100 vs 30) and `waystoneDropChance` (150 vs
+120) — the exact shape of mismatch the 2026-07-09 pass closed, reopened
+here on purpose because `NORMALIZE_CAP` now has the fresher, stronger
+sourcing (maxroll + 7 real samples) than `REFERENCE` ever had for these
+two stats. Left for a future pass if the real Juice Score's own weighting
+should move too.
+
 **Update (2026-07-10) — Breach and Abyss recalibrated from Fubgun's 0.5
 atlas strats (the strongest mechanic→stat source obtained so far):** the
 user pointed at Fubgun's Mobalytics "Atlas Tree and Strats" page (patch

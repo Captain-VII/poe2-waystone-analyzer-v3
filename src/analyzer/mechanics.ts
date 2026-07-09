@@ -36,29 +36,45 @@ export interface MechanicDef {
 // Per-stat cap used to normalize a raw stat value into a 0-1 "how strong
 // is this" signal — used by mechanic scoring (adapter.ts's
 // computeMechanicScores) and synergy bonuses. monsterRarity/
-// monsterEffectiveness/waystoneDropChance are still the original unsourced
-// first-pass numbers (KNOWN_ISSUES #3) — web research 2026-07-08 couldn't
-// confirm or correct them (conflicting/tablet-only data), so they're
-// untouched.
+// monsterEffectiveness are still the original unsourced first-pass numbers
+// (KNOWN_ISSUES #3) — web research 2026-07-08 couldn't confirm or correct
+// them (conflicting/tablet-only data), so they're untouched.
 //
 // itemRarity/packSize (2026-07-09): were 200/150, wildly out of step with
 // scoring.ts's RARITY_REFERENCE=100/PACK_SIZE_REFERENCE=30 — the SAME real
 // god-map references the actual Juice Score uses, already user-validated
-// in the 2026-07-06 scoring audit. That mismatch meant the exact same real
-// stat value counted very differently for the score vs. for the Mechanic
-// Match Score/tablet recommendation (a real waystone's 16% Pack Size was
-// 53% of the score's reference but only 11% of this cap) — confirmed via a
-// live clipboard paste to directly cause "the recommended tablet doesn't
-// match what the score says" (user report, 2026-07-09). Realigned to the
-// same references the score already uses, rather than importing another
-// unsourced guess — monsterRarity/monsterEffectiveness below were already
-// coincidentally aligned with their god-map references (100=100).
+// in the 2026-07-06 scoring audit. Realigned to 100/30 that day.
+//
+// packSize (2026-07-10, revised again): 30 was itself too low — 7 real T15
+// waystones pasted by the user this session show Pack Size from 7% up to
+// 44%, and a real market listing (17 divine, i.e. a genuinely sought-after
+// roll, not a fluke) showed 64%. maxroll.gg ("Rolling Waystones and
+// Precursor Tablets") confirms a T15's base Pack Size mod rolls (41-50)% —
+// already above the old 30 cap on its own. Raised to 100, matching how
+// itemRarity/monsterRarity/monsterEffectiveness are already treated (a
+// round, generous ceiling rather than a tight fit to the highest sample
+// seen so far) — comfortable headroom above the observed 64% max. This
+// deliberately reopens a gap against scoring.ts's PACK_SIZE_REFERENCE=30
+// (still 30, untouched — that's the real Juice Score, user-validated
+// 2026-07-06, out of scope for this pass): NORMALIZE_CAP now diverges from
+// REFERENCE again, same shape of disagreement the 2026-07-09 fix closed,
+// but this time NORMALIZE_CAP has the stronger, fresher sourcing. Flagged,
+// not silently reintroduced — see KNOWN_ISSUES #3.
+//
+// waystoneDropChance (2026-07-10): same bug, same session — those same 7
+// real waystones show Drop Chance from 80% up to 140%, already exceeding
+// the old cap of 100 (and even scoring.ts's own DROP_CHANCE_REFERENCE=120).
+// No external "mod tops out at X%" citation exists for this stat (unlike
+// quantity/packSize), so 150 is an empirical choice: headroom above the
+// highest confirmed real roll (140%), same margin logic as quantity's
+// 29%-observed → 35-cap. Also diverges from DROP_CHANCE_REFERENCE=120,
+// same flagged trade-off as packSize above.
 export const NORMALIZE_CAP: Record<StatKey, number> = {
   itemRarity: 100,
   monsterRarity: 100,
-  packSize: 30,
+  packSize: 100,
   monsterEffectiveness: 100,
-  waystoneDropChance: 100,
+  waystoneDropChance: 150,
   // Sourced 2026-07-08 (maxroll.gg "Rolling Waystones and Precursor
   // Tablets"): a T15 waystone's single Item Quantity mod line tops out at
   // (25-29)% — mod-parser.ts's `quantity` is a single-line max, never a

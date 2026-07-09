@@ -389,25 +389,6 @@ const monsterOnly = analyzeWaystoneText(SAMPLE_MONSTER_ONLY);
 check("monster-rarity/effectiveness-only map scores > 0 (both signals feed the score)",
   monsterOnly.heat.score > 0);
 
-// (2) Instilled-waystone wording: "Players in Area are X% Delirious" (the
-// word "Delirium" never appears on the item) must count as Delirium —
-// pinned via the detect bonus: the same map scores Delirium strictly
-// higher with the line than without it.
-const mkDeliriousSample = (withLine) => `Item Class: Waystones
-Rarity: Rare
-Fogged Vault
-Waystone (Tier 15)
---------
-Waystone Tier: 15
-Item Level: 82
---------
-+30% increased Pack Size${withLine ? "\nPlayers in Area are 24% Delirious" : ""}
---------`;
-const deliriumScoreOf = (r) => r.mechanicScores.find((m) => m.mechanic === "Delirium")?.score ?? 0;
-check("'Players in Area are X% Delirious' grants Delirium its detect bonus",
-  deliriumScoreOf(analyzeWaystoneText(mkDeliriousSample(true))) >
-  deliriumScoreOf(analyzeWaystoneText(mkDeliriousSample(false))));
-
 // (3) "Monsters take X% reduced Extra Damage from Critical Hits" is a
 // DEFENSIVE monster mod — it must not read as monsters critting the player
 // (the false positive showed an unearned "High Crit Monsters" warning).
@@ -462,9 +443,14 @@ check("skipIfBelow gates the mechanic recommendation on low-score maps",
   monsterOnly.tablets.every((t) => t.reason.includes("matches General")));
 
 // ============================================================
-// MECHANIC DETECTION (KNOWN_ISSUES #4, 2026-07-08): the +15 presence
-// bonus reads the ISOLATED mod lines only — a mechanic keyword in the
-// waystone's NAME (or any non-mod block) must not grant it.
+// MECHANIC MATCH SCORE IS PURELY STAT-FIT (2026-07-10): the old +15
+// presence bonus (any mechanic whose keyword appeared in the text) is
+// gone from computeMechanicScores — it was a single flat number applied
+// uniformly to 16 of 17 mechanics, disconnected from the real Juice
+// Score's own differentiated EXTRA_CONTENT_BONUS table, and large enough
+// to cluster Delirium near 70 regardless of its actual stat fit (user
+// report). mechanicScores must now depend ONLY on the six tracked stats —
+// never on the item name, mod wording, or any mechanic keyword.
 // ============================================================
 
 const mkNamedSample = (name, extraMod = "") => `Item Class: Waystones
@@ -479,30 +465,33 @@ Item Level: 82
 --------`;
 const mechScoreOf = (r, name) => r.mechanicScores.find((m) => m.mechanic === name)?.score ?? 0;
 
-// (8) Same mods, name with vs without a mechanic keyword → identical
-// Ritual scores (the fix); a real ritual MOD still raises it (the bonus
-// itself stayed alive).
+// (8) Same mods throughout — name with vs without a mechanic keyword, and
+// adding a mechanic-flavor mod LINE that carries no tracked stat (a real
+// "Ritual Altars" mod doesn't move any of the six StatKeys) — none of it
+// may change the Ritual score anymore. This is the mirror image of the old
+// "still grants the bonus" check: now the absence of any effect IS correct.
 const ritualNamed = analyzeWaystoneText(mkNamedSample("Ritual Reliquary"));
 const plainNamed = analyzeWaystoneText(mkNamedSample("Forsaken Vault"));
 const ritualModded = analyzeWaystoneText(mkNamedSample("Forsaken Vault", "Area contains 2 additional Ritual Altars"));
-check("mechanic keyword in the NAME does not grant the detect bonus",
+check("mechanic keyword in the NAME does not change the Ritual score",
   mechScoreOf(ritualNamed, "Ritual") === mechScoreOf(plainNamed, "Ritual"));
-check("a real ritual mod line still grants the detect bonus",
-  mechScoreOf(ritualModded, "Ritual") > mechScoreOf(plainNamed, "Ritual"));
+check("a stat-less 'Ritual Altars' mod line does not change the Ritual score either",
+  mechScoreOf(ritualModded, "Ritual") === mechScoreOf(plainNamed, "Ritual"));
 
-// (9) Real PoE2 mod phrasings, one per detectable mechanic with a real
-// tablet (plurals pin the 2026-07-08 regex widening for Abysses/Essences).
-for (const [mechanic, modLine] of [
-  ["Breach", "Area contains 2 additional Breaches"],
-  ["Ritual", "Area contains 3 additional Ritual Altars"],
-  ["Expedition", "Area contains an Expedition Encampment"],
-  ["Abyss", "Area contains 2 additional Abysses"],
-  ["Essence", "Area contains 2 additional Essences"],
-]) {
-  check(`'${modLine}' grants ${mechanic} its detect bonus`,
-    mechScoreOf(analyzeWaystoneText(mkNamedSample("Forsaken Vault", modLine)), mechanic) >
-    mechScoreOf(plainNamed, mechanic));
-}
+// (9) The flip side: a waystone with STRONG Ritual-fitting stats (priority
+// monsterRarity, secondaries packSize/monsterEffectiveness) but zero
+// mechanic wording anywhere must still score Ritual highly — proves the
+// Match Score reads stats, not text. Values chosen to dominate the base
+// "+30% increased Rarity of Monsters" line mkNamedSample always includes
+// (mod-parser keeps the strongest match per stat, never sums — 70 wins
+// over 30) : monsterRarity 70/100*.6 + packSize 60/100*.2 +
+// monsterEffectiveness 50/100*.2 = 64.
+const ritualStatsNoText = analyzeWaystoneText(mkNamedSample(
+  "Forsaken Vault",
+  "+70% increased Rarity of Monsters\n+60% increased Pack Size\n+50% Monster Effectiveness",
+));
+check("strong Ritual-shaped stats alone (no mechanic text anywhere) still score Ritual highly",
+  mechScoreOf(ritualStatsNoText, "Ritual") >= 55);
 
 // ============================================================
 // MECHANIC-PATTERN CONSOLIDATION (KNOWN_ISSUES #4 follow-up, 2026-07-08):
@@ -540,12 +529,13 @@ check("waystone NAME containing a mechanic keyword does not change heat.score",
 check("waystone NAME containing a mechanic keyword grants no 'extra content' bonus",
   !scoreRitualNamed.insights.some((line) => /ritual/i.test(line)));
 
-// (11) Out-of-block content still counts: an instilled "Players in Area are
-// X% Delirious" line living in its OWN block (after the mod block, not
-// inside it) must still raise both the Delirium detect bonus AND the real
-// score's mechanic-density term — extractModifiers() alone (single block)
-// would miss it, which is exactly why contentText spans every non-header
-// block instead of just the isolated mod list.
+// (11) Out-of-block content still counts for the real score: an instilled
+// "Players in Area are X% Delirious" line living in its OWN block (after
+// the mod block, not inside it) must still raise the real score's
+// mechanic-density term — extractModifiers() alone (single block) would
+// miss it, which is exactly why contentText spans every non-header block
+// instead of just the isolated mod list. (This used to also pin the Match
+// Score's detect bonus — removed 2026-07-10, see the section above.)
 const SAMPLE_INSTILLED_SEPARATE_BLOCK = `Item Class: Waystones
 Rarity: Rare
 Fogged Reliquary
@@ -570,8 +560,6 @@ Item Level: 82
 --------`;
 const instilledSeparate = analyzeWaystoneText(SAMPLE_INSTILLED_SEPARATE_BLOCK);
 const noInstill = analyzeWaystoneText(SAMPLE_NO_INSTILL);
-check("instilled Delirium line in its own block still grants the detect bonus",
-  mechScoreOf(instilledSeparate, "Delirium") > mechScoreOf(noInstill, "Delirium"));
 check("instilled Delirium line in its own block still raises heat.score (density term)",
   instilledSeparate.heat.score > noInstill.heat.score);
 
@@ -675,11 +663,18 @@ const monsterRarityOnly = analyzeWaystoneText(mkStatWaystone(["+80% increased Ra
 check("Breach: monster-rarity-only waystone no longer feeds Breach at all",
   fitScoreOf(monsterRarityOnly, "Breach") === 0);
 
-// Abyss now keys on pack size first ("1) pack size in map")...
-const packOnly = analyzeWaystoneText(mkStatWaystone(["+25% increased Pack Size"]));
-check("Abyss: pack-size-heavy waystone now ranks Abyss at the top (Fubgun 0.5)",
-  fitScoreOf(packOnly, "Abyss") >= 45 &&
-  packOnly.mechanicScores[0].score === fitScoreOf(packOnly, "Abyss"));
+// Abyss now keys on pack size / monster rarity / item rarity, in that order
+// ("1) pack size 2) monster rarity 3) rarity of items"). Compared against
+// Heist (priority itemRarity, no packSize at all) rather than asserting
+// sole rank-0 — Legion shares this exact priority+secondary set (it already
+// did before yesterday's Abyss recalibration), so a real high-pack-size map
+// legitimately ties Abyss and Legion at the top; that's correct, not a bug.
+const abyssShaped = analyzeWaystoneText(
+  mkStatWaystone(["+50% increased Pack Size", "+30% increased Rarity of Monsters", "+20% increased Rarity of Items found in this Area"]),
+);
+check("Abyss: pack-size/monster-rarity/item-rarity waystone gives Abyss a strong fit (Fubgun 0.5)",
+  fitScoreOf(abyssShaped, "Abyss") >= 35 &&
+  fitScoreOf(abyssShaped, "Abyss") > fitScoreOf(abyssShaped, "Heist"));
 // ...and quantity (the old secondary) no longer feeds it.
 const quantityOnly = analyzeWaystoneText(mkStatWaystone(["30% increased Quantity of Items found"]));
 check("Abyss: quantity-only waystone no longer feeds Abyss",
