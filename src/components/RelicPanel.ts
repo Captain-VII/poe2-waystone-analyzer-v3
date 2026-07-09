@@ -330,19 +330,19 @@ export function mountOverlay(
                 <span class="set-val set-meta-msg" data-meta-msg hidden></span>
                 <div class="set-row">
                   <span class="set-lab">Mécanique</span>
-                  <select class="set-select" data-meta-mech aria-label="Mécanique à personnaliser"></select>
+                  <button class="set-select" type="button" data-meta-mech aria-haspopup="listbox" aria-label="Mécanique à personnaliser"></button>
                 </div>
                 <div class="set-row">
                   <span class="set-lab">Stat prioritaire</span>
-                  <select class="set-select" data-meta-priority aria-label="Stat prioritaire"></select>
+                  <button class="set-select" type="button" data-meta-priority aria-haspopup="listbox" aria-label="Stat prioritaire"></button>
                 </div>
                 <div class="set-row">
                   <span class="set-lab">Secondaire 1</span>
-                  <select class="set-select" data-meta-sec1 aria-label="Première stat secondaire"></select>
+                  <button class="set-select" type="button" data-meta-sec1 aria-haspopup="listbox" aria-label="Première stat secondaire"></button>
                 </div>
                 <div class="set-row">
                   <span class="set-lab">Secondaire 2</span>
-                  <select class="set-select" data-meta-sec2 aria-label="Seconde stat secondaire"></select>
+                  <button class="set-select" type="button" data-meta-sec2 aria-haspopup="listbox" aria-label="Seconde stat secondaire"></button>
                 </div>
                 <div class="set-row set-col" title="Sous ce Juice Score, la mécanique n'est pas recommandée">
                   <div class="set-row">
@@ -402,10 +402,10 @@ export function mountOverlay(
   const statBestEl = q("[data-stat-best]");
   const statResetBtn = q("[data-stat-reset]");
   const metaSection = q("[data-meta-section]");
-  const metaMechSel = q("[data-meta-mech]") as HTMLSelectElement;
-  const metaPrioritySel = q("[data-meta-priority]") as HTMLSelectElement;
-  const metaSec1Sel = q("[data-meta-sec1]") as HTMLSelectElement;
-  const metaSec2Sel = q("[data-meta-sec2]") as HTMLSelectElement;
+  const metaMechSel = q("[data-meta-mech]") as HTMLButtonElement;
+  const metaPrioritySel = q("[data-meta-priority]") as HTMLButtonElement;
+  const metaSec1Sel = q("[data-meta-sec1]") as HTMLButtonElement;
+  const metaSec2Sel = q("[data-meta-sec2]") as HTMLButtonElement;
   const metaSkipInput = q("[data-meta-skip]") as HTMLInputElement;
   const metaSkipVal = q("[data-meta-skip-val]");
   const metaTabletsEl = q("[data-meta-tablets]");
@@ -650,6 +650,7 @@ export function mountOverlay(
   function toggleSettings(): void {
     settingsOpen = !settingsOpen;
     if (!settingsOpen) stopHotkeyCapture(); // a half-finished capture must not outlive its UI
+    if (!settingsOpen) openDropdownClose?.(); // an open dropdown must not outlive its panel
     if (settingsOpen && compareActive) closeCompare();
     if (settingsOpen) void loadMetaEditor(); // fresh model on every open — a hand-edit of the file mid-session shows up
     overlayEl.classList.toggle("settings-open", settingsOpen);
@@ -693,12 +694,112 @@ export function mountOverlay(
     }
   }
 
-  function statOptionsHtml(model: MetaEditorModel, selected: string, withNone: boolean): string {
-    const none = withNone ? `<option value=""${selected === "" ? " selected" : ""}>—</option>` : "";
-    return none + model.statOptions
-      .map((s) => `<option value="${s.key}"${s.key === selected ? " selected" : ""}>${s.label}</option>`)
-      .join("");
+  /** Custom dropdown replacing the native <select>. The native popup is an
+   *  OS window that can extend past the overlay's bounds — clicks landing
+   *  out there hit lib.rs's click-away poll (a left-click outside every
+   *  interactive rect hides the overlay), so picking an option in the
+   *  overflow area dismissed the whole overlay mid-selection. This list is
+   *  a plain element appended to the settings panel and clamped inside it,
+   *  so every click stays within the already-reported interactive rect. */
+  interface DropdownOption {
+    value: string;
+    label: string;
   }
+  let openDropdownClose: (() => void) | null = null;
+
+  function makeDropdown(btn: HTMLButtonElement, onPick: (value: string) => void) {
+    let options: DropdownOption[] = [];
+    let value = "";
+
+    function applyLabel(): void {
+      btn.textContent = options.find((o) => o.value === value)?.label ?? "—";
+    }
+
+    function open(): void {
+      openDropdownClose?.();
+      const list = document.createElement("div");
+      list.className = "set-dropdown-list";
+      list.setAttribute("role", "listbox");
+      for (const o of options) {
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = "set-dropdown-item" + (o.value === value ? " selected" : "");
+        item.setAttribute("role", "option");
+        item.textContent = o.label;
+        item.addEventListener("click", () => {
+          const changed = o.value !== value;
+          close();
+          if (changed) {
+            value = o.value;
+            applyLabel();
+            onPick(o.value);
+          }
+        });
+        list.appendChild(item);
+      }
+      settingsPanel.appendChild(list);
+      // Clamp inside the panel: below the button if it fits, above otherwise —
+      // the panel IS the reported click-through rect, so staying inside it is
+      // what keeps every option clickable (and the click-away poll quiet).
+      const panelRect = settingsPanel.getBoundingClientRect();
+      const btnRect = btn.getBoundingClientRect();
+      const height = Math.min(list.scrollHeight, 180);
+      let top = btnRect.bottom - panelRect.top + 3;
+      if (top + height > panelRect.height - 6) {
+        top = Math.max(6, btnRect.top - panelRect.top - height - 3);
+      }
+      list.style.top = `${top}px`;
+      list.style.right = `${Math.max(6, panelRect.right - btnRect.right)}px`;
+      list.style.maxHeight = `${height}px`;
+
+      const onDocMousedown = (ev: MouseEvent): void => {
+        if (ev.target instanceof Node && (list.contains(ev.target) || btn.contains(ev.target))) return;
+        close();
+      };
+      const onEscape = (ev: KeyboardEvent): void => {
+        if (ev.key !== "Escape") return;
+        ev.stopPropagation(); // must NOT reach hotkeys.ts's Escape-hides-overlay listener
+        close();
+      };
+      const onScroll = (): void => close(); // anchored position is stale once the panel scrolls
+      function close(): void {
+        list.remove();
+        document.removeEventListener("mousedown", onDocMousedown, true);
+        window.removeEventListener("keydown", onEscape, true);
+        scrollHost?.removeEventListener("scroll", onScroll);
+        openDropdownClose = null;
+      }
+      const scrollHost = settingsPanel.querySelector(".settings-scroll");
+      document.addEventListener("mousedown", onDocMousedown, true);
+      window.addEventListener("keydown", onEscape, true);
+      scrollHost?.addEventListener("scroll", onScroll);
+      openDropdownClose = close;
+    }
+
+    btn.addEventListener("click", () => {
+      if (openDropdownClose) openDropdownClose();
+      else open();
+    });
+
+    return {
+      get value(): string {
+        return value;
+      },
+      set(newOptions: DropdownOption[], selected: string): void {
+        options = newOptions;
+        value = selected;
+        applyLabel();
+      },
+    };
+  }
+
+  const mechDropdown = makeDropdown(metaMechSel, (v) => {
+    selectedMech = v;
+    renderMetaEditor(); // navigation only — nothing saved
+  });
+  const priorityDropdown = makeDropdown(metaPrioritySel, () => collectMechanicEdit());
+  const sec1Dropdown = makeDropdown(metaSec1Sel, () => collectMechanicEdit());
+  const sec2Dropdown = makeDropdown(metaSec2Sel, () => collectMechanicEdit());
 
   function renderMetaEditor(): void {
     const model = metaModel;
@@ -706,14 +807,17 @@ export function mountOverlay(
     if (!model.mechanics.some((m) => m.name === selectedMech)) {
       selectedMech = model.mechanics[0]?.name ?? "";
     }
-    metaMechSel.innerHTML = model.mechanics
-      .map((m) => `<option value="${m.name}"${m.name === selectedMech ? " selected" : ""}>${m.name}${m.isOverridden ? " •" : ""}</option>`)
-      .join("");
+    mechDropdown.set(
+      model.mechanics.map((m) => ({ value: m.name, label: m.name + (m.isOverridden ? " •" : "") })),
+      selectedMech,
+    );
     const mech = model.mechanics.find((m) => m.name === selectedMech);
     if (!mech) return;
-    metaPrioritySel.innerHTML = statOptionsHtml(model, mech.effective.priorityStat, false);
-    metaSec1Sel.innerHTML = statOptionsHtml(model, mech.effective.secondaryStats[0] ?? "", true);
-    metaSec2Sel.innerHTML = statOptionsHtml(model, mech.effective.secondaryStats[1] ?? "", true);
+    const statOptions = model.statOptions.map((s) => ({ value: s.key as string, label: s.label }));
+    const withNone = [{ value: "", label: "—" }, ...statOptions];
+    priorityDropdown.set(statOptions, mech.effective.priorityStat);
+    sec1Dropdown.set(withNone, mech.effective.secondaryStats[0] ?? "");
+    sec2Dropdown.set(withNone, mech.effective.secondaryStats[1] ?? "");
     metaSkipInput.value = String(mech.effective.skipIfBelow);
     metaSkipVal.textContent = String(mech.effective.skipIfBelow);
     metaTabletsEl.innerHTML = model.tablets
@@ -759,10 +863,10 @@ export function mountOverlay(
   function collectMechanicEdit(): void {
     const mech = metaModel?.mechanics.find((m) => m.name === selectedMech);
     if (!mech) return;
-    const secondaryStats = [metaSec1Sel.value, metaSec2Sel.value].filter((v) => v !== "");
+    const secondaryStats = [sec1Dropdown.value, sec2Dropdown.value].filter((v) => v !== "");
     void metaAction((ed) =>
       ed.saveMechanic(mech.name, {
-        priorityStat: metaPrioritySel.value as MechanicEdit["priorityStat"],
+        priorityStat: priorityDropdown.value as MechanicEdit["priorityStat"],
         secondaryStats: secondaryStats as MechanicEdit["secondaryStats"],
         skipIfBelow: Number(metaSkipInput.value),
       }),
@@ -962,13 +1066,8 @@ export function mountOverlay(
   setResetPositionBtn.addEventListener("click", () => opts.onResetPosition?.());
   statResetBtn.addEventListener("click", () => opts.onResetStats?.());
   if (opts.metaEditor) {
-    metaMechSel.addEventListener("change", () => {
-      selectedMech = metaMechSel.value;
-      renderMetaEditor(); // navigation only — nothing saved
-    });
-    metaPrioritySel.addEventListener("change", collectMechanicEdit);
-    metaSec1Sel.addEventListener("change", collectMechanicEdit);
-    metaSec2Sel.addEventListener("change", collectMechanicEdit);
+    // The four dropdown buttons wire themselves in makeDropdown — only the
+    // slider and reset button need listeners here.
     // Live value while dragging, one write on release.
     metaSkipInput.addEventListener("input", () => (metaSkipVal.textContent = metaSkipInput.value));
     metaSkipInput.addEventListener("change", collectMechanicEdit);

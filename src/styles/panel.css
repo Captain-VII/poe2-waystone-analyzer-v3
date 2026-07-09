@@ -504,10 +504,48 @@
 .set-select:hover:not(:disabled),
 .set-select:focus-visible { color: var(--ivory); border-color: var(--gold-hi); outline: none; }
 .set-select:disabled { color: var(--grey); cursor: not-allowed; opacity: 0.6; }
-.set-select option {
+/* Custom dropdown list (replaces the native <select> popup, which is an OS
+   window that can extend past the overlay bounds — clicks out there hit the
+   Rust click-away poll and hid the whole overlay). Appended to
+   .body-settings (position:absolute via .body) and clamped inside it by
+   RelicPanel's makeDropdown, so every option stays inside the reported
+   click-through rect. */
+.set-dropdown-list {
+  position: absolute;
+  z-index: 30;
+  min-width: 150px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px;
   background: #17120d;
-  color: var(--ivory);
+  border: 1px solid rgba(184, 135, 53, 0.55);
+  border-radius: 3px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
 }
+.set-dropdown-item {
+  flex: none; /* flex children shrink by default — 17 items in a 180px max-height list squashed to ~10px slivers without this */
+  font-family: var(--sans);
+  font-size: 11px;
+  color: var(--ivory);
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 2px;
+  padding: 5px 9px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.set-dropdown-item:hover,
+.set-dropdown-item:focus-visible {
+  background: rgba(184, 135, 53, 0.18);
+  color: var(--gold-hi);
+  outline: none;
+}
+.set-dropdown-item.selected { color: var(--gold-hi); }
 
 /* Tablet toggle labels can be long ("Standard Precursor Tablet") — let them
    ellipsize instead of pushing the switch out of the row. */
