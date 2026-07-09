@@ -434,6 +434,16 @@
   text-align: right;
 }
 
+/* Session stats' best-find value holds a full waystone name ("Dream Gambit
+   (78)") — ellipsize instead of widening the row; the title attr carries
+   the full name. */
+.set-stat-best {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 170px;
+}
+
 .set-btn {
   flex: none;
   font-family: var(--sans);

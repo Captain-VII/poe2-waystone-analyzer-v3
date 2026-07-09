@@ -1,5 +1,5 @@
 import type { AnalysisResult, TierClass } from "../types";
-import type { Mode, EffectiveMode, CompareEntry } from "../settings";
+import type { Mode, EffectiveMode, CompareEntry, SessionStatsView } from "../settings";
 import {
   loadReduceEffects,
   saveReduceEffects,
@@ -57,6 +57,10 @@ export interface OverlayOptions {
   /** Settings' "Réinitialiser" position button — clears the saved custom
    *  position and re-anchors top-right. */
   onResetPosition?(): void;
+  /** Settings' session-stats "Réinitialiser" button — clears the persisted
+   *  stats to start a fresh farming session (main.ts owns the storage and
+   *  calls setSessionStats back with the emptied view). */
+  onResetStats?(): void;
 }
 
 /** Why an Ins press produced no new result: the copy/read itself failed
@@ -86,6 +90,10 @@ export interface OverlayHandle {
    *  called once at startup after the async `isEnabled()` check resolves
    *  (main.ts's init()). */
   setAutostartChecked(enabled: boolean): void;
+  /** Renders the session-stats rows in Settings (count / average / best).
+   *  Called at startup with the persisted stats, after every applied
+   *  analysis, and after a reset. */
+  setSessionStats(view: SessionStatsView): void;
   /** Panel element, for click-through rect reporting. */
   panelEl: HTMLElement;
   /** Currently-visible interactive controls (§2: toggle / footer / mod-scroll
@@ -286,6 +294,24 @@ export function mountOverlay(
                 <button class="set-btn" data-set-reset-position type="button">Réinitialiser</button>
               </div>
               <div class="set-sep"></div>
+              <div class="sec-h" title="Depuis le dernier Réinitialiser — chaque waystone compte une fois (la re-analyser met à jour son score)">Session</div>
+              <div class="set-row">
+                <span class="set-lab">Waystones analysées</span>
+                <span class="set-val" data-stat-count>0</span>
+              </div>
+              <div class="set-row">
+                <span class="set-lab">Score moyen</span>
+                <span class="set-val" data-stat-avg>—</span>
+              </div>
+              <div class="set-row">
+                <span class="set-lab">Meilleure trouvaille</span>
+                <span class="set-val set-stat-best" data-stat-best>—</span>
+              </div>
+              <div class="set-row" title="Remet les stats de session à zéro pour démarrer une nouvelle session de farm">
+                <span class="set-lab">Stats</span>
+                <button class="set-btn" data-stat-reset type="button">Réinitialiser</button>
+              </div>
+              <div class="set-sep"></div>
               <div class="set-row">
                 <span class="set-lab">Hide Overlay</span>
                 <button class="set-btn" data-set-hide type="button" title="Sends the overlay to the system tray. Right-click the tray icon to quit for good.">Hide</button>
@@ -325,6 +351,10 @@ export function mountOverlay(
   const setScaleVal = q("[data-set-scale-val]");
   const setHideBtn = q("[data-set-hide]");
   const setResetPositionBtn = q("[data-set-reset-position]");
+  const statCountEl = q("[data-stat-count]");
+  const statAvgEl = q("[data-stat-avg]");
+  const statBestEl = q("[data-stat-best]");
+  const statResetBtn = q("[data-stat-reset]");
   const headEl = q("[data-head]");
   const hotkeyBtn = q("[data-set-hotkey]") as HTMLButtonElement;
   const hotkeyKbd = q("[data-hotkey-kbd]");
@@ -597,6 +627,13 @@ export function mountOverlay(
     setAutostartInput.checked = enabled;
   }
 
+  function setSessionStats(view: SessionStatsView): void {
+    statCountEl.textContent = String(view.count);
+    statAvgEl.textContent = view.avg === null ? "—" : view.avg.toFixed(1);
+    statBestEl.textContent = view.best === null ? "—" : `${view.best.name} (${Math.round(view.best.score)})`;
+    statBestEl.title = view.best?.name ?? "";
+  }
+
   function showHotkeyMsg(text: string, isError: boolean): void {
     hotkeyMsg.textContent = text;
     hotkeyMsg.classList.toggle("err", isError);
@@ -754,6 +791,7 @@ export function mountOverlay(
   });
   setHideBtn.addEventListener("click", opts.onHide);
   setResetPositionBtn.addEventListener("click", () => opts.onResetPosition?.());
+  statResetBtn.addEventListener("click", () => opts.onResetStats?.());
   if (opts.onDragStart) {
     const onDragStart = opts.onDragStart;
     headEl.addEventListener("mousedown", (ev) => {
@@ -800,6 +838,7 @@ export function mountOverlay(
     closeCompare,
     setHotkeyLabel,
     setAutostartChecked,
+    setSessionStats,
     panelEl: panel,
     interactiveEls,
   };

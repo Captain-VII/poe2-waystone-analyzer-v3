@@ -18,6 +18,10 @@ import {
   saveCompareList,
   loadCustomPosition,
   clearCustomPosition,
+  loadSessionStats,
+  saveSessionStats,
+  clearSessionStats,
+  summarizeSessionStats,
   type Mode,
   type CompareEntry,
 } from "./settings";
@@ -90,6 +94,23 @@ function removeCompareEntry(index: number): void {
   }
 }
 
+// Session stats (Settings panel): one score per waystone name, persisted —
+// see settings.ts's SessionStats for the dedupe/session semantics.
+const sessionStats = loadSessionStats();
+
+function recordSessionStat(result: AnalysisResult): void {
+  sessionStats.scores[result.waystone.name] = result.heat.score;
+  saveSessionStats(sessionStats);
+  overlay.setSessionStats(summarizeSessionStats(sessionStats));
+}
+
+/** Settings' session-stats "Réinitialiser" button — new farming session. */
+function resetSessionStats(): void {
+  sessionStats.scores = {};
+  clearSessionStats();
+  overlay.setSessionStats(summarizeSessionStats(sessionStats));
+}
+
 const overlay = mountOverlay(document.getElementById("app")!, MOCK_RESULTS[tier], {
   mode,
   isReduced: () =>
@@ -108,6 +129,7 @@ const overlay = mountOverlay(document.getElementById("app")!, MOCK_RESULTS[tier]
   onSetAutostart: "__TAURI_INTERNALS__" in window ? setAutostartEnabled : undefined,
   onDragStart: "__TAURI_INTERNALS__" in window ? startWindowDrag : undefined,
   onResetPosition: resetPosition,
+  onResetStats: resetSessionStats,
   // Dev-only: clicking the tier badge cycles the mock fixtures, for UI
   // testing without a real clipboard waystone. Disabled in production
   // builds (import.meta.env.DEV is false) — it would otherwise silently
@@ -164,6 +186,7 @@ async function analyze(simulateCopy = true): Promise<void> {
         void notifyLegendaryWaystone(result.waystone.name, result.heat.score);
       }
       pushCompareEntry(result);
+      recordSessionStat(result);
       if (compareOpen) overlay.showCompare(compareList);
     }
   }
@@ -282,6 +305,7 @@ async function init(): Promise<void> {
   // can be fetched — labels default to Ins, corrected here if remapped.
   overlay.setHotkeyLabel(await getHotkeyBase());
   overlay.setAutostartChecked(await getAutostartEnabled());
+  overlay.setSessionStats(summarizeSessionStats(sessionStats)); // persisted stats from previous launches
   await prepareWindowDrag(); // caches the window ref so the header's mousedown can start a drag synchronously
   await watchDisplayChanges(() => void handleDisplayChange());
   await watchWindowMoves(); // persists a user drag once it settles (KNOWN_ISSUES-adjacent QoL, see placement.ts)

@@ -14,6 +14,7 @@ const KEYS = {
   compactCompressed: "overlay.compactCompressed",
   compareList: "overlay.compareList",
   customPosition: "overlay.customPosition",
+  sessionStats: "overlay.sessionStats",
 } as const;
 
 export function loadMode(): Mode {
@@ -130,4 +131,70 @@ export function saveCustomPosition(pos: CustomPosition): void {
 
 export function clearCustomPosition(): void {
   localStorage.removeItem(KEYS.customPosition);
+}
+
+/** Session stats: one latest score per analyzed waystone name — keyed so a
+ *  re-analysis (same map after crafting, or an accidental double Ins)
+ *  updates in place instead of inflating the count, the same dedupe rule
+ *  Compare uses. "Session" means "since the user last hit Réinitialiser",
+ *  not "since app launch": stats survive restarts (and the KNOWN_ISSUES #1
+ *  black-screen relaunch) so a farming session isn't lost to a crash. */
+export interface SessionStats {
+  scores: Record<string, number>;
+}
+
+/** What the Settings panel actually displays, derived from SessionStats. */
+export interface SessionStatsView {
+  count: number;
+  avg: number | null;
+  best: { name: string; score: number } | null;
+}
+
+export function summarizeSessionStats(stats: SessionStats): SessionStatsView {
+  const entries = Object.entries(stats.scores);
+  if (entries.length === 0) return { count: 0, avg: null, best: null };
+  let sum = 0;
+  let best = entries[0]!;
+  for (const e of entries) {
+    sum += e[1];
+    if (e[1] > best[1]) best = e;
+  }
+  return {
+    count: entries.length,
+    avg: sum / entries.length,
+    best: { name: best[0], score: best[1] },
+  };
+}
+
+export function loadSessionStats(): SessionStats {
+  const raw = localStorage.getItem(KEYS.sessionStats);
+  if (!raw) return { scores: {} };
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    const scores = (parsed as SessionStats)?.scores;
+    if (
+      typeof scores === "object" &&
+      scores !== null &&
+      !Array.isArray(scores) &&
+      Object.values(scores).every((v) => typeof v === "number" && Number.isFinite(v))
+    ) {
+      return { scores: scores as Record<string, number> };
+    }
+    return { scores: {} };
+  } catch {
+    return { scores: {} };
+  }
+}
+
+export function saveSessionStats(stats: SessionStats): void {
+  try {
+    localStorage.setItem(KEYS.sessionStats, JSON.stringify(stats));
+  } catch {
+    // Same contract as saveCompareList: stats are a convenience, never
+    // worth breaking the analyze flow over.
+  }
+}
+
+export function clearSessionStats(): void {
+  localStorage.removeItem(KEYS.sessionStats);
 }
