@@ -13,7 +13,6 @@ import {
   dangerHitsToWarnings,
   describeDangerHits,
   detectDangerHits,
-  mechanicThresholdPenalty,
   modCountBonus,
   setActiveMechanics,
   MECHANICS,
@@ -444,8 +443,12 @@ check("detectDangerHits: players cursed (moderate)",
 // "no recommendation" (nothing clears skipIfBelow), but per-tablet ranking
 // (2026-07-10 redesign) is deliberately independent of that verdict — each
 // tablet keeps showing its own honest mechanic (from its `tags`, a fixed
-// property of the tablet, not the blank waystone). Only the two generic
-// tablets (no mechanic-specific tag) fall back to "General".
+// property of the tablet, not the blank waystone's stats). Since 2026-07-10
+// (later, tablet-fit-tracks-the-waystone rework), every tablet's stat fit is
+// ~equal on an all-zero-stat waystone (just the uniform mod-count bonus),
+// so `rewardScore` breaks the tie — the two General-tagged tablets (no
+// mechanic-specific currency) can legitimately fall out of the top 5 here,
+// unlike the old tablet's-own-roll model. Not asserted.
 const SAMPLE_WHITE = `Item Class: Waystones
 Rarity: Normal
 Waystone
@@ -457,8 +460,7 @@ const white = analyzeWaystoneText(SAMPLE_WHITE);
 check("white waystone: no mechanic recommendation, but tablets still show their own honest match",
   white.recommendedMechanic === null &&
   white.tablets.length > 0 &&
-  white.tablets.some((t) => t.reason.includes("matches Delirium")) &&
-  white.tablets.some((t) => t.reason.includes("matches General")));
+  white.tablets.some((t) => t.reason.includes("matches Delirium")));
 
 // (7) §10 skipIfBelow gate: a map whose Juice Score sits below every
 // eligible mechanic's skipIfBelow must not recommend one, even when a
@@ -727,22 +729,56 @@ const monsterRarityOnly = analyzeWaystoneText(mkStatWaystone(["+80% increased Ra
 check("Breach: monster-rarity-only waystone no longer feeds Breach at all (beyond the mod-count bonus)",
   fitScoreOf(monsterRarityOnly, "Breach") === Math.round(modCountBonus(1)));
 
-// Abyss now keys on pack size / monster rarity / item rarity, in that order
-// ("1) pack size 2) monster rarity 3) rarity of items"). Floor only (not a
-// sole-rank-0 assertion): every remaining tablet-linked mechanic (2026-07-10
-// — the 9 tablet-less ones were removed) has a cap-100 priority stat, so a
-// heavy pack-size profile legitimately ties Abyss with any of them; that's
-// correct, not a bug.
+// Abyss reverted 2026-07-10 (same day, later — see mechanics.ts's Abyss
+// entry comment): the packSize-priority change above was contradicted by
+// two independent sources (Mobalytics "Abyss Juicing Tablet Tier List",
+// Switchblade Gaming) found while debugging a real waystone where a huge
+// Monster Rarity roll produced a weak Abyss Tablet fit. Abyss now keys on
+// monster rarity / item rarity / quantity, in that order.
 const abyssShaped = analyzeWaystoneText(
-  mkStatWaystone(["+50% increased Pack Size", "+30% increased Rarity of Monsters", "+20% increased Rarity of Items found in this Area"]),
+  mkStatWaystone(["+60% increased Rarity of Monsters", "+20% increased Rarity of Items found in this Area"]),
 );
-check("Abyss: pack-size/monster-rarity/item-rarity waystone gives Abyss a strong fit (Fubgun 0.5)",
+check("Abyss: monster-rarity/item-rarity waystone gives Abyss a strong fit (reverted, sourced)",
   fitScoreOf(abyssShaped, "Abyss") >= 35);
-// ...and quantity (the old secondary) no longer feeds it. Same 2026-07-10
-// mod-count-bonus caveat as the Breach check above.
+// ...and pack size (the short-lived priority stat) no longer feeds it at
+// all. Same 2026-07-10 mod-count-bonus caveat as the Breach check above.
+const packSizeOnly = analyzeWaystoneText(mkStatWaystone(["+50% increased Pack Size"]));
+check("Abyss: pack-size-only waystone no longer feeds Abyss (beyond the mod-count bonus)",
+  fitScoreOf(packSizeOnly, "Abyss") === Math.round(modCountBonus(1)));
+// quantity is a real (if secondary, 0.2-weighted) Abyss stat again.
 const quantityOnly = analyzeWaystoneText(mkStatWaystone(["30% increased Quantity of Items found"]));
-check("Abyss: quantity-only waystone no longer feeds Abyss (beyond the mod-count bonus)",
-  fitScoreOf(quantityOnly, "Abyss") === Math.round(modCountBonus(1)));
+check("Abyss: quantity-only waystone feeds Abyss beyond just the mod-count bonus (secondary stat)",
+  fitScoreOf(quantityOnly, "Abyss") > Math.round(modCountBonus(1)));
+
+// ---------------------------------------------------------------------------
+// Tablet fit = waystone fit (2026-07-10 rework, user report + AskUserQuestion
+// decision "recentrer sur la waystone actuelle"): a tablet's `fit` is no
+// longer its own small boost roll scored against TABLET_ROLL_CAP (removed) —
+// it's now `mechanicScores[tablet's own mechanic].score` (same formula/caps
+// as the Mechanic Match Score, via `scoreMechanicFitRaw(stats, mech, ...)`)
+// plus the tablet's `rewardScore`, clamped 0-100. Direct proof: a tablet's
+// fit must track the WAYSTONE's stats now, not a fixed per-tablet number —
+// the same tablet gets a different fit on two different waystones shaped
+// for its own mechanic vs. not.
+{
+  const deliriumShaped = analyzeWaystoneText(
+    mkStatWaystone(["+70% increased Pack Size", "+30% increased Rarity of Items found in this Area"]),
+  );
+  const deliriumStarved = analyzeWaystoneText(mkStatWaystone(["+5% increased Pack Size"]));
+  const fitOf = (r, name) => r.tablets.find((t) => t.name === name)?.fit ?? -1;
+  check("tablet fit tracks the waystone's own stats, not a fixed per-tablet roll",
+    fitOf(deliriumShaped, "Delirium Tablet") > fitOf(deliriumStarved, "Delirium Tablet"));
+
+  // The Abyss bug this rework fixes, pinned directly: a real waystone with
+  // a huge Monster Rarity roll but almost no Pack Size must now give the
+  // Abyss Tablet a fit that reflects Monster Rarity (Abyss's reverted
+  // priority stat), not a near-zero score starved by a stat it never rolls.
+  const highMonsterRarityLowPack = analyzeWaystoneText(
+    mkStatWaystone(["+62% increased Rarity of Monsters", "+9% increased Pack Size"]),
+  );
+  check("Abyss Tablet fit reflects high Monster Rarity even with low Pack Size (the reported bug)",
+    fitOf(highMonsterRarityLowPack, "Abyss Tablet") >= 40);
+}
 
 // ---------------------------------------------------------------------------
 // Mod-count bonus (2026-07-10, adapter.ts's modCountBonus/computeMechanicScores):
@@ -769,54 +805,6 @@ check("Abyss: quantity-only waystone no longer feeds Abyss (beyond the mod-count
         return m.score - fourScore === Math.round(modCountBonus(8)) - Math.round(modCountBonus(4));
       });
     })());
-}
-
-// ---------------------------------------------------------------------------
-// Mechanic threshold penalty scaffolding (2026-07-10, mechanics.ts's
-// `minThresholds`/`mechanicThresholdPenalty`): built per user request after
-// a targeted web search + re-checking Fubgun's own strat text (already
-// pasted this session) found zero credible sourced numeric thresholds for
-// any PoE2 mechanic — so no bundled mechanic sets `minThresholds` yet. These
-// checks exercise the MECHANISM via synthetic mechanics, not real tuning.
-{
-  const noThresh = { name: "T", priorityStat: "packSize", secondaryStats: [], skipIfBelow: 0 };
-  check("threshold: no minThresholds set → penalty is always 1",
-    mechanicThresholdPenalty({ packSize: 0 }, noThresh) === 1 &&
-    mechanicThresholdPenalty({ packSize: 999 }, noThresh) === 1);
-
-  const oneThresh = { ...noThresh, minThresholds: { packSize: 20 } };
-  check("threshold: profile clearing the bar → penalty is 1 (no cliff at the boundary)",
-    mechanicThresholdPenalty({ packSize: 20 }, oneThresh) === 1 &&
-    mechanicThresholdPenalty({ packSize: 40 }, oneThresh) === 1);
-  check("threshold: profile at zero → penalty is 0",
-    mechanicThresholdPenalty({ packSize: 0 }, oneThresh) === 0);
-  check("threshold: profile at half the bar → penalty ramps linearly to 0.5, not a hard cliff",
-    mechanicThresholdPenalty({ packSize: 10 }, oneThresh) === 0.5);
-
-  const twoThresh = { ...noThresh, minThresholds: { packSize: 20, monsterRarity: 10 } };
-  check("threshold: one stat clears, the other doesn't → only the failing stat penalizes",
-    mechanicThresholdPenalty({ packSize: 20, monsterRarity: 5 }, twoThresh) === 0.5);
-  check("threshold: both stats fail → penalties compound multiplicatively",
-    Math.abs(mechanicThresholdPenalty({ packSize: 10, monsterRarity: 5 }, twoThresh) - 0.25) < 1e-9);
-
-  check("threshold: no bundled mechanic has minThresholds set yet (nothing sourced)",
-    MECHANICS.every((m) => m.minThresholds === undefined));
-
-  // End-to-end through the adapter bundle, same restore-after pattern as the
-  // meta e2e check further down: a synthetic threshold on Delirium's
-  // priority stat visibly suppresses its mechanicScores entry below the
-  // bar, and clears again once the bar is met — then defaults are restored.
-  const thresholdedDelirium = MECHANICS.map((m) => (m.name === "Delirium" ? { ...m, minThresholds: { packSize: 30 } } : m));
-  const lowPack = mkStatWaystone(["+10% increased Pack Size"]);
-  const before = analyzeWaystoneText(lowPack).mechanicScores.find((m) => m.mechanic === "Delirium").score;
-  setActiveMechanics(thresholdedDelirium);
-  const afterBelow = analyzeWaystoneText(lowPack).mechanicScores.find((m) => m.mechanic === "Delirium").score;
-  const afterAbove = analyzeWaystoneText(mkStatWaystone(["+30% increased Pack Size"])).mechanicScores.find((m) => m.mechanic === "Delirium").score;
-  setActiveMechanics(MECHANICS);
-  check("threshold e2e: a synthetic Delirium threshold suppresses its score below the bar",
-    afterBelow < before);
-  check("threshold e2e: the same waystone above the bar is unaffected (penalty back to 1)",
-    afterAbove === analyzeWaystoneText(mkStatWaystone(["+30% increased Pack Size"])).mechanicScores.find((m) => m.mechanic === "Delirium").score);
 }
 
 // ---------------------------------------------------------------------------

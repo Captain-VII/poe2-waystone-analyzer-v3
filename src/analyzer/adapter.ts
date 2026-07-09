@@ -21,16 +21,8 @@ import {
   type Weights,
 } from "./scoring";
 import { buildDisplayData, formatPercent } from "./displayAdapter";
-import {
-  getActiveMechanics,
-  scoreMechanicFitRaw,
-  mechanicThresholdPenalty,
-  NORMALIZE_CAP,
-  TABLET_ROLL_CAP,
-  type MechanicDef,
-  type StatKey,
-} from "./mechanics";
-import { getActiveTablets, getConfidenceMultiplier, type TabletDef } from "./tablets";
+import { getActiveMechanics, scoreMechanicFitRaw, type MechanicDef } from "./mechanics";
+import { getActiveTablets, type TabletDef } from "./tablets";
 import { describeReward } from "./rewards";
 import type { AnalysisResult, DangerHitView, MechanicScore, Modifier, Rating, TierClass, Verdict } from "../types";
 import type { ModStats } from "./mod-parser";
@@ -234,8 +226,7 @@ export function modCountBonus(modCount: number): number {
 /** §7: cross the waystone's own stat profile against each mechanic's
  *  priority/secondary stats (via `scoreMechanicFitRaw`, shared with tablet
  *  ranking below), plus a small mod-count bonus (`modCountBonus`, sourced,
- *  uniform across mechanics) and `mechanicThresholdPenalty` (currently
- *  always 1 — see mechanics.ts). Returns scores for all mechanics, desc
+ *  uniform across mechanics). Returns scores for all mechanics, desc
  *  sorted.
  *
  *  Otherwise purely stat-fit based — "which mechanic do THESE STATS suit"
@@ -261,171 +252,63 @@ export function modCountBonus(modCount: number): number {
 function computeMechanicScores(stats: ModStats, modCount: number): MechanicScore[] {
   const bonus = modCountBonus(modCount);
   const scores = getActiveMechanics().map((mech) => {
-    // Currently always 1 (no bundled mechanic sets minThresholds) — see
-    // that field's doc comment in mechanics.ts. Applied only here, never
-    // in rankTablets: a threshold is about the WAYSTONE's own stats, not a
-    // tablet's small boost roll.
-    const penalty = mechanicThresholdPenalty(stats, mech);
-    const raw = scoreMechanicFitRaw(stats, mech, bonus) * penalty;
+    const raw = scoreMechanicFitRaw(stats, mech, bonus);
     return { mechanic: mech.name, score: Math.round(raw), raw };
   });
   return scores.sort((a, b) => b.raw - a.raw).map(({ mechanic, score }) => ({ mechanic, score }));
 }
 
-/** Which of *this waystone's own* stats synergize with a tablet's mechanic
- *  — independent of which mechanic `rankTablets` ends up matching that
- *  tablet against: a Breach Tablet gets credit for a high-pack-size
- *  waystone even when its own best-fit mechanic is something else. Keyed
- *  by the same lowercase mechanic id already used in `tags`/`rewards[].id` (delirium,
- *  breach, expedition, ritual, abyss) — no new field on `TabletDef`.
- *  Real `StatKey`s only; "monster density"/"magic monsters" aren't tracked
- *  stats in this app (see KNOWN_ISSUES.md #2), so the nearest tracked proxy
- *  is used instead (`monsterEffectiveness`/`monsterRarity`). */
-// Kept aligned with each mechanic's researched priority/secondary stats in
-// mechanics.ts (community consensus 0.5, 2026-07-06) — same sources, same
-// rationale comments there.
-const MECHANIC_SYNERGY: Partial<Record<string, StatKey[]>> = {
-  delirium: ["packSize", "itemRarity"],
-  breach: ["monsterRarity", "itemRarity"],
-  expedition: ["quantity", "monsterRarity"],
-  ritual: ["monsterRarity", "packSize"],
-  abyss: ["monsterRarity", "quantity"],
-  irradiated: ["itemRarity", "monsterEffectiveness"],
-  temple: ["itemRarity", "packSize"],
-};
-
-/** User-designated primary mechanics (2026-07-06): the ones worth building
- *  a map around. Tablets whose mechanic isn't in this set (Expedition,
- *  Irradiated, Temple, and the generic Standard/Overseer) take a gentle
- *  end-stage ×0.8 on their fit in `rankTablets` — same soft-malus pattern
- *  as `getConfidenceMultiplier`, never a hard grouping: a secondary tablet
- *  that fits this waystone far better can still rank first. */
-const PRIMARY_MECHANIC_TAGS = new Set(["breach", "delirium", "ritual", "abyss"]);
-const SECONDARY_MECHANIC_MULTIPLIER = 0.8;
-
-const SYNERGY_CAP = 10;
-
-// Short stat names for the tablet list's one-line synergy footer ("Pack
-// size + Monster eff. = Breach loot") — tighter than FIELD_LABELS, which
-// is sized for the Heat Breakdown rows, not an inline formula.
-const SYNERGY_STAT_LABELS: Record<StatKey, string> = {
-  itemRarity: "Rarity",
-  monsterRarity: "Monster rarity",
-  packSize: "Pack size",
-  monsterEffectiveness: "Monster eff.",
-  waystoneDropChance: "Waystones",
-  quantity: "Quantity",
-};
-
-/** "Pack size + Monster eff. = Breach loot" — why the top tablet pairs
- *  with this map, phrased from the same MECHANIC_SYNERGY stats
- *  computeSynergyBonus scores on (never a second, drifting list).
- *  Undefined for tablets without a synergy-mapped mechanic tag
- *  (Standard/Overseer/General) — the overlay hides the footer then. */
-function buildSynergyLine(tablet: TabletDef): string | undefined {
-  const mechId = tablet.tags?.find((t) => t in MECHANIC_SYNERGY);
-  const synergyStats = mechId ? MECHANIC_SYNERGY[mechId] : undefined;
-  if (!mechId || !synergyStats || synergyStats.length === 0) return undefined;
-  const mechName = mechId.charAt(0).toUpperCase() + mechId.slice(1);
-  return `${synergyStats.map((s) => SYNERGY_STAT_LABELS[s]).join(" + ")} = ${mechName} loot`;
-}
-
-/** Small additive bonus (0-`SYNERGY_CAP`) rewarding a tablet whose mechanic
- *  synergizes with what this specific waystone is actually strong in.
- *  Each synergy stat is normalized 0-1 the same way `scoreMechanicFit` does
- *  (via `NORMALIZE_CAP`) so no single stat's raw magnitude dominates, then
- *  split evenly across however many stats that mechanic lists — a tablet
- *  with no recognized mechanic tag (or a mechanic with no synergy entry)
- *  contributes 0, unchanged from before this existed. */
-function computeSynergyBonus(stats: ModStats, tablet: TabletDef): number {
-  const mechId = tablet.tags?.find((t) => t in MECHANIC_SYNERGY);
-  const synergyStats = mechId ? MECHANIC_SYNERGY[mechId] : undefined;
-  if (!synergyStats || synergyStats.length === 0) return 0;
-  const perStat = SYNERGY_CAP / synergyStats.length;
-  let bonus = 0;
-  for (const key of synergyStats) {
-    bonus += Math.min(1, (stats[key] ?? 0) / NORMALIZE_CAP[key]) * perStat;
-  }
-  return Math.min(bonus, SYNERGY_CAP);
-}
-
-/** §9 "TABLETTE RECOMMANDEE": ranks every active tablet by how well its own
- *  boosts fit ITS OWN mechanic — not a single mechanic shared across every
- *  tablet. A tablet's mechanic identity comes from `tablet.tags` (the same
- *  source `computeSynergyBonus`/`buildSynergyLine`/`tierMult` already use
- *  below) resolved to a `TABLET_LINKED_MECHANICS` entry — Standard/Overseer
- *  Precursor (`tags: ["general"]`) resolve to "General", Breach/Ritual/
- *  Delirium/etc. resolve to their own name. Direct tag lookup, not a search
- *  for whichever of the 8 mechanics numerically scores highest — an
- *  argmax search was tried and discarded: it let e.g. Standard Precursor
- *  Tablet's Quantity+Item Rarity boosts "match" Irradiated (whose
- *  secondaries happen to include quantity) purely by numeric coincidence,
- *  a confusing label with no real identity behind it. A tablet's declared
- *  tag is curated data (tablets.ts), not something to rediscover per
- *  analysis.
- *
- *  2026-07-10 design fix (user report): every tablet used to be scored
- *  against the single globally-`recommendedMechanic`, so e.g. a Delirium
- *  Tablet (boosts: 20% Pack Size — a strong Delirium fit) on a
- *  Ritual-winning waystone displayed "matches Ritual (16/100)" — its real
- *  strength against its own mechanic (48/100) never shown, and even the
- *  small `computeSynergyBonus` couldn't fully compensate (capped at half
- *  of an already-suppressed base). `recommendedMechanic` (the waystone-
- *  level "Strong X match" verdict, still gated by `skipIfBelow`) is fully
- *  decoupled from this now — deliberately: a tablet's own honest fit is
- *  shown even on a waystone too weak to recommend chasing any specific
- *  mechanic (see call site).
- *
- *  A mechanic's optional `recommendedTablets` pin adds a flat bonus (now
- *  evaluated against each tablet's OWN mechanic, not the global winner —
- *  a real fix in its own right: a curated pin used to only ever apply to
- *  whichever tablet matched the global winner, e.g. Delirium's pin on
- *  "Delirium Tablet" only ever fired when Delirium itself won globally).
- *  Any tablet (including ones added purely via meta.json, no code change)
- *  is automatically eligible — an unrecognized/missing tag falls back to
- *  "General", same as the synergy/tier-multiplier logic below.
- *
- *  On top of that stat-fit, each tablet's `rewardScore` (rewards.ts) is
- *  added — value the six generic stats can't express (real
- *  mechanic-specific currency, mainly). A tablet with no `rewards`
- *  contributes 0 here, so this is purely additive: existing ranking for
- *  every tablet defined before this feature is unchanged. The combined
- *  total (`baseFit`) is clamped to 0-100, then a small, `baseFit`-scaled
- *  share of `computeSynergyBonus` is added (see the diminishing-returns
- *  comment just above the loop), re-clamped, then scaled by
- *  `getConfidenceMultiplier` (tablets.ts) as the final step — a
- *  `"high"`-confidence tablet is untouched (×1.0), `"low"` is gently
- *  penalized (×0.8), so speculative data can't outrank reliable data on a
- *  thin margin. Never folded into `statFit`/`rewardScore` themselves, and
- *  never changes `scoreToRating`'s bands.
- *
- *  Sorted by the unrounded fit (`fitRaw`), not the rounded `fit` each tablet
- *  displays — same rounding-tie problem `computeMechanicScores` has, just
- *  one level down. `fitRaw` is stripped before returning. */
 const round1 = (n: number): number => Math.round(n * 10) / 10;
 
 /** "Why this score" decomposition for one tablet — see `Tablet.breakdown`'s
- *  doc comment for the additive-vs-qualitative contract. Built from values
- *  `rankTablets` already computes; this function only decides which of
- *  them are worth a line and how to phrase the two multiplicative ones. */
-function buildTabletBreakdown(
-  statFit: number,
-  rewardScore: number,
-  synergyBonus: number,
-  confidence: TabletDef["confidence"],
-  confidenceMult: number,
-  isPrimaryTier: boolean,
-): { label: string; value?: number }[] {
+ *  doc comment for the additive contract. Just the two components that
+ *  make up `fit`: how well THIS WAYSTONE suits the tablet's mechanic, and
+ *  the tablet's own mechanic-specific reward (rewards.ts), if any. */
+function buildTabletBreakdown(statFit: number, rewardScore: number): { label: string; value?: number }[] {
   const rows: { label: string; value?: number }[] = [{ label: "Stat fit", value: round1(statFit) }];
   if (rewardScore > 0) rows.push({ label: "Reward", value: round1(rewardScore) });
-  if (synergyBonus > 0) rows.push({ label: "Synergy", value: round1(synergyBonus) });
-  if (confidenceMult < 1) rows.push({ label: `Confidence: ${confidence} (×${confidenceMult})` });
-  if (!isPrimaryTier) rows.push({ label: `Secondary mechanic (×${SECONDARY_MECHANIC_MULTIPLIER})` });
   return rows;
 }
 
+/** §9 "TABLETTE RECOMMANDEE": ranks every active tablet by how well THIS
+ *  WAYSTONE's own stats fit ITS OWN mechanic — not a single mechanic shared
+ *  across every tablet, and (2026-07-10 rework, user report) no longer the
+ *  tablet's own small 10-25% boost roll either. A tablet's mechanic
+ *  identity comes from `tablet.tags` resolved to a `TABLET_LINKED_MECHANICS`
+ *  entry — Standard/Overseer Precursor (`tags: ["general"]`) resolve to
+ *  "General", Breach/Ritual/Delirium/etc. resolve to their own name. Direct
+ *  tag lookup, not a search for whichever of the 8 mechanics numerically
+ *  scores highest — an argmax search was tried and discarded: it let e.g.
+ *  Standard Precursor Tablet's Quantity+Item Rarity boosts "match"
+ *  Irradiated purely by numeric coincidence, a confusing label with no real
+ *  identity behind it. A tablet's declared tag is curated data (tablets.ts),
+ *  not something to rediscover per analysis.
+ *
+ *  Reused directly from `scoreMechanicFitRaw(stats, mech, ...)` — the exact
+ *  same formula and caps `computeMechanicScores` uses for the Mechanic
+ *  Match Score, so there's only one "does this waystone suit this
+ *  mechanic" calculation in the whole app, not two scales to keep in sync.
+ *  Previously this scored the TABLET's own roll against a separate,
+ *  smaller cap (`TABLET_ROLL_CAP`), with the waystone's stats only leaking
+ *  in via a small capped `computeSynergyBonus` — that's why a real waystone
+ *  with +62% Monster Rarity still showed a weak Abyss Tablet fit (its own
+ *  roll didn't have Pack Size, the-then priority stat). Removed along with
+ *  the confidence/secondary-mechanic multipliers (×0.92/×0.8) and the
+ *  inert `minThresholds` scaffold — none were validated against real data,
+ *  and stacking multiple unsourced multipliers on top of a now-correct
+ *  base score was exactly the "hard to reason about" complaint that
+ *  triggered this rework (KNOWN_ISSUES.md).
+ *
+ *  A mechanic's optional `recommendedTablets` pin (meta.json-editable,
+ *  meta-schema.ts) still adds a flat +10 bonus for the curated tablet.
+ *  `rewardScore` (rewards.ts, real mechanic-specific currency) is added on
+ *  top, clamped to 0-100. Sorted by the unrounded fit (`fitRaw`), not the
+ *  rounded `fit` each tablet displays — same rounding-tie problem
+ *  `computeMechanicScores` has, just one level down. `fitRaw` is stripped
+ *  before returning. */
 function rankTablets(
   stats: ModStats,
+  modCount: number,
 ): { tablet: TabletDef; fit: number; mechanic: string; breakdown: { label: string; value?: number }[] }[] {
   const activeMechanics = getActiveMechanics();
   const tagToMechanic = new Map(
@@ -434,32 +317,16 @@ function rankTablets(
       .filter((entry): entry is [string, MechanicDef] => entry[1] !== undefined),
   );
   const generalDef = tagToMechanic.get("general")!; // TABLET_LINKED_MECHANICS always includes "General"
+  const bonus = modCountBonus(modCount);
   return getActiveTablets()
     .map((tablet) => {
       const tag = tablet.tags?.find((t) => tagToMechanic.has(t));
       const mech = (tag && tagToMechanic.get(tag)) || generalDef;
       const pinBonus = mech.recommendedTablets?.includes(tablet.name) ? 10 : 0;
-      // TABLET_ROLL_CAP, not NORMALIZE_CAP: a tablet carries one 10-25%
-      // roll, not a waystone's stacked totals — see mechanics.ts.
-      const statFit = scoreMechanicFitRaw(tablet.boosts, mech, pinBonus, TABLET_ROLL_CAP);
-      const baseFit = Math.max(0, Math.min(100, statFit + tablet.rewardScore));
-      const rawSynergy = computeSynergyBonus(stats, tablet);
-      // Diminishing returns: a weak tablet (low baseFit) can't ride synergy
-      // alone to the top. Below half of baseFit, synergy passes through
-      // untouched; past that, it tapers to 25% marginal — smooth, no hard
-      // cutoff — so a strong tablet still gets most of a good synergy roll
-      // while a weak one's ceiling stays close to its own baseFit.
-      const maxAllowedBonus = baseFit * 0.5;
-      const scaledSynergy =
-        rawSynergy <= maxAllowedBonus ? rawSynergy : maxAllowedBonus + (rawSynergy - maxAllowedBonus) * 0.25;
-      const synergyBonus = Math.min(scaledSynergy, SYNERGY_CAP);
-      const adjusted = Math.max(0, Math.min(100, baseFit + synergyBonus));
-      const confidenceMult = getConfidenceMultiplier(tablet.confidence);
-      const isPrimaryTier = tablet.tags?.some((t) => PRIMARY_MECHANIC_TAGS.has(t)) ?? false;
-      const tierMult = isPrimaryTier ? 1 : SECONDARY_MECHANIC_MULTIPLIER;
-      const fitRaw = Math.max(0, Math.min(100, adjusted * confidenceMult * tierMult));
+      const statFit = scoreMechanicFitRaw(stats, mech, bonus + pinBonus);
+      const fitRaw = Math.max(0, Math.min(100, statFit + tablet.rewardScore));
       const fit = Math.round(fitRaw);
-      const breakdown = buildTabletBreakdown(statFit, tablet.rewardScore, synergyBonus, tablet.confidence, confidenceMult, isPrimaryTier);
+      const breakdown = buildTabletBreakdown(statFit, tablet.rewardScore);
       return { tablet, fit, fitRaw, mechanic: mech.name, breakdown };
     })
     .sort((a, b) => b.fitRaw - a.fitRaw)
@@ -523,17 +390,16 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
   });
   const recommendedMechanic = bestTabletLinked ? bestTabletLinked.mechanic : null;
 
-  const ranked = rankTablets(stats);
+  const ranked = rankTablets(stats, parsed.modifiers.length);
   // 5 rows (was 4): the tablet list is now a uniform icon/score/bar scan
   // list with no per-row reason/rewards lines, so five rows cost less
   // height than the old three did.
-  const tablets = ranked.slice(0, 5).map(({ tablet, fit, mechanic, breakdown }, i) => ({
+  const tablets = ranked.slice(0, 5).map(({ tablet, fit, mechanic, breakdown }) => ({
     name: tablet.name,
     delta: Math.round((sumBoosts(tablet.boosts) / 10) * 10) / 10,
     reason: `${tablet.name} matches ${mechanic} (${fit}/100)`,
     rating: scoreToRating(fit),
     fit,
-    synergy: i === 0 ? buildSynergyLine(tablet) : undefined,
     rewards: tablet.rewards && tablet.rewards.length > 0 ? tablet.rewards.map(describeReward) : undefined,
     breakdown,
   }));
@@ -580,4 +446,4 @@ export { computeDangerLevel, dangerHitsToWarnings, detectDangerHits };
 // lets the script activate a merged mechanic table inside THIS bundle's
 // module instance (the separate meta-schema bundle has its own copy of
 // MECHANICS, so its setActive* wouldn't affect analyzeWaystoneText here).
-export { setActiveMechanics, MECHANICS, mechanicThresholdPenalty } from "./mechanics";
+export { setActiveMechanics, MECHANICS } from "./mechanics";

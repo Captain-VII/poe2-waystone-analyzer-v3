@@ -230,27 +230,6 @@ function toBoosts(mods: string[]): Partial<Record<StatKey, number>> {
   return boosts;
 }
 
-/** Small end-stage multiplier so speculative (`"low"`) tablet data can't
- *  outrank reliable (`"high"`) data purely because its `mods`/`rewards`
- *  happened to be guessed generously — applied once, after `statFit` +
- *  `rewardScore` are already combined (`adapter.ts`'s `rankTablets`), never
- *  inside either of those calculations. Deliberately gentle (-8%/-20%, not
- *  a hard filter): a `"low"`-confidence tablet that's a much better fit
- *  than the alternatives should still surface, just not win on a coin-flip
- *  margin against a `"high"`-confidence one. */
-export function getConfidenceMultiplier(confidence: TabletDef["confidence"]): number {
-  switch (confidence) {
-    case "high":
-      return 1.0;
-    case "medium":
-      return 0.92;
-    case "low":
-      return 0.8;
-    default:
-      return 0.92;
-  }
-}
-
 function hydrate(raw: RawTabletDef): TabletDef {
   return {
     ...raw,

@@ -92,28 +92,15 @@ export interface Tablet {
    *  numeric, for the row's score figure and bar width (`fit / 100`).
    *  Computed in adapter.ts (rankTablets), never in the overlay. */
   fit: number;
-  /** One-line "why this pairs with the map" note (e.g. "Pack size +
-   *  Monster eff. = Breach loot"), derived adapter-side from the tablet
-   *  mechanic's synergy stats. Only set on the top-ranked tablet; the
-   *  overlay renders it as the list's footer line and hides the footer
-   *  when absent. */
-  synergy?: string;
   /** Individual reward line items (rewards.ts), already resolved to a
    *  display label + the exact number that contributed to this tablet's
    *  fit score. Omitted/empty when the tablet declares no `rewards` — the
    *  overlay only renders a rewards line when this is non-empty. */
   rewards?: { label: string; value: number }[];
-  /** "Why this score" decomposition — additive contributions only
-   *  (statFit + reward + synergy ≈ `fit` before the final confidence/tier
-   *  multiplier), never the multiplier itself: a `×0.8` scaling factor
-   *  isn't a point contribution, and listing it as one would misrepresent
-   *  the math. A multiplier below 1 instead adds a trailing qualitative
-   *  row with `value` omitted — `label` carries the full note (e.g.
-   *  "Confiance moyenne ×0.92") and the overlay renders it without a
-   *  number. Rows with a zero/absent source (no reward, no synergy) are
-   *  omitted entirely, same convention as `rewards` above. Computed in
-   *  adapter.ts (rankTablets) from values it already calculates but used
-   *  to discard. */
+  /** "Why this score" decomposition — additive contributions only (stat fit
+   *  + reward = `fit`, clamped). Rows with a zero/absent source (no reward)
+   *  are omitted entirely, same convention as `rewards` above. Computed in
+   *  adapter.ts (rankTablets). */
   breakdown?: { label: string; value?: number }[];
 }
 

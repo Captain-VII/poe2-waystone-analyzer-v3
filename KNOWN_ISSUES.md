@@ -445,6 +445,74 @@ from their browser**. Changes made in `mechanics.ts`:
   overturn a 3-source consensus on its own — logged for whoever revisits
   this with more data, nothing changed.
 
+**Update (2026-07-10) — Abyss reverted to `monsterRarity` priority
+(sourced, 2 vs. 1), and tablet ranking recentred on the waystone's own
+stats instead of the tablet's own roll:** user report — a real T15
+waystone ("Rotting Course": Monster Rarity +62%, Pack Size +9%) showed
+Abyss Tablet fitting at only 35/100, which read as incoherent next to
+such a high Monster Rarity roll. Root-caused with the probe-script
+pattern (§ above): `rankTablets` scored a tablet against **its own**
+10-25% boost roll (`tablet.boosts`, `TABLET_ROLL_CAP`), not the
+waystone's stats — the waystone only leaked in via a small, capped
+(`computeSynergyBonus`, max +10, further tapered) bonus. Abyss Tablet's
+own roll is `"15% increased Rarity of Monsters"` (written for the
+*pre*-07-10 monsterRarity-priority Abyss), so once Abyss's priority stat
+flipped to `packSize` earlier the same day (see the Fubgun recalibration
+above), the tablet's own roll no longer matched its mechanic's new
+priority at all — statFit = 22 (12 from the monsterRarity secondary +
+10 pin bonus), Pack Size contributing 0 since the tablet never rolls it.
+
+**Two changes, from a real conversation, not a guess:**
+1. **Abyss reverted**: two more independent sources found while
+   debugging — Mobalytics "Abyss Juicing Tablet Tier List" (Perra):
+   *"Pack Size is considered bait... Rare Monster Modifier along with
+   the Rarity of Items modifiers are most important"*; Switchblade
+   Gaming's Abyss waystone-rolling priority: *"rare monster count → item
+   quantity → monster effectiveness"* (pack size/monster rarity assigned
+   to *other* mechanics there). 2 sources against Fubgun's 1, and both
+   converge with the Abyss Tablet's own real roll. `Abyss.priorityStat`
+   is `monsterRarity` again, secondaries `[itemRarity, quantity]`.
+2. **Tablet fit recentred on the waystone (user decision, explicit
+   scope: "les 3" pain points — numbers that never stop moving, a
+   formula too layered to reason about, and no stable ground truth)**:
+   `rankTablets` (`adapter.ts`) no longer scores a tablet against its own
+   roll at all. It now reuses `scoreMechanicFitRaw(stats, mech, ...)` —
+   the exact same formula/caps `computeMechanicScores` (the Mechanic
+   Match Score) already uses — so there is only one "does this waystone
+   suit this mechanic" calculation in the app, applied once per mechanic
+   and once per tablet (via its resolved mechanic). Removed as part of
+   the same "coupe large" simplification pass, all previously unvalidated
+   against real data: `confidenceMult` (×0.92/×0.8 by `tablet.confidence`,
+   `getConfidenceMultiplier`), the primary/secondary-mechanic tier
+   multiplier (×0.8, `PRIMARY_MECHANIC_TAGS`), `computeSynergyBonus`/
+   `MECHANIC_SYNERGY`/`buildSynergyLine` (mathematically redundant now
+   that the base fit already IS the waystone-stat signal), and the
+   `minThresholds`/`mechanicThresholdPenalty` scaffold added earlier the
+   same day (still inert, never sourced — cut rather than left dormant).
+   Kept: the curated `recommendedTablets` pin (+10, still meta.json-
+   editable) and `rewardScore` (rewards.ts, real mechanic-specific
+   currency) — both additive on top of the waystone fit. `Tablet.breakdown`
+   simplified from up to 5 conditional rows to 2 (`Stat fit`, `Reward`).
+   `TABLET_ROLL_CAP` removed (no remaining consumer).
+
+   Verified against the real "Rotting Course" waystone: Abyss Tablet's
+   fit went from 35 (Stat fit 22, Pack Size-starved) to **72** (Stat fit
+   59, driven by Monster Rarity — now the top-ranked tablet), and the
+   Mechanic Match Score's Abyss entry moved from mid-pack to top (49).
+   `verify-adapter.mjs` pins the new formula directly (a tablet's fit
+   must track the waystone's own stats, not a fixed roll) plus the
+   specific reported case (high Monster Rarity + low Pack Size still
+   gives Abyss Tablet a strong fit).
+
+**Heat Breakdown's composite score temporarily hidden (Full mode only,
+`RelicPanel.ts`'s `HEAT_SCORE_VISIBLE = false`)**: same conversation —
+the user found the Heat Breakdown column's Total Heat number/rating
+misleading mid-rework and asked it not be *displayed* for now, without
+removing any code. The per-stat % rows (Item Rarity/Monster Rarity/etc.)
+are unaffected — those just mirror the item's own tooltip. A single
+flag flip (`true`) restores it once the rework has been validated
+against more real waystones in actual gameplay.
+
 ## 4. ~~Mechanic-presence detection is a simple keyword match~~ (resolved 2026-07-08)
 
 "Mecanique naturelle presente sur la map" (§2/§8/§9) is detected by a regex

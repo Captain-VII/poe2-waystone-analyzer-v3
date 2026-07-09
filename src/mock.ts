@@ -12,7 +12,6 @@ const TABLETS: AnalysisResult["tablets"] = [
     reason: "Matches Breach (82/100)",
     rating: "S",
     fit: 82,
-    synergy: "Pack size + Monster eff. = Breach loot",
     rewards: [
       { label: "Breach", value: 7 },
       { label: "Breach Splinter", value: 9 },

@@ -31,22 +31,6 @@ export interface MechanicDef {
    *  this field), so the bundled wording always applies regardless of
    *  user config. */
   detect?: RegExp;
-  /** Real-world "this mechanic barely functions below X" breakpoints (e.g.
-   *  a hypothetical "Abyss needs at least 20% Pack Size to spawn well") —
-   *  keyed by the SAME real % scale the stat is parsed at (mod-parser.ts),
-   *  not a normalized 0-1 fraction. Deliberately unset on every mechanic
-   *  below: research this session (web search + Fubgun's own strat text,
-   *  2026-07-10) found zero credible sourced numeric thresholds for any
-   *  PoE2 mechanic — every guide is qualitative ("more density is better")
-   *  with no cutoff value. This field exists so a real one can be added
-   *  the moment it's sourced (a real waystone/gameplay observation, or a
-   *  future guide), without another scoring-architecture change — see
-   *  `mechanicThresholdPenalty` for how it would be applied, and
-   *  KNOWN_ISSUES.md for the research trail. Only meaningful against a
-   *  WAYSTONE's own stat profile (`computeMechanicScores`) — never applied
-   *  to a tablet's own small boost roll (`rankTablets`), which isn't the
-   *  thing a "does this mechanic function here" threshold is about. */
-  minThresholds?: Partial<Record<StatKey, number>>;
 }
 
 // Per-stat cap used to normalize a raw stat value into a 0-1 "how strong
@@ -77,6 +61,12 @@ export interface MechanicDef {
 // but this time NORMALIZE_CAP has the stronger, fresher sourcing. Flagged,
 // not silently reintroduced — see KNOWN_ISSUES #3.
 //
+// The single NORMALIZE_CAP set is now also used for tablet fit
+// (`adapter.ts`'s `rankTablets`, 2026-07-10 rework): tablets are scored
+// against the WAYSTONE's own stats, not a tablet's own small boost roll
+// (the old TABLET_ROLL_CAP + tablet.boosts approach — removed, see
+// KNOWN_ISSUES.md), so there is only ever one scale to keep sourced.
+//
 // waystoneDropChance (2026-07-10): same bug, same session — those same 7
 // real waystones show Drop Chance from 80% up to 140%, already exceeding
 // the old cap of 100 (and even scoring.ts's own DROP_CHANCE_REFERENCE=120).
@@ -99,29 +89,12 @@ export const NORMALIZE_CAP: Record<StatKey, number> = {
   // contributed ~14.5% of the normalized signal — confirms and quantifies
   // KNOWN_ISSUES #3's standing suspicion that this suppressed
   // quantity-driven mechanic fits (Expedition's priority stat). 35 leaves
-  // headroom above the confirmed real max, same margin TABLET_ROLL_CAP.
-  // quantity=25 already uses over its own ~25% real ceiling.
+  // headroom above the confirmed real max.
   quantity: 35,
 };
 
-// Same idea, sized for a single TABLET roll: a tablet carries one shared-
-// prefix mod of 10-25% (tablets.ts research pass), so judging it against
-// the waystone-total scale above made even a perfect tablet score ~8/100
-// on statFit — the whole 0-100 fit scale was dead above ~43 and every
-// tablet displayed C/D forever (user report 2026-07-06). 25 ≈ a top roll
-// of the shared prefix pool; waystoneDropChance 12 because Overseer's real
-// roll is 5-10%. Passed by adapter.ts's rankTablets as the `caps` override.
-export const TABLET_ROLL_CAP: Record<StatKey, number> = {
-  itemRarity: 25,
-  monsterRarity: 25,
-  packSize: 25,
-  monsterEffectiveness: 25,
-  waystoneDropChance: 12,
-  quantity: 25,
-};
-
-/** Crosses any stat profile (a waystone's parsed mods, or a tablet's parsed
- *  boosts) against a mechanic's priority/secondary stats: priority weighted
+/** Crosses a waystone's parsed stat profile against a mechanic's
+ *  priority/secondary stats: priority weighted
  *  0.6, up to two secondary stats at 0.2 each, scaled to 0-100. `extraBonus`
  *  folds in anything additive-and-clamped (mechanic "naturally present on
  *  the map" detection, or a tablet-name pin) without duplicating the
@@ -133,13 +106,8 @@ export const TABLET_ROLL_CAP: Record<StatKey, number> = {
  *  adapter.ts's computeMechanicScores/rankTablets), not the rounded
  *  `scoreMechanicFit` below, or ties silently fall back to array
  *  declaration order instead of reflecting the actual stat profile. */
-export function scoreMechanicFitRaw(
-  profile: Partial<Record<StatKey, number>>,
-  mech: MechanicDef,
-  extraBonus = 0,
-  caps: Record<StatKey, number> = NORMALIZE_CAP,
-): number {
-  const normalized = (key: StatKey) => Math.min(1, (profile[key] ?? 0) / caps[key]);
+export function scoreMechanicFitRaw(profile: Partial<Record<StatKey, number>>, mech: MechanicDef, extraBonus = 0): number {
+  const normalized = (key: StatKey) => Math.min(1, (profile[key] ?? 0) / NORMALIZE_CAP[key]);
   let score = 0.6 * normalized(mech.priorityStat);
   for (const sec of mech.secondaryStats.slice(0, 2)) score += 0.2 * normalized(sec);
   score = score * 100 + extraBonus;
@@ -148,37 +116,8 @@ export function scoreMechanicFitRaw(
 
 /** Display/contract version of `scoreMechanicFitRaw` — rounded to a whole
  *  0-100 number, same as every other user-facing score in this app. */
-export function scoreMechanicFit(
-  profile: Partial<Record<StatKey, number>>,
-  mech: MechanicDef,
-  extraBonus = 0,
-  caps: Record<StatKey, number> = NORMALIZE_CAP,
-): number {
-  return Math.round(scoreMechanicFitRaw(profile, mech, extraBonus, caps));
-}
-
-/** 0-1 multiplier from `mech.minThresholds` — 1 (no-op) whenever a mechanic
- *  has no thresholds set, or every thresholded stat already clears its own
- *  bar. A stat below its threshold ramps the multiplier down LINEARLY from
- *  1 (at the threshold) to 0 (at zero) rather than a hard cliff — same
- *  "smooth, no hard cutoff" principle `rankTablets`' synergy taper already
- *  uses, so a map that's just barely under a bar isn't punished as hard as
- *  one with none of the stat at all. Multiple thresholded stats compound
- *  multiplicatively (each below-bar stat drags the score down further, not
- *  just the worst one) — deliberately strict: a mechanic needing several
- *  conditions should be penalized for missing more than one, not capped at
- *  a single penalty. Currently always 1 in practice: no bundled mechanic
- *  sets `minThresholds` yet (see that field's doc comment) — exercised only
- *  by verify-adapter.mjs's synthetic-mechanic tests until real data lands. */
-export function mechanicThresholdPenalty(profile: Partial<Record<StatKey, number>>, mech: MechanicDef): number {
-  if (!mech.minThresholds) return 1;
-  let penalty = 1;
-  for (const [key, threshold] of Object.entries(mech.minThresholds) as [StatKey, number][]) {
-    if (threshold <= 0) continue;
-    const value = profile[key] ?? 0;
-    if (value < threshold) penalty *= Math.max(0, value / threshold);
-  }
-  return penalty;
+export function scoreMechanicFit(profile: Partial<Record<StatKey, number>>, mech: MechanicDef, extraBonus = 0): number {
+  return Math.round(scoreMechanicFitRaw(profile, mech, extraBonus));
 }
 
 // Only mechanics with a real PoE2 tablet are modeled here (2026-07-10 —
@@ -215,18 +154,24 @@ export const MECHANICS: MechanicDef[] = [
     skipIfBelow: 35,
     detect: MECHANIC_PATTERNS.expedition,
   },
-  // Fubgun 0.5 atlas strats (mobalytics, user-pasted tab text, 2026-07-10),
-  // explicit ranking repeated verbatim in BOTH of his abyss strats (Jado and
-  // Hilda): "1) pack size in map 2) monster rarity 3) rarity of items found
-  // 4) monster effectiveness (not as good in this strat because you already
-  // have so much)". Replaces the older mobalytics-tierlist/mmogah consensus
-  // (monsterRarity priority, quantity secondary). monsterEffectiveness's
-  // demotion is strat-specific (his mandatory tablet mods already stack it),
-  // so it's merely dropped here, not treated as bad.
+  // Reverted 2026-07-10 (same day, later): the 2026-07-10 packSize-priority
+  // change above (Fubgun's Jado/Hilda strats) was contradicted by two
+  // independent sources found on a real waystone bug report (Abyss Tablet
+  // scoring 35/100 despite +62% Monster Rarity): Mobalytics "Abyss Juicing
+  // Tablet Tier List" (Perra) — "Pack Size is considered bait... Rare
+  // Monster Modifier along with the Rarity of Items modifiers are most
+  // important" — and Switchblade Gaming's waystone-rolling priority for
+  // Abyss, "rare monster count → item quantity → monster effectiveness"
+  // (pack size/monster rarity explicitly assigned to other mechanics
+  // there). 2 sources against Fubgun's 1, and both converge with the
+  // Abyss Tablet's own real roll (tablets.ts: "15% increased Rarity of
+  // Monsters", written for the monsterRarity-priority model). "Rare
+  // monster count" isn't a tracked StatKey (KNOWN_ISSUES #2) — monsterRarity
+  // is the nearest tracked proxy, same convention used elsewhere.
   {
     name: "Abyss",
-    priorityStat: "packSize",
-    secondaryStats: ["monsterRarity", "itemRarity"],
+    priorityStat: "monsterRarity",
+    secondaryStats: ["itemRarity", "quantity"],
     recommendedTablets: ["Abyss Tablet", "Standard Precursor Tablet"],
     skipIfBelow: 30,
     detect: MECHANIC_PATTERNS.abyss,
