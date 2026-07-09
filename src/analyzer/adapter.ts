@@ -408,10 +408,13 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
   const recommendedMechanic = bestTabletLinked ? bestTabletLinked.mechanic : null;
 
   const ranked = rankTablets(stats, parsed.modifiers.length);
-  // 5 rows (was 4): the tablet list is now a uniform icon/verdict scan list
-  // with no per-row reason/rewards lines, so five rows cost less height
-  // than the old three did.
-  const tablets = ranked.slice(0, 5).map(({ tablet, fit, mechanic, verdict, breakdown }) => ({
+  // Every active tablet, not just a top-N slice (2026-07-10, user request:
+  // "je veux que toutes les tablettes soient présentées, de façon
+  // permanente") — the overlay decides per-mode how many rows it has room
+  // for (RelicPanel.ts: Full shows the whole list in its own scrolling
+  // column, Compact keeps a top-5 cutoff, its fixed-height card has no
+  // scroll budget for more).
+  const tablets = ranked.map(({ tablet, fit, mechanic, verdict, breakdown }) => ({
     name: tablet.name,
     delta: Math.round((sumBoosts(tablet.boosts) / 10) * 10) / 10,
     reason: `${tablet.name} matches ${mechanic} (${fit}/100)`,

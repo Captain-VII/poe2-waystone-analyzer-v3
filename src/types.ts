@@ -145,7 +145,10 @@ export interface AnalysisResult {
    *  in UI. They are REQUIRED by verify-adapter.mjs tests and part of the
    *  data contract. Do not remove without updating tests. */
   modifiers: Modifier[];
-  /** Sorted by fit desc; Compact and Full both render up to 5. */
+  /** Sorted by fit desc; every active tablet, not pre-truncated (2026-07-10)
+   *  — the overlay decides per-mode how many rows to render (Compact caps
+   *  at 5, its fixed-height card has no scroll budget; Full renders the
+   *  whole list in its own scrolling column). */
   tablets: Tablet[];
   /**
    * warning:

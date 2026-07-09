@@ -114,6 +114,11 @@ check("every mechanic score is within 0-100",
   result.mechanicScores.every((m) => m.score >= 0 && m.score <= 100));
 check("recommendedMechanic is a string or null", result.recommendedMechanic === null || typeof result.recommendedMechanic === "string");
 check("tablets have positive delta and named reasons", result.tablets.every((t) => typeof t.name === "string" && typeof t.reason === "string"));
+// 2026-07-10 (user request): the adapter no longer truncates to a top-5
+// slice — every active tablet is returned, so a real (>5-tablet) roster
+// must come back whole. The overlay is what caps Compact's rows now, not
+// the data contract (RelicPanel.ts).
+check("tablets are NOT pre-truncated to 5 (adapter returns every active tablet)", result.tablets.length > 5);
 
 // Rating + rewards + keyFactors (2026-07-04 UI-interpretability additions)
 const RATINGS = ["S", "A", "B", "C", "D"];
@@ -121,11 +126,6 @@ check("heat.rating is one of the five valid letters", RATINGS.includes(result.he
 check("every tablet has a valid rating", result.tablets.every((t) => RATINGS.includes(t.rating)));
 const TABLET_VERDICTS = ["run", "why-not", "dont-run"];
 check("every tablet has a valid verdict", result.tablets.every((t) => TABLET_VERDICTS.includes(t.verdict)));
-check("tablet verdict matches its own fit via tabletVerdict's thresholds (<30 dont-run, <55 why-not, else run)",
-  result.tablets.every((t) => {
-    const expected = t.fit < 30 ? "dont-run" : t.fit < 55 ? "why-not" : "run";
-    return t.verdict === expected;
-  }));
 check("tablet rewards, when present, are non-empty label+value pairs",
   result.tablets.every((t) => t.rewards === undefined || (t.rewards.length > 0 && t.rewards.every((r) => typeof r.label === "string" && typeof r.value === "number"))));
 
@@ -784,6 +784,15 @@ check("Abyss: quantity-only waystone does NOT feed Abyss beyond the weak-tier ba
   check("tier boundary: 49% is top, 50% is legendary",
     fitScoreOf(at(49, RARITY), "Ritual") === Math.round(TIER_SCORE.top + modCountBonus(1)) &&
     fitScoreOf(at(50, RARITY), "Ritual") === Math.round(TIER_SCORE.legendary + modCountBonus(1)));
+
+  // Tablet verdict reads the tier directly (adapter.ts's tabletVerdict),
+  // not the numeric fit — pin all 4 tiers against a real tablet (Ritual
+  // Tablet, tag "ritual" -> mechanic Ritual, priorityStat monsterRarity).
+  const verdictOf = (r, name) => r.tablets.find((t) => t.name === name)?.verdict;
+  check("tablet verdict: weak tier -> dont-run", verdictOf(at(0, RARITY), "Ritual Tablet") === "dont-run");
+  check("tablet verdict: ok tier -> why-not", verdictOf(at(20, RARITY), "Ritual Tablet") === "why-not");
+  check("tablet verdict: top tier -> run", verdictOf(at(30, RARITY), "Ritual Tablet") === "run");
+  check("tablet verdict: legendary tier -> run", verdictOf(at(60, RARITY), "Ritual Tablet") === "run");
 }
 
 // ---------------------------------------------------------------------------

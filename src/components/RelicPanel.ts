@@ -521,15 +521,17 @@ export function mountOverlay(
         </div>`;
     };
     // Top pick's footer: its breakdown, visible without a hover — the other
-    // 4 rows only get it via their own tooltip above. Always non-empty
+    // rows only get it via their own tooltip above. Always non-empty
     // (buildTabletBreakdown always includes "Stat fit"), so this footer
     // always renders for the top tablet.
     const top = result.tablets[0];
     const topBreakdown = top?.breakdown && top.breakdown.length > 0 ? esc(top.breakdown.map(formatBreakdownRow).join(" · ")) : "";
     const synergyFooter = topBreakdown ? `<div class="t-syn">${topBreakdown}</div>` : "";
-    const tabletsHtml = result.tablets.slice(0, 5).map(tabletRow).join("") + synergyFooter;
-    q("[data-tablets]").innerHTML = tabletsHtml;
-    q("[data-tablets-full]").innerHTML = tabletsHtml;
+    // Compact keeps a top-5 cutoff (fixed-height card, no scroll budget) —
+    // Full shows every active tablet (2026-07-10, user request), its
+    // column already scrolls on overflow (`.col`, full.css).
+    q("[data-tablets]").innerHTML = result.tablets.slice(0, 5).map(tabletRow).join("") + synergyFooter;
+    q("[data-tablets-full]").innerHTML = result.tablets.map(tabletRow).join("") + synergyFooter;
 
     // The column-1 label width (~104px) fits every breakdown label except
     // these two — shortened display-only (full name still on hover), same
