@@ -305,29 +305,19 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.trow .t-fit {
+/* Run/Why not/Don't run — replaces the raw fit number/bar (2026-07-10):
+   a 3-tier label reads at a glance without cross-referencing a bar length. */
+.trow .t-verdict {
   flex: none;
-  width: 22px;
   text-align: right;
-  color: var(--grey);
-  font-variant-numeric: tabular-nums;
-  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  font-size: 9.5px;
+  white-space: nowrap;
 }
-.trow .tbar {
-  flex: none;
-  width: 52px;
-  height: 5px;
-  background: var(--track);
-  border-radius: 2px;
-  overflow: hidden;
-  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.5);
-}
-.trow .tbar i {
-  display: block;
-  height: 100%;
-  background: linear-gradient(90deg, var(--gold), var(--gold-hi));
-  border-radius: 2px;
-}
+.trow .t-verdict-run { color: var(--gold-hi); }
+.trow .t-verdict-why-not { color: var(--grey); }
+.trow .t-verdict-dont-run { color: var(--danger); }
 /* Top pick stands out by name color only — rows stay uniform height. */
 .trow:first-child .t-name { color: var(--gold-hi); }
 

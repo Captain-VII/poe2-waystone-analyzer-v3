@@ -150,6 +150,16 @@ const TABLET_ICONS: Record<string, string> = {
   overseer: "👑",
 };
 
+// 2026-07-10 (user request): the row shows this label instead of the raw
+// fit number/bar — mirrors the SKIP/RUN/GARDER wording already used for
+// the waystone-level verdict. Keyed by `Tablet.verdict` (adapter.ts's
+// `tabletVerdict`); the exact number/breakdown is still one hover away.
+const TABLET_VERDICT_LABEL: Record<AnalysisResult["tablets"][number]["verdict"], string> = {
+  run: "RUN",
+  "why-not": "WHY NOT",
+  "dont-run": "DON'T RUN",
+};
+
 const CORNER_PATHS = `
   <path d="M2 23 V8 Q2 2 8 2 H23" fill="none" stroke="currentColor" stroke-width="2.2"/>
   <path d="M2 17 Q10 15 10 10 Q15 10 17 2" fill="none" stroke="currentColor" stroke-width="1" opacity=".7"/>
@@ -488,9 +498,10 @@ export function mountOverlay(
       return `${row.label}: ${prefix}${row.value}`;
     };
 
-    // One uniform scan-row per tablet: icon · NAME · fit score · fit bar
-    // (0-100 → bar width). No per-row reason/rating/rewards lines anymore —
-    // the hover title and the top pick's footer carry the "why" instead.
+    // One uniform scan-row per tablet: icon · NAME · Run/Why not/Don't run.
+    // No per-row reason/rating/rewards lines, and no raw fit number/bar
+    // (2026-07-10) — the hover title and the top pick's footer carry the
+    // exact numbers instead, the row itself reads at a glance.
     const tabletRow = (t: AnalysisResult["tablets"][number]) => {
       // Every real tablet name ends in "Tablet" (Expedition Tablet, Standard
       // Precursor Tablet, ...) — that word carries no distinguishing info in
@@ -506,8 +517,7 @@ export function mountOverlay(
         <div class="trow" title="${esc(title)}">
           <span class="t-ic">${icon}</span>
           <span class="t-name" title="${esc(t.name)}">${esc(shortName)}</span>
-          <span class="t-fit">${t.fit}</span>
-          <div class="tbar"><i style="width:${Math.min(Math.max(t.fit, 0), 100)}%"></i></div>
+          <span class="t-verdict t-verdict-${t.verdict}">${TABLET_VERDICT_LABEL[t.verdict]}</span>
         </div>`;
     };
     // Top pick's footer: its breakdown, visible without a hover — the other

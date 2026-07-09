@@ -33,6 +33,14 @@ export interface DangerHitView {
  *  `tierClass`/`verdict`). */
 export type Rating = "S" | "A" | "B" | "C" | "D";
 
+/** 3-tier plain-language read of a tablet's `fit` (0-100), replacing the raw
+ *  number/bar on the tablet row itself (2026-07-10, user request — mirrors
+ *  the existing SKIP/RUN/GARDER waystone-level verdict vocabulary at the
+ *  tablet level, since a raw fit number required cross-referencing a bar to
+ *  mean anything at a glance). Computed in adapter.ts (`tabletVerdict`); the
+ *  exact number/breakdown is still available via the row's hover title. */
+export type TabletVerdict = "run" | "why-not" | "dont-run";
+
 /** Plain-language read of a 0-100 score (src/analyzer/displayAdapter.ts's
  *  `getScoreLabel`) — declared independently here (same convention as
  *  `DangerLevel`/`TierClass`) so this file never imports analyzer
@@ -88,10 +96,14 @@ export interface Tablet {
   /** Letter view of this tablet's stat+reward fit score (0-100) against the
    *  recommended mechanic. */
   rating: Rating;
-  /** The same 0-100 stat+reward fit score `rating` is the letter view of —
-   *  numeric, for the row's score figure and bar width (`fit / 100`).
-   *  Computed in adapter.ts (rankTablets), never in the overlay. */
+  /** The same 0-100 stat+reward fit score `rating`/`verdict` are views of —
+   *  kept for sorting and the hover title's "(Y/100)" figure; no longer
+   *  rendered directly on the row itself (see `verdict`). Computed in
+   *  adapter.ts (rankTablets), never in the overlay. */
   fit: number;
+  /** 3-tier plain-language read of `fit` — what the row itself renders
+   *  now instead of the raw number/bar. See `TabletVerdict`'s doc comment. */
+  verdict: TabletVerdict;
   /** Individual reward line items (rewards.ts), already resolved to a
    *  display label + the exact number that contributed to this tablet's
    *  fit score. Omitted/empty when the tablet declares no `rewards` — the

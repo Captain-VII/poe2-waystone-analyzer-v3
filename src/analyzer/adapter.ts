@@ -24,7 +24,7 @@ import { buildDisplayData, formatPercent } from "./displayAdapter";
 import { getActiveMechanics, scoreMechanicFitRaw, type MechanicDef } from "./mechanics";
 import { getActiveTablets, type TabletDef } from "./tablets";
 import { describeReward } from "./rewards";
-import type { AnalysisResult, DangerHitView, MechanicScore, Modifier, Rating, TierClass, Verdict } from "../types";
+import type { AnalysisResult, DangerHitView, MechanicScore, Modifier, Rating, TabletVerdict, TierClass, Verdict } from "../types";
 import type { ModStats } from "./mod-parser";
 
 // Juiciness levels (§6): score → tierClass (internal id) band.
@@ -132,6 +132,21 @@ function classifyVerdict(score: number, tier: number): Verdict {
   if (score < DEFAULT_THRESHOLD) return "SKIP";
   if (score >= 50 && tier >= 3) return "GARDER";
   return "RUN";
+}
+
+// 2026-07-10 (user request): the tablet row no longer shows its raw fit
+// number/bar — a 3-tier "Run/Why not/Don't run" verdict reads faster at a
+// glance, mirroring the SKIP/RUN/GARDER vocabulary already used for the
+// waystone-level verdict above. Own thresholds, not classifyVerdict's (30/
+// 50+tier) — the two scales measure different things (a tablet's own
+// waystone-fit vs. the whole map's loot potential) and a tablet has no
+// "tier" to gate on. Boundaries are a display-bucketing choice, same kind
+// of judgment call as `scoreToRating`'s 20/40/60/80 bands above, not a
+// sourced game-mechanic claim.
+function tabletVerdict(fit: number): TabletVerdict {
+  if (fit < 30) return "dont-run";
+  if (fit < 55) return "why-not";
+  return "run";
 }
 
 const FIELD_LABELS: Record<keyof Weights, string> = {
@@ -391,15 +406,16 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
   const recommendedMechanic = bestTabletLinked ? bestTabletLinked.mechanic : null;
 
   const ranked = rankTablets(stats, parsed.modifiers.length);
-  // 5 rows (was 4): the tablet list is now a uniform icon/score/bar scan
-  // list with no per-row reason/rewards lines, so five rows cost less
-  // height than the old three did.
+  // 5 rows (was 4): the tablet list is now a uniform icon/verdict scan list
+  // with no per-row reason/rewards lines, so five rows cost less height
+  // than the old three did.
   const tablets = ranked.slice(0, 5).map(({ tablet, fit, mechanic, breakdown }) => ({
     name: tablet.name,
     delta: Math.round((sumBoosts(tablet.boosts) / 10) * 10) / 10,
     reason: `${tablet.name} matches ${mechanic} (${fit}/100)`,
     rating: scoreToRating(fit),
     fit,
+    verdict: tabletVerdict(fit),
     rewards: tablet.rewards && tablet.rewards.length > 0 ? tablet.rewards.map(describeReward) : undefined,
     breakdown,
   }));

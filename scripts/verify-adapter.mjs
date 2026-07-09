@@ -117,6 +117,13 @@ check("tablets have positive delta and named reasons", result.tablets.every((t) 
 const RATINGS = ["S", "A", "B", "C", "D"];
 check("heat.rating is one of the five valid letters", RATINGS.includes(result.heat.rating));
 check("every tablet has a valid rating", result.tablets.every((t) => RATINGS.includes(t.rating)));
+const TABLET_VERDICTS = ["run", "why-not", "dont-run"];
+check("every tablet has a valid verdict", result.tablets.every((t) => TABLET_VERDICTS.includes(t.verdict)));
+check("tablet verdict matches its own fit via tabletVerdict's thresholds (<30 dont-run, <55 why-not, else run)",
+  result.tablets.every((t) => {
+    const expected = t.fit < 30 ? "dont-run" : t.fit < 55 ? "why-not" : "run";
+    return t.verdict === expected;
+  }));
 check("tablet rewards, when present, are non-empty label+value pairs",
   result.tablets.every((t) => t.rewards === undefined || (t.rewards.length > 0 && t.rewards.every((r) => typeof r.label === "string" && typeof r.value === "number"))));
 
