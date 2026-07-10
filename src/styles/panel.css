@@ -586,6 +586,18 @@
 .set-hotkey-msg[hidden] { display: none; }
 .set-hotkey-msg.err { color: var(--danger); }
 
+/* Update-row feedback ("À jour" / "Téléchargement… NN %" / error) — same
+   squeezed-between-label-and-button behavior as the hotkey message. */
+.set-update-msg {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.set-update-msg[hidden] { display: none; }
+.set-update-msg.err { color: var(--danger); }
+
 .set-slider {
   width: 100%;
   accent-color: var(--gold-hi);

@@ -33,7 +33,8 @@ import { readClipboardText } from "./clipboard";
 import { analyzeWaystoneText } from "./analyzer/adapter";
 import { loadMetaConfig, readRawMetaFile, saveMetaFile, resetMetaFile } from "./analyzer/meta-config";
 import { buildEditorModel, buildMetaFile, type MechanicEdit, type MetaEditorModel } from "./analyzer/meta-schema";
-import { notifyLegendaryWaystone } from "./notify";
+import { notifyLegendaryWaystone, notifyUpdateAvailable } from "./notify";
+import { checkForUpdate, installUpdate } from "./updater";
 import type { AnalysisResult, TierClass } from "./types";
 
 let tier: TierClass = "god";
@@ -155,6 +156,8 @@ const overlay = mountOverlay(document.getElementById("app")!, MOCK_RESULTS[tier]
   onComparePin: toggleComparePin,
   onCompareRemove: removeCompareEntry,
   onSetAutostart: "__TAURI_INTERNALS__" in window ? setAutostartEnabled : undefined,
+  onCheckUpdate: "__TAURI_INTERNALS__" in window ? checkForUpdate : undefined,
+  onInstallUpdate: "__TAURI_INTERNALS__" in window ? installUpdate : undefined,
   onDragStart: "__TAURI_INTERNALS__" in window ? startWindowDrag : undefined,
   onResetPosition: resetPosition,
   onResetStats: resetSessionStats,
@@ -343,6 +346,19 @@ async function init(): Promise<void> {
   // focus at this moment (often a dev terminal, not the game) would receive
   // the keystroke instead of the overlay, which for a console means SIGINT.
   analyze(false);
+  // Fire-and-forget: version display + silent update check. Never blocks
+  // startup, never installs anything — a found update only arms the
+  // Settings row and fires one toast; installing stays a user click.
+  void (async () => {
+    if (!("__TAURI_INTERNALS__" in window)) return;
+    const { getVersion } = await import("@tauri-apps/api/app");
+    overlay.setAppVersion(await getVersion());
+    const info = await checkForUpdate();
+    if (info) {
+      overlay.setUpdateAvailable(info.version);
+      await notifyUpdateAvailable(info.version);
+    }
+  })();
 }
 
 init();

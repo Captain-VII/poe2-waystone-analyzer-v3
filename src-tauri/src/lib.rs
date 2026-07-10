@@ -525,6 +525,8 @@ pub fn run() {
         // MacosLauncher::LaunchAgent is ignored on Windows (this app's only
         // real target) but required at compile time by the plugin's API.
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(InteractiveRects(Mutex::new(Vec::new())))
         .invoke_handler(tauri::generate_handler![
             set_interactive_rects,

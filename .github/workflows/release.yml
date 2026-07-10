@@ -1,0 +1,68 @@
+# Tag-triggered release pipeline: push a `vX.Y.Z[-suffix]` tag and this
+# builds the signed NSIS installer, publishes the GitHub release (pre-release
+# when the version has a `-suffix`), and refreshes the rolling `updater`
+# release's latest.json — the fixed endpoint every installed app polls.
+# That rolling release exists because GitHub's /releases/latest ignores
+# pre-releases, which is all a beta program ever publishes.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      # A tag that doesn't match the manifests would ship an installer whose
+      # embedded version disagrees with its release page — and the updater
+      # feed compares versions, so the mismatch would confuse every install.
+      - name: Guard - tag matches manifests
+        shell: bash
+        run: |
+          PKG=$(node -p "require('./package.json').version")
+          CONF=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          [ "v$PKG" = "$GITHUB_REF_NAME" ] && [ "$PKG" = "$CONF" ] || {
+            echo "Tag $GITHUB_REF_NAME vs package.json $PKG vs tauri.conf.json $CONF mismatch"; exit 1; }
+      - run: npm ci
+      # Re-run the cheap checks here rather than depending on ci.yml —
+      # `needs:` can't cross workflow files, and a release must never ship
+      # from a commit whose checks were red.
+      - run: npm run test
+      - run: npm run verify-adapter
+      - run: cargo test
+        working-directory: src-tauri
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: ${{ github.ref_name }}
+          releaseDraft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          includeUpdaterJson: true
+          updaterJsonPreferNsis: true
+      - name: Refresh rolling updater feed
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "$GITHUB_REF_NAME" --pattern latest.json --dir "$RUNNER_TEMP"
+          gh release view updater >/dev/null 2>&1 || gh release create updater --prerelease \
+            --title "Updater feed (ne pas installer depuis ici)" \
+            --notes "Flux latest.json consommé par la mise à jour automatique intégrée. Installez l'application depuis les releases versionnées."
+          gh release upload updater "$RUNNER_TEMP/latest.json" --clobber

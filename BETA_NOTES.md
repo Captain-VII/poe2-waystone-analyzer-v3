@@ -1,7 +1,16 @@
-# Beta notes — v0.2.0-beta.1
+# Beta notes — v0.2.0-beta.2
 
 Thanks for testing. This is a restricted beta, not a public release — please
 don't redistribute the installer further without asking first.
+
+## Updating from v0.2.0-beta.1: one manual reinstall
+
+Starting with v0.2.0-beta.2 the app updates itself: it checks GitHub at
+startup, shows a notification when a newer version exists, and installs it
+when you click the button in Settings (never automatically). **But
+v0.2.0-beta.1 was built without this mechanism** — if you're on beta.1,
+download and run the beta.2 installer manually one last time. Every update
+after that is automatic.
 
 ## What to expect
 

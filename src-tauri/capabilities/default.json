@@ -16,6 +16,8 @@
     "clipboard-manager:allow-write-text",
     "notification:default",
     "autostart:default",
+    "updater:default",
+    "process:allow-restart",
     {
       "identifier": "fs:allow-read-text-file",
       "allow": [{ "path": "$APPCONFIG/meta.json" }]

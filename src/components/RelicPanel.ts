@@ -51,6 +51,13 @@ export interface OverlayOptions {
    *  "on" it didn't actually achieve. Omitted = unavailable (plain-browser
    *  dev), same convention as onSetHotkey. */
   onSetAutostart?(enabled: boolean): Promise<void>;
+  /** Update check/install (updater.ts). Check never throws (null = up to
+   *  date, or unavailable, or the check itself failed — deliberately
+   *  indistinguishable); install rejects on failure so the row can show
+   *  the error and restore the install button. Omitted = unavailable
+   *  (plain-browser dev), same convention as onSetAutostart. */
+  onCheckUpdate?(): Promise<{ version: string } | null>;
+  onInstallUpdate?(onProgress: (pct: number | null) => void): Promise<void>;
   /** Drag-to-reposition (placement.ts's startWindowDrag) — fired
    *  synchronously from the header's mousedown, see that function's doc
    *  for why. Omitted = unavailable (plain-browser dev). */
@@ -103,6 +110,13 @@ export interface OverlayHandle {
    *  called once at startup after the async `isEnabled()` check resolves
    *  (main.ts's init()). */
   setAutostartChecked(enabled: boolean): void;
+  /** Renders the app version in Settings — called once at startup
+   *  (getVersion() is async, the row shows "—" until then). */
+  setAppVersion(version: string): void;
+  /** Flips the update row to "Installer vX.Y.Z" — called when the silent
+   *  startup check (main.ts) finds a newer version, so the row is already
+   *  actionable when the user opens Settings after the toast. */
+  setUpdateAvailable(version: string): void;
   /** Renders the session-stats rows in Settings (count / average / best).
    *  Called at startup with the persisted stats, after every applied
    *  analysis, and after a reset. */
@@ -316,6 +330,15 @@ export function mountOverlay(
                 <span class="set-lab">Position</span>
                 <button class="set-btn" data-set-reset-position type="button">Réinitialiser</button>
               </div>
+              <div class="set-row">
+                <span class="set-lab">Version</span>
+                <span class="set-val" data-app-version>—</span>
+              </div>
+              <div class="set-row" title="Vérifie sur GitHub ; l'installation ne démarre que sur clic — jamais automatiquement">
+                <span class="set-lab">Mise à jour</span>
+                <span class="set-val set-update-msg" data-update-msg hidden></span>
+                <button class="set-btn" data-update-btn type="button">Vérifier</button>
+              </div>
               <div class="set-sep"></div>
               <div class="sec-h" title="Depuis le dernier Réinitialiser — chaque waystone compte une fois (la re-analyser met à jour son score)">Session</div>
               <div class="set-row">
@@ -409,6 +432,9 @@ export function mountOverlay(
   const setScaleVal = q("[data-set-scale-val]");
   const setHideBtn = q("[data-set-hide]");
   const setResetPositionBtn = q("[data-set-reset-position]");
+  const appVersionEl = q("[data-app-version]");
+  const updateBtn = q("[data-update-btn]") as HTMLButtonElement;
+  const updateMsg = q("[data-update-msg]");
   const statCountEl = q("[data-stat-count]");
   const statAvgEl = q("[data-stat-avg]");
   const statBestEl = q("[data-stat-best]");
@@ -1113,6 +1139,30 @@ export function mountOverlay(
     setAutostartInput.checked = enabled;
   }
 
+  function setAppVersion(version: string): void {
+    appVersionEl.textContent = `v${version}`;
+  }
+
+  // Version found by the last check (startup or manual) — while set, the
+  // button installs instead of re-checking.
+  let updateVersion: string | null = null;
+  let updateMsgTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function showUpdateMsg(text: string, isError: boolean, transient: boolean): void {
+    updateMsg.textContent = text;
+    updateMsg.classList.toggle("err", isError);
+    updateMsg.hidden = false;
+    clearTimeout(updateMsgTimer);
+    if (transient) updateMsgTimer = setTimeout(() => (updateMsg.hidden = true), 4000);
+  }
+
+  function setUpdateAvailable(version: string): void {
+    updateVersion = version;
+    updateMsg.hidden = true;
+    updateBtn.textContent = `Installer v${version}`;
+    updateBtn.disabled = false;
+  }
+
   function setSessionStats(view: SessionStatsView): void {
     statCountEl.textContent = String(view.count);
     statAvgEl.textContent = view.avg === null ? "—" : view.avg.toFixed(1);
@@ -1282,6 +1332,41 @@ export function mountOverlay(
   });
   setHideBtn.addEventListener("click", opts.onHide);
   setResetPositionBtn.addEventListener("click", () => opts.onResetPosition?.());
+  if (opts.onCheckUpdate && opts.onInstallUpdate) {
+    const { onCheckUpdate, onInstallUpdate } = opts;
+    updateBtn.addEventListener("click", () => {
+      if (updateVersion) {
+        // Install path — explicit user click, the only place an install
+        // ever starts (in-game overlay: never auto-install).
+        const version = updateVersion;
+        updateBtn.disabled = true;
+        showUpdateMsg("Téléchargement…", false, false);
+        onInstallUpdate((pct) => {
+          showUpdateMsg(pct === null ? "Téléchargement…" : `Téléchargement… ${pct} %`, false, false);
+        }).catch(() => {
+          // The pending update is still valid — restore the install button.
+          showUpdateMsg("Échec de la mise à jour", true, true);
+          setUpdateAvailable(version);
+        });
+        // Success needs no handler: the passive NSIS updater relaunches
+        // the app, this whole DOM is torn down mid-install.
+      } else {
+        updateBtn.disabled = true;
+        updateBtn.textContent = "Vérification…";
+        void onCheckUpdate().then((info) => {
+          if (info) {
+            setUpdateAvailable(info.version);
+          } else {
+            updateBtn.textContent = "Vérifier";
+            updateBtn.disabled = false;
+            showUpdateMsg("À jour", false, true);
+          }
+        });
+      }
+    });
+  } else {
+    updateBtn.disabled = true; // plain-browser dev: display-only
+  }
   statResetBtn.addEventListener("click", () => opts.onResetStats?.());
   if (opts.metaEditor) {
     // The four dropdown buttons wire themselves in makeDropdown — only the
@@ -1349,6 +1434,8 @@ export function mountOverlay(
     closeCompare,
     setHotkeyLabel,
     setAutostartChecked,
+    setAppVersion,
+    setUpdateAvailable,
     setSessionStats,
     panelEl: panel,
     interactiveEls,
