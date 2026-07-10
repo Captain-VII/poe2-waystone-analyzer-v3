@@ -127,6 +127,21 @@
   font-weight: 700;
 }
 
+/* Rows are only clickable here (Full — see the click delegation on
+   tabletsFullEl in RelicPanel.ts) — Compact's identical-looking list is
+   hover-only, so this indicator is deliberately scoped to Full alone. */
+.body-full [data-tablets-full] .trow {
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background-color 0.12s ease;
+}
+.body-full [data-tablets-full] .trow:hover {
+  background: rgba(184, 135, 53, 0.14);
+}
+.body-full [data-tablets-full] .trow:hover .t-name {
+  color: var(--gold-hi);
+}
+
 /* Tablet-row click → scoped one-mechanic meta editor (RelicPanel.ts's
    openTabletPopup). Appended directly to .panel (not .bodies), so it isn't
    subject to the mode/Settings/Compare cross-fade — closed explicitly
@@ -154,6 +169,7 @@
   gap: 8px;
   padding-bottom: 4px;
   border-bottom: 1px solid rgba(184, 135, 53, 0.25);
+  cursor: move; /* draggable — RelicPanel.ts's onHeadMousedown */
 }
 .tmp-title {
   font-size: 11px;

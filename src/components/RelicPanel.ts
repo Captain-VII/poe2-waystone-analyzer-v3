@@ -1017,25 +1017,48 @@ export function mountOverlay(
     renderPopupFields();
     tabletPopupRenderFields = renderPopupFields;
 
-    // Anchored beside the tablets column, not below the clicked row inside
-    // it — a popup placed directly under the row would sit on top of every
-    // row beneath it (the list is dense, ~9 rows tall), blocking clicks on
-    // any other tablet until it's closed. Floating it to the right (over
-    // the Heat Breakdown/Insights columns instead) keeps the rest of the
-    // list clickable while it's open. Vertically aligned near the clicked
-    // row, clamped inside `panel` — same clamping idea as makeDropdown's
-    // open(), just against `panel` since this popup isn't Settings-owned.
+    // Centered in the panel (not anchored to the clicked row) — the row it
+    // came from is no longer relevant to where it sits, and centering keeps
+    // it clear of the tablet list on every panel size. The `.tmp-head` drag
+    // handle below lets the user move it off-center if it's in the way of
+    // something else; it re-centers again on the next open (no persisted
+    // position, matching the transient nature of this popup).
     const panelRect = panel.getBoundingClientRect();
-    const colRect = colTablets.getBoundingClientRect();
-    const rowRect = anchorRow.getBoundingClientRect();
     const width = 200;
     el.style.width = `${width}px`;
     const height = el.offsetHeight;
-    const left = Math.min(colRect.right - panelRect.left + 8, panelRect.width - width - 6);
-    let top = rowRect.top - panelRect.top;
-    top = Math.min(Math.max(6, top), panelRect.height - height - 6);
-    el.style.top = `${top}px`;
-    el.style.left = `${left}px`;
+    el.style.left = `${Math.max(6, (panelRect.width - width) / 2)}px`;
+    el.style.top = `${Math.max(6, (panelRect.height - height) / 2)}px`;
+
+    // Drag by the header (title/empty space, not the close button) — a
+    // plain DOM reposition clamped inside `panel`, no OS window move
+    // involved (unlike the overlay's own opts.onDragStart drag).
+    const head = el.querySelector(".tmp-head") as HTMLElement;
+    let stopDrag: (() => void) | null = null;
+    const onHeadMousedown = (ev: MouseEvent): void => {
+      if ((ev.target as HTMLElement).closest("button")) return; // let the close button handle its own click
+      ev.preventDefault();
+      const startX = ev.clientX;
+      const startY = ev.clientY;
+      const startLeft = el.offsetLeft;
+      const startTop = el.offsetTop;
+      const onMove = (mv: MouseEvent): void => {
+        const bounds = panel.getBoundingClientRect();
+        const left = Math.min(Math.max(6, startLeft + (mv.clientX - startX)), bounds.width - el.offsetWidth - 6);
+        const top = Math.min(Math.max(6, startTop + (mv.clientY - startY)), bounds.height - el.offsetHeight - 6);
+        el.style.left = `${left}px`;
+        el.style.top = `${top}px`;
+      };
+      const onUp = (): void => {
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+        stopDrag = null;
+      };
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
+      stopDrag = onUp;
+    };
+    head.addEventListener("mousedown", onHeadMousedown);
 
     const onDocMousedown = (ev: MouseEvent): void => {
       if (ev.target instanceof Node && (el.contains(ev.target) || anchorRow.contains(ev.target))) return;
@@ -1046,17 +1069,16 @@ export function mountOverlay(
       ev.stopPropagation(); // must NOT reach hotkeys.ts's Escape-hides-overlay listener
       closeTabletPopup();
     };
-    const onScroll = (): void => closeTabletPopup(); // colTablets scrolled — the anchor position is stale
     document.addEventListener("mousedown", onDocMousedown, true);
     window.addEventListener("keydown", onEscape, true);
-    colTablets.addEventListener("scroll", onScroll);
     closeBtn.addEventListener("click", () => closeTabletPopup());
     skipInput.addEventListener("input", () => (skipVal.textContent = skipInput.value));
     skipInput.addEventListener("change", collectPopupEdit);
     tabletPopupCleanup = () => {
+      stopDrag?.();
+      head.removeEventListener("mousedown", onHeadMousedown);
       document.removeEventListener("mousedown", onDocMousedown, true);
       window.removeEventListener("keydown", onEscape, true);
-      colTablets.removeEventListener("scroll", onScroll);
       tabletPopupRenderFields = null;
     };
 
