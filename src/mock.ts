@@ -13,15 +13,16 @@ const TABLETS: AnalysisResult["tablets"] = [
     rating: "S",
     fit: 82,
     verdict: "run",
+    mechanic: "Breach",
     rewards: [
       { label: "Breach", value: 7 },
       { label: "Breach Splinter", value: 9 },
     ],
   },
-  { name: "Ritual Tablet", delta: 1.5, reason: "Matches Breach (74/100)", rating: "A", fit: 74, verdict: "run" },
-  { name: "Delirium Tablet", delta: 2.0, reason: "Matches Breach (61/100)", rating: "A", fit: 61, verdict: "run" },
-  { name: "Abyss Tablet", delta: 1.5, reason: "Matches Breach (48/100)", rating: "B", fit: 48, verdict: "why-not" },
-  { name: "Overseer Precursor Tablet", delta: 2.8, reason: "Matches Breach (30/100)", rating: "C", fit: 30, verdict: "why-not" },
+  { name: "Ritual Tablet", delta: 1.5, reason: "Matches Breach (74/100)", rating: "A", fit: 74, verdict: "run", mechanic: "Breach" },
+  { name: "Delirium Tablet", delta: 2.0, reason: "Matches Breach (61/100)", rating: "A", fit: 61, verdict: "run", mechanic: "Breach" },
+  { name: "Abyss Tablet", delta: 1.5, reason: "Matches Breach (48/100)", rating: "B", fit: 48, verdict: "why-not", mechanic: "Breach" },
+  { name: "Overseer Precursor Tablet", delta: 2.8, reason: "Matches Breach (30/100)", rating: "C", fit: 30, verdict: "why-not", mechanic: "Breach" },
 ];
 
 const MODIFIERS: AnalysisResult["modifiers"] = [

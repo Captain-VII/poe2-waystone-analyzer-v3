@@ -394,6 +394,7 @@ export function mountOverlay(
   const footBtn = q("[data-foot]");
   const colTablets = q("[data-col-tablets]");
   const colInsights = q("[data-col-insights]");
+  const tabletsFullEl = q("[data-tablets-full]");
   const compareGrid = q("[data-compare]");
   const settingsBtn = q("[data-settings]");
   const settingsPanel = q("[data-settings-panel]");
@@ -435,6 +436,7 @@ export function mountOverlay(
 
   function setResult(result: AnalysisResult): void {
     hideStatusChip(); // a success instantly clears a lingering failure chip
+    closeTabletPopup(); // the tablet list is about to be rebuilt — its anchor row would go stale
     current = result;
     const { heat, waystone } = result;
     for (const t of TIER_CLASSES) panel.classList.toggle(`tier-${t}`, t === heat.tierClass);
@@ -497,8 +499,11 @@ export function mountOverlay(
       // Multi-line native tooltip: the opaque "matches X (Y/100)" reason,
       // then one line per breakdown row — every row gets this on hover.
       const title = [t.reason, ...(t.breakdown ?? []).map(formatBreakdownRow)].join("\n");
+      // data-mechanic drives the Full-mode click-to-edit popup
+      // (openTabletPopup) — rendered on every row (Compact too) since
+      // tabletRow is shared, but only tabletsFullEl gets a click listener.
       return `
-        <div class="trow" title="${esc(title)}">
+        <div class="trow" data-mechanic="${esc(t.mechanic)}" title="${esc(title)}">
           <span class="t-ic">${icon}</span>
           <span class="t-name" title="${esc(t.name)}">${esc(shortName)}</span>
           <span class="t-verdict t-verdict-${t.verdict}">${TABLET_VERDICT_LABEL[t.verdict]}</span>
@@ -508,7 +513,7 @@ export function mountOverlay(
     // Full shows every active tablet (2026-07-10, user request), its
     // column already scrolls on overflow (`.col`, full.css).
     q("[data-tablets]").innerHTML = result.tablets.slice(0, 5).map(tabletRow).join("");
-    q("[data-tablets-full]").innerHTML = result.tablets.map(tabletRow).join("");
+    tabletsFullEl.innerHTML = result.tablets.map(tabletRow).join("");
 
     // The column-1 label width (~104px) fits every breakdown label except
     // these two — shortened display-only (full name still on hover), same
@@ -659,6 +664,9 @@ export function mountOverlay(
     // only fires on an actual layout switch, not every re-application of
     // the same mode. Avoids a stale Settings panel over the new layout.
     if (settingsOpen && modeChanged) toggleSettings();
+    // The tablet-mechanic popup is Full-only UI anchored to Full-mode DOM —
+    // a real mode switch invalidates it even if Settings wasn't open.
+    if (modeChanged) closeTabletPopup();
   }
 
   /** Settings-panel-only display prefs (insights visibility, opacity,
@@ -686,6 +694,7 @@ export function mountOverlay(
     if (!settingsOpen) stopHotkeyCapture(); // a half-finished capture must not outlive its UI
     if (!settingsOpen) openDropdownClose?.(); // an open dropdown must not outlive its panel
     if (settingsOpen && compareActive) closeCompare();
+    if (settingsOpen) closeTabletPopup(); // the popup lives outside .bodies, CSS cross-fade alone won't hide it
     if (settingsOpen) void loadMetaEditor(); // fresh model on every open — a hand-edit of the file mid-session shows up
     overlayEl.classList.toggle("settings-open", settingsOpen);
     settingsBtn.classList.toggle("active", settingsOpen);
@@ -741,7 +750,7 @@ export function mountOverlay(
   }
   let openDropdownClose: (() => void) | null = null;
 
-  function makeDropdown(btn: HTMLButtonElement, onPick: (value: string) => void) {
+  function makeDropdown(btn: HTMLButtonElement, onPick: (value: string) => void, container: HTMLElement = settingsPanel) {
     let options: DropdownOption[] = [];
     let value = "";
 
@@ -771,19 +780,20 @@ export function mountOverlay(
         });
         list.appendChild(item);
       }
-      settingsPanel.appendChild(list);
-      // Clamp inside the panel: below the button if it fits, above otherwise —
-      // the panel IS the reported click-through rect, so staying inside it is
-      // what keeps every option clickable (and the click-away poll quiet).
-      const panelRect = settingsPanel.getBoundingClientRect();
+      container.appendChild(list);
+      // Clamp inside the container: below the button if it fits, above
+      // otherwise — the container IS (or is inside) the reported
+      // click-through rect, so staying inside it is what keeps every
+      // option clickable (and the click-away poll quiet).
+      const containerRect = container.getBoundingClientRect();
       const btnRect = btn.getBoundingClientRect();
       const height = Math.min(list.scrollHeight, 180);
-      let top = btnRect.bottom - panelRect.top + 3;
-      if (top + height > panelRect.height - 6) {
-        top = Math.max(6, btnRect.top - panelRect.top - height - 3);
+      let top = btnRect.bottom - containerRect.top + 3;
+      if (top + height > containerRect.height - 6) {
+        top = Math.max(6, btnRect.top - containerRect.top - height - 3);
       }
       list.style.top = `${top}px`;
-      list.style.right = `${Math.max(6, panelRect.right - btnRect.right)}px`;
+      list.style.right = `${Math.max(6, containerRect.right - btnRect.right)}px`;
       list.style.maxHeight = `${height}px`;
 
       const onDocMousedown = (ev: MouseEvent): void => {
@@ -795,7 +805,7 @@ export function mountOverlay(
         ev.stopPropagation(); // must NOT reach hotkeys.ts's Escape-hides-overlay listener
         close();
       };
-      const onScroll = (): void => close(); // anchored position is stale once the panel scrolls
+      const onScroll = (): void => close(); // anchored position is stale once the container scrolls
       function close(): void {
         list.remove();
         document.removeEventListener("mousedown", onDocMousedown, true);
@@ -803,7 +813,10 @@ export function mountOverlay(
         scrollHost?.removeEventListener("scroll", onScroll);
         openDropdownClose = null;
       }
-      const scrollHost = settingsPanel.querySelector(".settings-scroll");
+      // .settings-scroll only exists inside settingsPanel — other
+      // containers (e.g. the tablet meta popup) have no independent scroll
+      // region of their own, so this is a no-op there (nothing to attach).
+      const scrollHost = container.querySelector(".settings-scroll");
       document.addEventListener("mousedown", onDocMousedown, true);
       window.addEventListener("keydown", onEscape, true);
       scrollHost?.addEventListener("scroll", onScroll);
@@ -886,9 +899,11 @@ export function mountOverlay(
       metaModel = await run(opts.metaEditor);
       metaMsg.hidden = true; // a successful write clears any stale corrupt/error banner
       renderMetaEditor();
+      tabletPopupRenderFields?.(); // a save from EITHER surface (Settings or the tablet popup) refreshes both
     } catch {
       showMetaMsg("Écriture de meta.json impossible");
       renderMetaEditor();
+      tabletPopupRenderFields?.();
     } finally {
       setMetaControlsDisabled(false);
     }
@@ -905,6 +920,148 @@ export function mountOverlay(
         skipIfBelow: Number(metaSkipInput.value),
       }),
     );
+  }
+
+  /** Full-mode-only, scoped-down twin of the Settings Méta editor: clicking
+   *  a tablet row (see the click delegation on tabletsFullEl below) opens a
+   *  small popup showing just THAT tablet's mechanic's 3 editable fields,
+   *  saving through the exact same metaAction()/saveMechanic pipeline as
+   *  Settings — meta.json persistence is identical, no new IO. Lives
+   *  appended directly to `panel` (not `.bodies`) since it must survive a
+   *  mode/Settings/Compare cross-fade only via the explicit close hooks
+   *  below, not by being hidden along with a `.body` layer. */
+  let openTabletMechanicPopup: string | null = null;
+  let tabletPopupEl: HTMLElement | null = null;
+  let tabletPopupCleanup: (() => void) | null = null;
+  let tabletPopupRenderFields: (() => void) | null = null;
+
+  function closeTabletPopup(): void {
+    if (!tabletPopupEl) return;
+    openDropdownClose?.(); // a dropdown opened inside the popup must not outlive it
+    tabletPopupCleanup?.();
+    tabletPopupEl.remove();
+    tabletPopupEl = null;
+    openTabletMechanicPopup = null;
+    opts.onInteractiveChange?.();
+  }
+
+  function openTabletPopup(mechanicName: string, anchorRow: HTMLElement): void {
+    if (openTabletMechanicPopup === mechanicName) {
+      closeTabletPopup(); // re-clicking the same row toggles it shut
+      return;
+    }
+    closeTabletPopup();
+    if (!opts.metaEditor || !metaModel) return; // no IO, or meta.json not loaded yet — nothing to show
+    const mech = metaModel.mechanics.find((m) => m.name === mechanicName);
+    if (!mech) return;
+
+    openTabletMechanicPopup = mechanicName;
+    const el = document.createElement("div");
+    el.className = "tablet-meta-popup";
+    el.innerHTML = `
+      <div class="tmp-head">
+        <span class="tmp-title">${esc(mechanicName)}</span>
+        <button type="button" class="tmp-close" data-tmp-close aria-label="Fermer">×</button>
+      </div>
+      <div class="set-row">
+        <span class="set-lab">Stat prioritaire</span>
+        <button class="set-select" type="button" data-tmp-priority aria-haspopup="listbox" aria-label="Stat prioritaire"></button>
+      </div>
+      <div class="set-row">
+        <span class="set-lab">Secondaire 1</span>
+        <button class="set-select" type="button" data-tmp-sec1 aria-haspopup="listbox" aria-label="Première stat secondaire"></button>
+      </div>
+      <div class="set-row">
+        <span class="set-lab">Secondaire 2</span>
+        <button class="set-select" type="button" data-tmp-sec2 aria-haspopup="listbox" aria-label="Seconde stat secondaire"></button>
+      </div>
+      <div class="set-row" title="Sous ce Juice Score, la mécanique n'est pas recommandée">
+        <span class="set-lab">Skip si score sous</span>
+        <span class="set-val" data-tmp-skip-val></span>
+      </div>
+      <input class="set-slider" type="range" min="0" max="100" step="1" data-tmp-skip aria-label="Seuil de skip" />`;
+    panel.appendChild(el);
+
+    const priorityBtn = el.querySelector("[data-tmp-priority]") as HTMLButtonElement;
+    const sec1Btn = el.querySelector("[data-tmp-sec1]") as HTMLButtonElement;
+    const sec2Btn = el.querySelector("[data-tmp-sec2]") as HTMLButtonElement;
+    const skipInput = el.querySelector("[data-tmp-skip]") as HTMLInputElement;
+    const skipVal = el.querySelector("[data-tmp-skip-val]") as HTMLElement;
+    const closeBtn = el.querySelector("[data-tmp-close]") as HTMLButtonElement;
+
+    function collectPopupEdit(): void {
+      const secondaryStats = [tmpSec1.value, tmpSec2.value].filter((v) => v !== "");
+      void metaAction((ed) =>
+        ed.saveMechanic(mechanicName, {
+          priorityStat: tmpPriority.value as MechanicEdit["priorityStat"],
+          secondaryStats: secondaryStats as MechanicEdit["secondaryStats"],
+          skipIfBelow: Number(skipInput.value),
+        }),
+      );
+    }
+    const tmpPriority = makeDropdown(priorityBtn, collectPopupEdit, el);
+    const tmpSec1 = makeDropdown(sec1Btn, collectPopupEdit, el);
+    const tmpSec2 = makeDropdown(sec2Btn, collectPopupEdit, el);
+
+    function renderPopupFields(): void {
+      const m = metaModel?.mechanics.find((x) => x.name === mechanicName);
+      if (!m || !metaModel) return;
+      const statOptions = metaModel.statOptions.map((s) => ({ value: s.key as string, label: s.label }));
+      const withNone = [{ value: "", label: "—" }, ...statOptions];
+      tmpPriority.set(statOptions, m.effective.priorityStat);
+      tmpSec1.set(withNone, m.effective.secondaryStats[0] ?? "");
+      tmpSec2.set(withNone, m.effective.secondaryStats[1] ?? "");
+      skipInput.value = String(m.effective.skipIfBelow);
+      skipVal.textContent = String(m.effective.skipIfBelow);
+    }
+    renderPopupFields();
+    tabletPopupRenderFields = renderPopupFields;
+
+    // Anchored beside the tablets column, not below the clicked row inside
+    // it — a popup placed directly under the row would sit on top of every
+    // row beneath it (the list is dense, ~9 rows tall), blocking clicks on
+    // any other tablet until it's closed. Floating it to the right (over
+    // the Heat Breakdown/Insights columns instead) keeps the rest of the
+    // list clickable while it's open. Vertically aligned near the clicked
+    // row, clamped inside `panel` — same clamping idea as makeDropdown's
+    // open(), just against `panel` since this popup isn't Settings-owned.
+    const panelRect = panel.getBoundingClientRect();
+    const colRect = colTablets.getBoundingClientRect();
+    const rowRect = anchorRow.getBoundingClientRect();
+    const width = 200;
+    el.style.width = `${width}px`;
+    const height = el.offsetHeight;
+    const left = Math.min(colRect.right - panelRect.left + 8, panelRect.width - width - 6);
+    let top = rowRect.top - panelRect.top;
+    top = Math.min(Math.max(6, top), panelRect.height - height - 6);
+    el.style.top = `${top}px`;
+    el.style.left = `${left}px`;
+
+    const onDocMousedown = (ev: MouseEvent): void => {
+      if (ev.target instanceof Node && (el.contains(ev.target) || anchorRow.contains(ev.target))) return;
+      closeTabletPopup();
+    };
+    const onEscape = (ev: KeyboardEvent): void => {
+      if (ev.key !== "Escape") return;
+      ev.stopPropagation(); // must NOT reach hotkeys.ts's Escape-hides-overlay listener
+      closeTabletPopup();
+    };
+    const onScroll = (): void => closeTabletPopup(); // colTablets scrolled — the anchor position is stale
+    document.addEventListener("mousedown", onDocMousedown, true);
+    window.addEventListener("keydown", onEscape, true);
+    colTablets.addEventListener("scroll", onScroll);
+    closeBtn.addEventListener("click", () => closeTabletPopup());
+    skipInput.addEventListener("input", () => (skipVal.textContent = skipInput.value));
+    skipInput.addEventListener("change", collectPopupEdit);
+    tabletPopupCleanup = () => {
+      document.removeEventListener("mousedown", onDocMousedown, true);
+      window.removeEventListener("keydown", onEscape, true);
+      colTablets.removeEventListener("scroll", onScroll);
+      tabletPopupRenderFields = null;
+    };
+
+    tabletPopupEl = el;
+    opts.onInteractiveChange?.();
   }
 
   /** Hotkey remap (KNOWN_ISSUES #7). Click the binding → capture the next
@@ -984,6 +1141,7 @@ export function mountOverlay(
    *  `closeCompare()` reveals it again unchanged (compare doesn't touch
    *  `mode`/`effective`). */
   function showCompare(entries: CompareEntry[]): void {
+    closeTabletPopup(); // like Settings, Compare can be invoked externally (hotkey) — don't leave the popup orphaned
     compareActive = true;
     overlayEl.classList.add("compare-active");
     const best = entries.reduce((a, b) => (b.result.heat.score > a.result.heat.score ? b : a), entries[0]!);
@@ -1025,6 +1183,10 @@ export function mountOverlay(
     if (!opts.onDragStart && opts.onCycleTier) els.push(badge);
     if (settingsOpen) return [...els, settingsPanel]; // whole panel as one rect
     if (compareActive) return [...els, compareGrid]; // per-card pin/remove buttons (#8)
+    // Same reasoning as settingsOpen above: the popup's own dropdowns can
+    // overflow past its small box (makeDropdown's clamping), so the whole
+    // panel is reported rather than trying to track that overflow.
+    if (openTabletMechanicPopup) return [...els, panel];
     if (effective === "compact") els.push(footBtn);
     // Either full-mode column can overflow-scroll on some DPI/font combos —
     // its scrollbar is unusable unless the column is inside the
@@ -1106,6 +1268,16 @@ export function mountOverlay(
     metaSkipInput.addEventListener("input", () => (metaSkipVal.textContent = metaSkipInput.value));
     metaSkipInput.addEventListener("change", collectMechanicEdit);
     metaResetBtn.addEventListener("click", () => void metaAction((ed) => ed.reset()));
+    // Full-mode-only click-to-edit: delegated (rows are rebuilt on every
+    // setResult, the container isn't). Gated on opts.metaEditor like the
+    // rest of the Méta section — nothing to edit without IO.
+    tabletsFullEl.addEventListener("click", (ev) => {
+      const row = (ev.target as HTMLElement).closest<HTMLElement>(".trow[data-mechanic]");
+      if (!row) return;
+      const mechanic = row.dataset.mechanic;
+      if (mechanic) openTabletPopup(mechanic, row);
+    });
+    void loadMetaEditor(); // loaded once eagerly so a tablet click doesn't need its own fetch/loading state
   } else {
     metaSection.remove(); // plain-browser dev — no Tauri fs to edit
   }

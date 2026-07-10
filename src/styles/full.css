@@ -127,6 +127,54 @@
   font-weight: 700;
 }
 
+/* Tablet-row click → scoped one-mechanic meta editor (RelicPanel.ts's
+   openTabletPopup). Appended directly to .panel (not .bodies), so it isn't
+   subject to the mode/Settings/Compare cross-fade — closed explicitly
+   instead, see RelicPanel.ts's cross-close hooks. Positioned/clamped in JS,
+   same technique as panel.css's .set-dropdown-list; visual style matches
+   it too, just its own small header on top. Everything below .tmp-head
+   reuses panel.css's generic .set-row/.set-lab/.set-select/.set-slider —
+   nothing duplicated here. */
+.tablet-meta-popup {
+  position: absolute;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px 10px;
+  background: #17120d;
+  border: 1px solid rgba(184, 135, 53, 0.55);
+  border-radius: 4px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+}
+.tmp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(184, 135, 53, 0.25);
+}
+.tmp-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--gold-hi);
+}
+.tmp-close {
+  flex: none;
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1;
+  color: var(--grey);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.tmp-close:hover { color: var(--ivory); }
+
 /* ---- column 3: insights ---- */
 .insights { display: flex; flex-direction: column; gap: 2px; }
 .ins-row {

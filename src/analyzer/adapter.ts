@@ -421,6 +421,7 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
     rating: scoreToRating(fit),
     fit,
     verdict,
+    mechanic,
     rewards: tablet.rewards && tablet.rewards.length > 0 ? tablet.rewards.map(describeReward) : undefined,
     breakdown,
   }));

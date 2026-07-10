@@ -104,6 +104,13 @@ export interface Tablet {
   /** 3-tier plain-language read of `fit` — what the row itself renders
    *  now instead of the raw number/bar. See `TabletVerdict`'s doc comment. */
   verdict: TabletVerdict;
+  /** Mechanic this tablet was scored against (rankTablets' resolved `mech.
+   *  name`) — matches MECHANICS[].name / MetaEditorModel.mechanics[].name
+   *  exactly (e.g. "Breach", "General"). `reason` already spells this out
+   *  in prose; this field drives the tablet row's click-to-edit popup
+   *  (RelicPanel.ts) so it can open the meta editor scoped to the right
+   *  mechanic without re-parsing `reason`. */
+  mechanic: string;
   /** Individual reward line items (rewards.ts), already resolved to a
    *  display label + the exact number that contributed to this tablet's
    *  fit score. Omitted/empty when the tablet declares no `rewards` — the
