@@ -178,6 +178,53 @@ Sanctum/Harvest/Metamorph/Essence/Incursion/Bestiary) still exist as
 scoreable mechanics in `mechanics.ts` — that's real (they're still real
 PoE2 league mechanics, just not ones with their own tablet), not a bug.
 
+Also worth noting: `src/analyzer/tablets.ts`'s `DEFAULT_TABLETS` grew to
+**nine** entries some time after this section was last fully updated here —
+Abyss (2026-07-04), Irradiated and Temple (2026-07-06) were added but this
+KNOWN_ISSUES entry's prose above still only discusses the original six
+Precursor-Tower types. Their status is unchanged from what's already
+written above/in `tablets.ts`'s own header comment: Abyss confirmed real
+via poe2db.tw but with a plausible-not-confirmed roll; Irradiated/Temple
+the same.
+
+**Update (2026-07-11) — the shared prefix/suffix pools got their first real
+cross-check, several representative values corrected:** user picked this
+issue's "still open" item to work on. `poe2wiki.net`'s dedicated
+"List of modifiers for tablets" page exists but blocks non-browser fetches
+(403); its content was retrieved via odealo.com's summary of it instead,
+cross-checked against maxroll.gg's rolling guide. Findings:
+- The full shared prefix pool (7 mods) and full suffix pools for Standard/
+  Overseer/Breach/Ritual/Delirium/Expedition are now known, with numeric
+  ranges, from two independent sources.
+- Several representative values in `tablets.ts` were outside the newly-
+  confirmed real ranges (most notably Delirium's Pack Size at 20% vs. a
+  real ~3-10% depending on which of two Pack-Size-shaped mods is used) —
+  corrected; see each tablet's own comment in `tablets.ts` for the exact
+  sourcing and number chosen.
+- **One genuine, unresolved source conflict**: the shared Quantity-of-Items
+  prefix's range is (3-7)% per poe2wiki/odealo vs. (10-20)% per maxroll —
+  no overlap. Not chased down further (would repeat the exact "hunt every
+  new source for a tie-break" pattern issue #3 already flags as a fatigue
+  risk) — disclosed in Expedition Tablet's comment, a defensible boundary
+  value picked instead.
+- A parser-accuracy check (`parseMods`, via a scratchpad probe script)
+  caught that the wiki's literal wording for Standard Tablet's suffix
+  ("increased Quantity of Waystones found") would double-count as BOTH
+  `waystoneDropChance` and `quantity` (Item Quantity) purely because it
+  contains the word "quantity" — the app's existing "chance to drop/find a
+  Waystone" phrasing was kept instead (same real range, parses as only the
+  intended stat). Worth remembering if sourcing more real tablet/waystone
+  text going forward: verify new wording against the actual parser before
+  trusting it, not just by eye.
+- Magic Monsters/Gold/Experience remain untracked and out of scope, same
+  as before this pass — not attempted, per the user's explicit choice to
+  keep this pass to correcting existing data rather than extending the
+  stat model (which would touch the recently-stabilized Juice Score
+  formula, issue #3).
+- Abyss/Irradiated/Temple mods remain unconfirmed — both new sources
+  explicitly say they don't cover these three, consistent with the
+  poe2db.tw finding already on record.
+
 ## 3. Juice Score weights and Mechanic Match Score formula are a first pass
 
 The Juice Score's god-map references/weights (`src/analyzer/scoring.ts`'s

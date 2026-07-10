@@ -16,7 +16,7 @@
  *  7 "original" + 8 "placeholder" guesses.** Cross-checked against three
  *  independent sources (poe2wiki.net, maxroll.gg, odealo.com) covering the
  *  Precursor Tablet/Atlas Tower system, plus poe2db.tw's item data (checked
- *  2026-07-06) for the full base-type list: real PoE2 has **eight** standard
+ *  2026-07-06) for the full base-type list: real PoE2 has **nine** standard
  *  tablet types — Standard, Overseer, Breach, Ritual, Delirium, Expedition,
  *  Abyss, Irradiated, Temple — no more. Legion, Heist, Sanctum, Harvest,
  *  Metamorph, Essence, Incursion, and Bestiary have no dedicated tablet at
@@ -28,15 +28,31 @@
  *  Every real tablet is Magic rarity (1 prefix + 1 suffix) and can roll
  *  from the *same* shared generic-stat prefix pool (Quantity/Rarity/Pack
  *  Size/Magic Monsters/Rare Monsters/Gold/Experience); each `mods` entry
- *  below is one representative prefix from that pool, not an exhaustive
- *  roll table. The four mechanic-specific types' real value is almost
- *  entirely in their *suffix*, which grants mechanic-specific currency
- *  (Breach Splinters, Expedition Artifacts/Logbooks, Ritual Tribute,
- *  Delirium Simulacrum Splinters) rather than a generic stat — that's what
- *  `rewards` (rewards.ts) represents; Standard/Overseer have no
- *  mechanic-specific currency of their own, so they carry no `rewards`.
- *  Replace any entry's exact mod wording once a more precise source turns
- *  up; no other code needs to change either way. */
+ *  below is one representative prefix (or, for Standard/Overseer, prefix +
+ *  a stat-shaped suffix) from that pool, not an exhaustive roll table — a
+ *  real tablet only ever has one of each anyway, so "the full pool" isn't
+ *  something a single definition can represent; a user with a differently-
+ *  rolled real tablet overrides it via meta.json's "tablets" array. The
+ *  four mechanic-specific types' real value is almost entirely in their
+ *  *suffix*, which grants mechanic-specific currency (Breach Splinters,
+ *  Expedition Artifacts/Logbooks, Ritual Tribute, Delirium Simulacrum
+ *  Splinters) rather than a generic stat — that's what `rewards`
+ *  (rewards.ts) represents; Standard/Overseer have no mechanic-specific
+ *  currency of their own, so they carry no `rewards`.
+ *
+ *  **Re-sourced 2026-07-11**: the shared prefix pool and the Standard/
+ *  Overseer/Breach/Ritual/Delirium/Expedition suffix pools were cross-
+ *  checked against poe2wiki.net's dedicated tablet-modifier list (fetched
+ *  via odealo.com's summary — poe2wiki itself blocks non-browser fetches)
+ *  and maxroll.gg's rolling guide; several representative values were
+ *  outside the newly-confirmed real ranges and corrected (see each entry's
+ *  own comment). Magic Monsters/Gold/Experience remain untracked (would
+ *  need new `StatKey`s and a scoring-model decision — explicitly out of
+ *  scope for this pass, see KNOWN_ISSUES.md #2). Abyss/Irradiated/Temple
+ *  mods remain unconfirmed by any source checked so far (both new sources
+ *  explicitly omit them, same as poe2db.tw before). Replace any entry's
+ *  exact mod wording once a more precise source turns up; no other code
+ *  needs to change either way. */
 
 import { parseMods } from "./mod-parser";
 import { computeRewardScore, type Reward } from "./rewards";
@@ -93,9 +109,21 @@ export const DEFAULT_TABLETS: RawTabletDef[] = [
   // own, so no `rewards`. Real shared-prefix range (10-20)%; suffix ranges
   // vary by roll (e.g. "1 additional random Modifier") — using a
   // representative prefix midpoint.
+  // 2026-07-11: corrected from two prefix-pool lines (a mistake — a real
+  // tablet is Magic rarity, 1 prefix + 1 suffix, never two prefixes) to one
+  // of each, cross-checked against poe2wiki's tablet-modifier list (via
+  // odealo.com's summary) and maxroll.gg: prefix Rarity of Items (10-15%
+  // range, both sources agree, using the midpoint) + Standard's own real
+  // suffix ("increased Quantity of Waystones found in your Maps," 10-20%
+  // range). That suffix is rephrased here as "chance to drop a Waystone" —
+  // verified via probe script that the literal wiki wording also parses as
+  // `quantity` (Item Quantity) purely because it contains the word
+  // "quantity," which would be a wrong/duplicate boost; this app's existing
+  // "chance to drop/find a Waystone" phrasing parses cleanly as only
+  // `waystoneDropChance`, same real range, no accuracy loss.
   {
     name: "Standard Precursor Tablet",
-    mods: ["15% increased Quantity of Items found", "12% increased Rarity of Items found"],
+    mods: ["12% increased Rarity of Items found", "15% increased chance to drop a Waystone"],
     tags: ["general"],
     confidence: "high",
     source: "wiki",
@@ -103,6 +131,9 @@ export const DEFAULT_TABLETS: RawTabletDef[] = [
   // Drops from Map Bosses; boosts their own drops specifically. Real suffix
   // ranges: waystone quantity (5-10)%, item rarity (15-25)% dropped by Map
   // Bosses — using midpoints. No mechanic-specific currency of its own.
+  // Re-confirmed 2026-07-11 against poe2wiki's tablet-modifier list (via
+  // odealo.com) and maxroll.gg — both existing values already sit inside
+  // the sourced ranges, unchanged.
   {
     name: "Overseer Precursor Tablet",
     mods: ["8% increased chance to drop a Waystone", "20% increased Rarity of Items dropped by Map Bosses"],
@@ -114,10 +145,13 @@ export const DEFAULT_TABLETS: RawTabletDef[] = [
   // density, additional Breaches) rather than a generic stat — that value
   // flows through `rewards`, not `mods`. `mods` here is one representative
   // shared-prefix roll (Rare Monsters, matching the researched 0.5 Breach
-  // profile: rares carry the value, not white packs).
+  // profile: rares carry the value, not white packs). Value corrected
+  // 2026-07-11: the shared "Rare Monsters" prefix's real range is (10-15)%
+  // (poe2wiki via odealo.com, confirmed by maxroll.gg) — was 20%, outside
+  // that range; now the midpoint.
   {
     name: "Breach Tablet",
-    mods: ["20% increased Rarity of Monsters"],
+    mods: ["12% increased Rarity of Monsters"],
     tags: ["breach"],
     confidence: "medium",
     source: "wiki",
@@ -130,9 +164,12 @@ export const DEFAULT_TABLETS: RawTabletDef[] = [
   // see `rewards`. `mods` is a representative shared-prefix roll (Rare
   // Monsters: tribute scales with magic/rare monster count, and item
   // rarity does NOT affect ritual rewards per the 0.5 research pass).
+  // Value corrected 2026-07-11 to the sourced (10-15)% midpoint, same
+  // shared-prefix range as Breach above — see that entry's comment for
+  // sourcing.
   {
     name: "Ritual Tablet",
-    mods: ["15% increased Rarity of Monsters"],
+    mods: ["12% increased Rarity of Monsters"],
     tags: ["ritual"],
     confidence: "medium",
     source: "wiki",
@@ -142,10 +179,17 @@ export const DEFAULT_TABLETS: RawTabletDef[] = [
     ],
   },
   // Real suffixes are Simulacrum Splinters/Fog-focused, not a generic stat
-  // — see `rewards`. `mods` is a representative shared-prefix roll.
+  // — see `rewards`. Was a generic 20% Pack Size prefix — corrected
+  // 2026-07-11: the shared Pack Size prefix's real range is only (3-7)%
+  // (poe2wiki via odealo.com AND maxroll.gg agree exactly on this one), so
+  // 20% was well outside it. Switched to Delirium's own real suffix
+  // instead — "Delirium Monsters in your Maps have (5-10)% increased Pack
+  // Size" — both more accurate to a real roll AND thematically Delirium-
+  // specific rather than a generic map-wide line; phrased to parse as
+  // packSize only (verified via probe script), using the midpoint.
   {
     name: "Delirium Tablet",
-    mods: ["20% increased Pack Size"],
+    mods: ["8% increased Pack Size for Delirium Monsters"],
     tags: ["delirium"],
     confidence: "medium",
     source: "wiki",
@@ -155,10 +199,19 @@ export const DEFAULT_TABLETS: RawTabletDef[] = [
     ],
   },
   // Real suffixes are Artifact/Logbook/Remnant-focused, not a generic stat
-  // — see `rewards`. `mods` is a representative shared-prefix roll.
+  // — see `rewards`. `mods` is a representative shared-prefix roll (Item
+  // Quantity — no real Expedition-specific generic-stat suffix exists, so
+  // any shared prefix is as defensible as another). Value note 2026-07-11:
+  // the shared Quantity prefix's real range is genuinely disputed between
+  // the two sources checked — poe2wiki (via odealo.com) says (3-7)%,
+  // maxroll.gg says (10-20)% for the same nominal mod, no overlap between
+  // them. Not resolved (avoiding a third-source hunt for a tie-break, see
+  // KNOWN_ISSUES.md #3's fatigue note) — 10% sits right at maxroll's floor
+  // and just above odealo's ceiling, the least-arbitrary single number
+  // given both are cited.
   {
     name: "Expedition Tablet",
-    mods: ["15% increased Quantity of Items found"],
+    mods: ["10% increased Quantity of Items found"],
     tags: ["expedition"],
     confidence: "medium",
     source: "wiki",

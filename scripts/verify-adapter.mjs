@@ -497,9 +497,9 @@ check("skipIfBelow gates the waystone-level recommendation, not the tablet list"
 
 // (7b) Per-tablet independence, direct regression pin (2026-07-10): a
 // waystone whose stats strongly favor Ritual GLOBALLY must not drag
-// Delirium Tablet's own reason along with it — its real boosts (20%
-// increased Pack Size) fit Delirium, not Ritual, so its label must say so
-// regardless of which mechanic wins the waystone overall.
+// Delirium Tablet's own reason along with it — it's tagged "delirium"
+// (tablets.ts), so its label must say so regardless of which mechanic
+// wins the waystone overall or what Delirium Tablet's own boosts are.
 const SAMPLE_RITUAL_LEANING = `Item Class: Waystones
 Rarity: Rare
 Ritual Grounds
