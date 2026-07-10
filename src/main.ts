@@ -336,7 +336,13 @@ async function init(): Promise<void> {
   // The overlay mounts (synchronously, above) before the persisted base
   // can be fetched — labels default to Ins, corrected here if remapped.
   overlay.setHotkeyLabel(await getHotkeyBase());
-  overlay.setAutostartChecked(await getAutostartEnabled());
+  const autostartOn = await getAutostartEnabled();
+  overlay.setAutostartChecked(autostartOn);
+  // Re-assert so the registry Run key always points at the CURRENT exe —
+  // an update that changes the install path/binary name (e.g. the
+  // waystone-overlay → Waystone-Analyzer rename) would otherwise keep
+  // launching the orphaned old install at every login.
+  if (autostartOn) setAutostartEnabled(true).catch(() => {});
   overlay.setSessionStats(summarizeSessionStats(sessionStats)); // persisted stats from previous launches
   await prepareWindowDrag(); // caches the window ref so the header's mousedown can start a drag synchronously
   await watchDisplayChanges(() => void handleDisplayChange());

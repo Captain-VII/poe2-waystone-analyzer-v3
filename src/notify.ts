@@ -33,7 +33,7 @@ export async function notifyUpdateAvailable(version: string): Promise<void> {
     if (!granted) return;
     sendNotification({
       title: "Mise à jour disponible",
-      body: `Waystone Overlay v${version} — ouvrez les Réglages pour l'installer.`,
+      body: `Waystone-Analyzer v${version} — ouvrez les Réglages pour l'installer.`,
     });
   } catch {
     // Same nice-to-have policy as above.

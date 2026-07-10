@@ -564,7 +564,7 @@ pub fn run() {
             // set_ignore_cursor_events() toggling itself the hover-blackening culprit?).
             let click_through = env_flag("OVERLAY_CLICK_THROUGH", !debug_opaque);
 
-            let title = if debug_opaque { "Waystone Overlay [DEBUG OPAQUE]" } else { "Waystone Overlay" };
+            let title = if debug_opaque { "Waystone-Analyzer [DEBUG OPAQUE]" } else { "Waystone-Analyzer" };
 
             let mut builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
                 .title(title)
@@ -675,7 +675,7 @@ pub fn run() {
                 .icon(app.default_window_icon().cloned().unwrap())
                 .menu(&tray_menu)
                 .show_menu_on_left_click(true)
-                .tooltip("Waystone Overlay")
+                .tooltip("Waystone-Analyzer")
                 .on_menu_event(move |app, event| match event.id().as_ref() {
                     "quit" => {
                         println!("[overlay] quit requested from tray menu");
