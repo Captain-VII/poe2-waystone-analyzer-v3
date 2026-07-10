@@ -772,8 +772,8 @@ check("Abyss: quantity-only waystone does NOT feed Abyss beyond the weak-tier ba
 // Composite Juice Score: dominant-stat model (2026-07-1x, user's own call —
 // "basé sur sa plus grosse stat, et des petits bonus si y'a d'autres stats
 // intéressantes"). Replaces the 2026-07-06 weighted-sum + multiplicative-
-// synergy model entirely. References below (Pack Size ceiling 30%, others
-// 100/120%) mirror scoring.ts's STAT_REFERENCES.
+// synergy model entirely. References below (100 for 4 of the 5 stats, 120
+// for Waystone Drop Chance) mirror scoring.ts's STAT_REFERENCES.
 {
   check("a single stat alone scores exactly its own tier (Drop Chance 80% -> normalized 66.7% -> legendary -> 80, no bonus)",
     analyzeWaystoneText(mkStatWaystone(["+80% chance to find an additional Waystone"])).heat.score === TIER_SCORE.legendary);
@@ -781,15 +781,30 @@ check("Abyss: quantity-only waystone does NOT feed Abyss beyond the weak-tier ba
   check("a lone weak stat floors at TIER_SCORE.weak with zero bonus (nothing else can be 'ok' if the max stat isn't)",
     analyzeWaystoneText(mkStatWaystone(["+3% increased Pack Size"])).heat.score === TIER_SCORE.weak);
 
-  // Pack Size (ceiling 30%) at 25% normalizes to ~83% (legendary) and must
-  // outrank Item Rarity (ceiling 100%) at 40% raw, which only normalizes to
-  // 40% (top) — proves stats are compared against their OWN ceiling, not
-  // raw %, otherwise Item Rarity's bigger raw number would wrongly win.
-  const packVsRarity = analyzeWaystoneText(
-    mkStatWaystone(["+25% increased Pack Size", "+40% increased Rarity of Items found in this Area"]),
+  // Regression pin (2026-07-11 bug report: "le rating est tout le temps en
+  // légendaire") — Pack Size's reference used to be 30, so an ordinary 15%
+  // roll normalized to 50% of "ceiling" and hit legendary on its own. Now
+  // shares the same 100 reference as itemRarity/monsterRarity/
+  // monsterEffectiveness: 15% Pack Size alone must land at "ok" (25), and
+  // it takes a real 50%+ roll to reach legendary, same bar as every other
+  // stat here.
+  check("an ordinary 15% Pack Size roll alone is 'ok', NOT legendary (2026-07-11 fix)",
+    analyzeWaystoneText(mkStatWaystone(["+15% increased Pack Size"])).heat.score === TIER_SCORE.ok);
+  check("a 50%+ Pack Size roll alone IS legendary — the bar didn't move, only the reference did",
+    analyzeWaystoneText(mkStatWaystone(["+50% increased Pack Size"])).heat.score === TIER_SCORE.legendary);
+
+  // Waystone Drop Chance (ceiling 120%) at 55% normalizes to ~45.8% (top)
+  // and must lose to Item Rarity (ceiling 100%) at the SAME raw 55%, which
+  // normalizes to 55% (legendary) — proves stats are still compared
+  // against their OWN ceiling, not raw %, using the one pair of stats that
+  // still has genuinely different references post-fix.
+  const dropVsRarity = analyzeWaystoneText(
+    mkStatWaystone(["+55% chance to find an additional Waystone", "+55% increased Rarity of Items found in this Area"]),
   );
-  check("Pack Size 25% (near its own ceiling) outweighs a bigger-looking Item Rarity 40% as the dominant stat",
-    packVsRarity.heat.score === TIER_SCORE.legendary + Math.min(40 / 100, 1) * 5);
+  const dropNormalized = (55 / 120) * 100;
+  const dropVsRarityExpected = Math.round((TIER_SCORE.legendary + Math.min(dropNormalized / 100, 1) * 5) * 100) / 100;
+  check("Item Rarity 55% (ceiling 100) outranks the SAME raw 55% on Drop Chance (ceiling 120) as the dominant stat",
+    dropVsRarity.heat.score === dropVsRarityExpected);
 
   // Same dominant stat (Drop Chance, maxed) with two different secondary
   // Monster Rarity values -> the bonus must scale with the secondary's own

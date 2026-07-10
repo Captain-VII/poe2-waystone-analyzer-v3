@@ -630,9 +630,50 @@ Legendaire** (was "MOYEN"); "Rotting Course" (the original Abyss bug
 report waystone) scores **81.5, Legendaire**, consistent with its Abyss
 Tablet fit of 100/100. `verify-adapter.mjs` pins the formula directly —
 a lone stat scores exactly its tier, a lone weak stat floors at 10 with
-zero bonus, Pack Size at 25% (near its ceiling) outranks a bigger-looking
-Item Rarity at 40% as the dominant stat, and the secondary-stat bonus
-scales with the secondary's own magnitude rather than being a flat award.
+zero bonus, and the secondary-stat bonus scales with the secondary's own
+magnitude rather than being a flat award. (The original version of this
+paragraph also cited "Pack Size at 25% outranks a bigger-looking Item
+Rarity at 40%" as a worked example of the ceiling-comparison design —
+that example relied on `STAT_REFERENCES.packSize = 30`, which the
+2026-07-11 update directly below found to be a bug, not a feature; see
+that entry for the corrected reference and the replacement test.)
+
+**Update (2026-07-11) — Pack Size's reference was itself miscalibrated,
+causing near-every real waystone to read Legendaire:** user report —
+"le rating est tout le temps en légendaire." Root-caused with a probe
+script: `STAT_REFERENCES.packSize` was `30` (copied from the old
+weighted-sum model's god-map reference table above without re-checking
+it against the new dominant-stat model's different use of that number).
+Under the dominant-stat model, a stat reaches "legendary" tier at 50% of
+its own reference — for Pack Size that meant **15% raw Pack Size**, a
+thoroughly ordinary roll (this project's own prior research, cited
+earlier in this section, already established real Pack Size runs
+7-64%, with T15's base mod alone rolling 41-50%). Confirmed via probe:
+a bare `+15% increased Pack Size` alone scored 80/100 Legendaire; a
+waystone with nothing above 20% on any of the 5 stats (including a
+modest 10% Pack Size) scored 56.8/100 "Bon" — Pack Size didn't need to
+be the map's true strength to hijack the dominant-stat slot, just
+merely present.
+
+**Fix**: `STAT_REFERENCES.packSize` raised from 30 to **100**, matching
+itemRarity/monsterRarity/monsterEffectiveness (the same "generous
+ceiling over a tight fit to the observed sample" reasoning already used
+once before in this project for the analogous `NORMALIZE_CAP.packSize`
+constant, see the 2026-07-10 entry above — that fix just never got
+mirrored into this file's own reference table). Waystone Drop Chance
+keeps its distinct 120 reference (its own real range runs up to ~140%,
+per the 2026-07-10 entry above) — it's now the only stat that isn't
+directly 1:1 comparable to the other four, and `verify-adapter.mjs`'s
+composite-score test block was updated to demonstrate the ceiling-based
+comparison using Drop-Chance-vs-Item-Rarity instead of the now-invalid
+Pack-Size-vs-Item-Rarity example, plus two new regression checks pinning
+this exact bug (15% Pack Size alone = "ok", not legendary; 50%+ Pack
+Size alone = legendary, same bar as every other stat).
+
+Re-verified against the same probe cases: the earlier "mediocre
+everything" fixture (nothing above 20% on any stat) now scores 25.8/100
+"Moyen" (was wrongly 56.8/100 "Bon"), and "Putrid Bearings"/"Rotting
+Course" above are unaffected (neither has meaningful Pack Size).
 
 ## 4. ~~Mechanic-presence detection is a simple keyword match~~ (resolved 2026-07-08)
 

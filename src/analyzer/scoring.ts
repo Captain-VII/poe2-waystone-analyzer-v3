@@ -4,11 +4,11 @@
  *  DOMINANT-STAT model (2026-07-1x redesign, user's own gameplay judgment —
  *  "basé sur sa plus grosse stat, et des petits bonus si y'a d'autres stats
  *  intéressantes"): find the waystone's single strongest stat (normalized
- *  against its own realistic ceiling — see `STAT_REFERENCES` — so Pack Size,
- *  which tops out near 30%, can still "win" against Item Rarity/Drop Chance,
- *  which run past 100%), tier it with the same 15/25/50 boundaries already
- *  used for mechanic/tablet fit (`mechanics.ts`'s `tierForPercent`), and add
- *  a small bonus for every OTHER stat that also clears "ok". See
+ *  against its own realistic ceiling — see `STAT_REFERENCES`, all 5 stats
+ *  now share the same 100/120 ceilings after the 2026-07-11 Pack Size fix
+ *  below), tier it with the same 15/25/50 boundaries already used for
+ *  mechanic/tablet fit (`mechanics.ts`'s `tierForPercent`), and add a small
+ *  bonus for every OTHER stat that also clears "ok". See
  *  `computeCompositeScore` below. This replaces the 2026-07-06 weighted-sum
  *  model (6 signals incl. a mechanic-density term, each capped and summed,
  *  then scaled by multiplicative mechanic/Pack-Size synergy) — that model
@@ -246,13 +246,22 @@ const STAT_SIGNALS: StatSignal[] = [
 
 // Each stat's realistic ceiling — used ONLY to compare stats of very
 // different natural ranges on a level footing before picking "the biggest
-// one" (Pack Size tops out near 30%, Item Rarity/Drop Chance run well past
-// 100% — comparing raw %s directly would mean Pack Size could never win
-// even when maxed). Same values as the old god-map reference table.
+// one". packSize was 30 at launch (copied from the old god-map reference
+// table without re-checking it) — far too low: a real T15's base Pack Size
+// mod alone rolls (41-50)% (maxroll.gg, already sourced for the same
+// constant on the Mechanic Match Score side, KNOWN_ISSUES #3's 2026-07-10
+// update), so 30 meant a completely ordinary 15% roll normalized to 50%
+// of "ceiling" — instant legendary tier for nearly every real waystone
+// with any Pack Size at all (user report, 2026-07-11: "le rating est tout
+// le temps en légendaire"). Raised to 100, matching every other stat here
+// (same generous-ceiling-over-tight-fit reasoning already used for that
+// other constant) — real Pack Size (up to ~64% observed) now needs to
+// actually be strong to dominate, same bar as Item Rarity/Monster Rarity/
+// Monster Effectiveness.
 const STAT_REFERENCES: Record<StatSignal, number> = {
   itemRarity: 100,
   monsterRarity: 100,
-  packSize: 30,
+  packSize: 100,
   monsterEffectiveness: 100,
   waystoneDropChance: 120,
 };
