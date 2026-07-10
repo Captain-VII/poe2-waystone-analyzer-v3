@@ -694,3 +694,98 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running waystone overlay");
 }
+
+/// Unit tests for the pure hotkey-validation logic — `is_printable_key`/
+/// `hotkey_accels`/`validate_hotkey_base` are plain string logic with no
+/// window/OS dependency (unlike most of this file, which needs a real
+/// window/display and has historically only been verified by hand — see
+/// KNOWN_ISSUES.md's Rust-side test-coverage gap). Deliberately NOT testing
+/// `env_flag`/`has_cli_flag` here: both read real process-global state
+/// (`env::var`/`env::args()`), which is unsafe to mutate across Rust's
+/// parallel-by-default test threads without extra test-only dependencies —
+/// not worth it for two three-line functions.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn printable_keys_are_rejected_letters_digits_numpad() {
+        assert!(is_printable_key("KeyA"));
+        assert!(is_printable_key("KeyZ"));
+        assert!(is_printable_key("Digit0"));
+        assert!(is_printable_key("Digit9"));
+        assert!(is_printable_key("Numpad5"));
+        assert!(is_printable_key("Comma"));
+        assert!(is_printable_key("Semicolon"));
+    }
+
+    #[test]
+    fn numpad_enter_is_the_one_numpad_exception() {
+        // NumpadEnter is an editing key (blocklisted separately), not a
+        // printable one — see is_printable_key's doc comment.
+        assert!(!is_printable_key("NumpadEnter"));
+    }
+
+    #[test]
+    fn navigation_and_function_keys_are_not_printable() {
+        assert!(!is_printable_key("Insert"));
+        assert!(!is_printable_key("F9"));
+        assert!(!is_printable_key("Delete"));
+        assert!(!is_printable_key("Home"));
+        assert!(!is_printable_key("ArrowUp"));
+        assert!(!is_printable_key("Escape"));
+    }
+
+    #[test]
+    fn hotkey_accels_derives_the_three_action_layers() {
+        let accels = hotkey_accels("Insert");
+        assert_eq!(
+            accels,
+            vec![
+                ("Insert".to_string(), "analyze"),
+                ("Shift+Insert".to_string(), "toggle"),
+                ("Control+Insert".to_string(), "compare"),
+            ]
+        );
+    }
+
+    #[test]
+    fn validate_hotkey_base_accepts_the_default_and_a_function_key() {
+        assert!(validate_hotkey_base(DEFAULT_HOTKEY_BASE).is_ok());
+        assert!(validate_hotkey_base("F9").is_ok());
+    }
+
+    #[test]
+    fn validate_hotkey_base_rejects_empty_and_combos() {
+        assert!(validate_hotkey_base("").is_err());
+        assert!(validate_hotkey_base("Shift+Insert").is_err());
+        assert!(validate_hotkey_base("Control C").is_err()); // whitespace
+    }
+
+    #[test]
+    fn validate_hotkey_base_rejects_blocklisted_keys() {
+        assert!(validate_hotkey_base("Escape").is_err());
+        assert!(validate_hotkey_base("Enter").is_err());
+        assert!(validate_hotkey_base("NumpadEnter").is_err());
+        assert!(validate_hotkey_base("Space").is_err());
+        assert!(validate_hotkey_base("Tab").is_err());
+        assert!(validate_hotkey_base("Backspace").is_err());
+    }
+
+    #[test]
+    fn validate_hotkey_base_rejects_printable_keys() {
+        // The actual reported bug this guards against (KNOWN_ISSUES/git log:
+        // "Reject printable keys as hotkey bases") — a global grab on a
+        // letter/digit would swallow it OS-wide, breaking typing everywhere
+        // including the game's own chat.
+        assert!(validate_hotkey_base("KeyA").is_err());
+        assert!(validate_hotkey_base("Digit5").is_err());
+        assert!(validate_hotkey_base("Comma").is_err());
+    }
+
+    #[test]
+    fn validate_hotkey_base_is_case_insensitive_on_the_blocklist() {
+        assert!(validate_hotkey_base("escape").is_err());
+        assert!(validate_hotkey_base("ESCAPE").is_err());
+    }
+}

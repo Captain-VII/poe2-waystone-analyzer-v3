@@ -17,3 +17,24 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run verify-adapter
+
+  # The app is Windows-only/WebView2-only, but until now this crate was
+  # never actually built or tested in CI — a src-tauri change could break
+  # the build and nothing would catch it before a release. Runs on
+  # windows-latest (matches the app's real target) rather than cross-
+  # compiling from Linux. `cargo check`/`cargo test` don't need the
+  # frontend built first (verified locally: `dist/` isn't required for
+  # either) — only `tauri build`'s full bundling step needs it, which this
+  # job deliberately doesn't run.
+  rust-checks:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: src-tauri
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: cargo check
+      - run: cargo test
