@@ -455,6 +455,16 @@ launched from a constrained shell), run with `CHOKIDAR_USEPOLLING=1`.
       live-resize case is open under M1, item 9 inherits the known
       compositor flakiness) rather than being silently marked done.
 
+      **Doc-hygiene note (2026-07-11):** `docs/overlay-ui-spec.md`'s §13
+      checklist itself still showed every box unchecked despite this pass
+      having verified all ten — synced to `[x]` here. Item 5's own wording
+      was also stale by then (still said "3 tablets + reasons," but the
+      tablet list grew to a 5-item cap with Run/Why Not/Don't Run verdicts
+      replacing per-row reason text somewhere between this pass and now) —
+      updated to match current behavior. This was a pure doc-sync pass, not
+      a re-walk of the checklist against the running app — the caveats
+      above (items 2/3/4/6/9) still apply exactly as written 2026-07-04.
+
 ## Release readiness pass (2026-07-04)
 
 Not a numbered milestone — a cleanup/packaging pass preparing the current

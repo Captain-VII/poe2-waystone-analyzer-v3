@@ -356,14 +356,25 @@ on tier in JS except `FxLayer` (sparks gate on `god`).
 
 ## 13. Acceptance checklist
 
-- [ ] Overlay opens in persisted mode with zero layout flash.
-- [ ] Ins → data + pulse + flare (+ sparks on God) in < 100ms after analyzer returns.
-- [ ] Shift+Ins and header button both morph modes in 220ms with micro-shift.
-- [ ] All five tier states render per §6; God halo never exceeds panel + 12px.
-- [ ] Compact shows exactly: score, tier name, verdict chip, 3 tablets + reasons,
-      ≤1 warning, footer. Nothing else.
-- [ ] Safe-zone pad 20px (14px below 1600×900); no edge ever off-screen.
-- [ ] Fallback: Full→Compact→Mini Compact; intended mode restored when space returns.
-- [ ] Reduce effects + OS reduced-motion honored per §10.
-- [ ] Game input is never blocked outside the three interactive regions.
-- [ ] Score digits don't shift during pulse (tabular numerals everywhere).
+Walked end-to-end 2026-07-04 (`docs/implementation-plan.md`'s M6 section) —
+all ten passed at the code/log level, three with an explicit caveat (items
+2/3/4 not visually re-confirmed that pass, item 9 inherits the still-open
+compositor flakiness, KNOWN_ISSUES #1). See that section for the per-item
+verification notes; not duplicated here. **Not re-walked live since** —
+checked below reflects that 2026-07-04 pass, not a fresh 2026-07-11
+re-verification. Item 5's wording was updated 2026-07-11 to match since-
+shipped changes (the tablet list grew from a 3-item cap to 5, and per-row
+"reasons" text was replaced by Run/Why Not/Don't Run verdicts) — everything
+else below is unchanged from the original 2026-07-04 wording.
+
+- [x] Overlay opens in persisted mode with zero layout flash.
+- [x] Ins → data + pulse + flare (+ sparks on God) in < 100ms after analyzer returns.
+- [x] Shift+Ins and header button both morph modes in 220ms with micro-shift.
+- [x] All five tier states render per §6; God halo never exceeds panel + 12px.
+- [x] Compact shows exactly: score, tier name, verdict chip, top-5 tablets +
+      Run/Why Not/Don't Run verdicts, ≤1 warning, footer. Nothing else.
+- [x] Safe-zone pad 20px (14px below 1600×900); no edge ever off-screen.
+- [x] Fallback: Full→Compact→Mini Compact; intended mode restored when space returns.
+- [x] Reduce effects + OS reduced-motion honored per §10.
+- [x] Game input is never blocked outside the three interactive regions.
+- [x] Score digits don't shift during pulse (tabular numerals everywhere).
