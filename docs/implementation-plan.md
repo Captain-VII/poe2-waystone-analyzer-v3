@@ -186,6 +186,43 @@ one clean session doesn't clear a non-deterministic bug at that base rate —
 but it's the first positive real-use data point, so downgrading urgency:
 no further active debugging planned unless it resurfaces in real use.
 
+**New attempt (2026-07-11):** debugging resumed at the user's request.
+Re-read the trial log above before trying anything new (avoid repeating a
+dead end): every window flag was already bisected individually (trials
+3-10) with none deterministically responsible, so this attempt doesn't
+touch flags again. Instead it targets a gap in the *reactive* mitigations
+already shipped: `recompose_nudge()` only fires on a hover-enter transition
+or a post-`hide()` reveal (`restore_known_size`) — trial #16 above
+("invisible from the start again... nudge did not fire") has neither, so
+no existing trigger could ever have caught it. `show_window` (the command
+that makes the window visible after the frontend's double-rAF paint
+confirmation, `diagnostics.ts`'s `showWhenPainted`) deliberately has no
+nudge of its own — trial #12 showed an *immediate* nudge racing the
+show itself and making things worse.
+
+The new angle: a **delayed** nudge burst (not immediate) — `lib.rs`'s
+`startup_nudge_burst`, called from `show_window` after `window.show()`
+succeeds, fires `recompose_nudge()` three times at 300/800/1500ms after
+show, giving the compositor time to settle before the first forced
+recomposite instead of racing it. Bisectable via `OVERLAY_STARTUP_NUDGE_BURST`
+(default on), same convention as every other flag in this section. This is
+an experimental mitigation, not a confirmed fix — the bug's own
+non-determinism (~30-40%/launch under rapid restart) means no single trial
+run proves anything either way; results from manual multi-launch testing
+go in the table below as they come in.
+
+| # | Config delta | Result |
+|---|---|---|
+| 17-24 | `startup_nudge_burst` added (300/800/1500ms delayed); 8 back-to-back dev-mode relaunches, real OS-level desktop screenshots (not CDP — see note below) taken ~1.8s after each `show_window invoked` log line | **1,2,3: visible. 4,5,6,7: invisible (no panel at all, game content unobstructed where it should be). 8: visible again.** Logs confirm all 3 nudges fired in every trial, including all 4 failures — the burst ran as designed and still didn't produce a visible frame. |
+
+**Result (2026-07-11): did not fix it.** 4 of 8 trials still failed, and every trial's own frontend diagnostics (`display-watch-attached`, panel geometry, stylesheet counts) were byte-identical between visible and invisible runs — no JS-observable difference, exactly matching this bug's original signature ("DOM/CSSOM diagnostics... show the panel as fully correct" even during a failure). The nudges physically fired (confirmed in the Rust-side logs) but the compositor still didn't present a frame in 4 cases — this rules out "the nudge never got a chance to run" as the explanation and points back to the compositor/driver race itself being the blocker, not the timing of when a resize is requested.
+
+**Caveat on the failure *pattern*, not just the rate:** 4 losses in a row is a longer streak than the original characterization of this bug ("the exact same configuration reproduced the issue on one launch and was clean on the next, back to back") would predict for a ~30-40% independent-per-launch rate (though not impossible — a 4-in-a-row streak has roughly a 4% chance at p=0.35, low but not negligible). A streak this long raises the possibility that rapid dev-mode relaunches share some state across trials that a real single long-lived launch wouldn't — WebView2 is known to reuse a shared browser-process family tied to the app's user-data-dir across restarts (already documented elsewhere in this project's session history as a source of dev-mode-specific quirks), which could plausibly carry a bad compositor state across several consecutive relaunches before it resets. Not confirmed — flagged as a real methodological uncertainty, not dismissed to explain away an inconvenient result.
+
+**Decision:** ship `startup_nudge_burst` anyway (bisectable via `OVERLAY_STARTUP_NUDGE_BURST`, same as the rest of this file's mitigations) — it's cheap, it's the same shape as the mitigations already kept despite not being confirmed fixes (`OVERLAY_EXPLICIT_BG`, `OVERLAY_HOVER_NUDGE`), and this test batch doesn't show it makes anything worse. But KNOWN_ISSUES #1 stays open and unresolved — this attempt did not close it.
+
+**Note on verification methodology:** a CDP/Playwright screenshot would NOT have caught this — it reads Chromium's own committed frame buffer, which the trial log's own diagnostics show is already "fully correct" during a failure; the bug is specifically that DWM/DirectComposition fails to *present* that correct buffer on screen. Verifying this class of bug requires a real OS-level desktop capture (`System.Drawing.Graphics.CopyFromScreen`), not a browser-internal screenshot API.
+
 ### Deterministic invisible-window bug (2026-07-03/04) — FIXED
 
 **Toolchain note (2026-07-03):** Rust was missing on this machine; installed via

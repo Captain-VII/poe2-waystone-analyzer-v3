@@ -44,6 +44,20 @@ restart cycling rather than a long-lived real-use overlay, but one clean
 session isn't proof against a ~30-40%-per-launch flaky bug — keep watching
 for it, especially right after launch or on the first hover.
 
+**Update (2026-07-11):** a new mitigation was tried targeting specifically
+the "invisible from the start, no hover/reveal involved" case (trial #16 in
+the log below) — the existing reactive nudge never had a trigger to fire on
+for that case. `show_window` now schedules a delayed nudge burst (300/800/
+1500ms after the window is shown) instead of the immediate nudge that was
+already tried and made things worse (trial #12). **Tested with 8 back-to-back
+launches and real desktop screenshots (a CDP screenshot can't see this bug —
+see the methodology note in the trial log): 4 of 8 still failed**, despite
+the nudges confirmed firing every time. Shipped anyway (bisectable via
+`OVERLAY_STARTUP_NUDGE_BURST`, default on) since it's cheap and doesn't
+appear to make anything worse, but **this issue is still open** — see
+`docs/implementation-plan.md`'s M1 section for the full result and a
+methodological caveat about the failure pattern.
+
 ## 2. Tablet pool is mostly not verified against real PoE2 tablet items — and the real system doesn't match this app's model
 
 **As of the 2026-07-04 update below, `src/analyzer/tablets.ts` ships

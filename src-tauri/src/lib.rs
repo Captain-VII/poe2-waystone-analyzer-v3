@@ -83,15 +83,43 @@ fn restore_known_size(window: &tauri::WebviewWindow) {
     let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize::new(w, h)));
 }
 
-// NOTE: deliberately no nudge here — this is the startup "post-paint
-// signal" path, and nudging that early once regressed to an
-// invisible-from-the-start window in testing (see the click-through
-// thread's `first_check` guard below for the same lesson). Post-hide
-// re-reveals use `reveal_window` instead, which nudges safely.
+// An IMMEDIATE nudge here once regressed to an invisible-from-the-start
+// window in testing (see the click-through thread's `first_check` guard
+// below for the same lesson) — racing a resize against the window-show
+// itself made things worse, not better. But the black-frame race has also
+// been observed with NO nudge at all firing anywhere (trial #16,
+// docs/implementation-plan.md's M1 log: "invisible from the start again...
+// nudge did not fire") — startup is the one path with no hover/reveal
+// transition to trigger the existing reactive nudges. `startup_nudge_burst`
+// below is the new angle: DELAYED nudges (not immediate), giving the
+// compositor time to settle first, at a few increasing offsets so a slow
+// first composite still gets caught.
 #[tauri::command]
 fn show_window(window: tauri::WebviewWindow) -> Result<(), String> {
     println!("[overlay] show_window invoked by frontend (post-paint signal)");
-    window.show().map_err(|e| e.to_string())
+    window.show().map_err(|e| e.to_string())?;
+    startup_nudge_burst(&window);
+    Ok(())
+}
+
+/// Bisectable via OVERLAY_STARTUP_NUDGE_BURST (default on) — see
+/// `show_window`'s doc comment for why this exists and why it's delayed
+/// rather than immediate. Three nudges at increasing offsets (not just one)
+/// since the compositor race's exact timing is unknown; logged the same way
+/// as every other nudge in this file so the trial-log methodology
+/// (docs/implementation-plan.md M1) can track whether this one helps.
+fn startup_nudge_burst(window: &tauri::WebviewWindow) {
+    if !env_flag("OVERLAY_STARTUP_NUDGE_BURST", true) {
+        return;
+    }
+    let handle = window.clone();
+    thread::spawn(move || {
+        for (i, delay_ms) in [300u64, 500, 700].iter().enumerate() {
+            thread::sleep(Duration::from_millis(*delay_ms));
+            println!("[overlay] startup nudge {}/3 firing", i + 1);
+            recompose_nudge(&handle);
+        }
+    });
 }
 
 /// Re-reveals the overlay after Escape/click-away/tray-hide — unlike
