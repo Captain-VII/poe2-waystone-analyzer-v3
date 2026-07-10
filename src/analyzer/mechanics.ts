@@ -47,14 +47,21 @@ const TIER_BOUNDS: { belowPercent: number; tier: StatTier }[] = [
   { belowPercent: Infinity, tier: "legendary" },
 ];
 
+/** Which tier a raw stat % falls into, against the same 15/25/50 boundaries
+ *  everywhere in the app now uses. Exported so scoring.ts's composite
+ *  waystone score (2026-07-1x: dominant-stat-plus-bonus model) can reuse the
+ *  exact same tiering instead of keeping its own copy. */
+export function tierForPercent(value: number): StatTier {
+  return TIER_BOUNDS.find((b) => value < b.belowPercent)!.tier;
+}
+
 /** Which tier a mechanic's PRIORITY stat falls into, given a stat profile
  *  (a waystone's parsed mods). Secondary stats no longer factor in at all
  *  (simplification, user's explicit call — `secondaryStats` stays on
  *  `MechanicDef`/meta.json only as user-facing/editable data, unused by
  *  scoring now). */
 export function priorityStatTier(profile: Partial<Record<StatKey, number>>, mech: MechanicDef): StatTier {
-  const value = profile[mech.priorityStat] ?? 0;
-  return TIER_BOUNDS.find((b) => value < b.belowPercent)!.tier;
+  return tierForPercent(profile[mech.priorityStat] ?? 0);
 }
 
 // Representative 0-100 point value per tier — exists only so every caller
@@ -99,11 +106,12 @@ export function scoreMechanicFit(profile: Partial<Record<StatKey, number>>, mech
 // Bestiary were previously scored too (mechanicScores kept all 17) even
 // though they could never surface as a tablet recommendation — dead
 // weight the user asked to cut. Blight/Legion/Essence's keyword patterns
-// stay in mechanic-patterns.ts: they still feed the real Juice Score's
-// mechanic-density term (scoring.ts's SYNERGY_MECHANIC_IDS), a separate,
-// still-useful signal unrelated to tablet-matching. The other six
-// (Heist/Sanctum/Harvest/Metamorph/Incursion/Bestiary) had no other
-// consumer and were removed from mechanic-patterns.ts too.
+// stayed in mechanic-patterns.ts a while longer (they fed the real Juice
+// Score's mechanic-density term) but that term itself was cut in the
+// 2026-07-1x composite-score rework (scoring.ts) — they were removed from
+// mechanic-patterns.ts in the same pass, alongside the other six
+// (Heist/Sanctum/Harvest/Metamorph/Incursion/Bestiary), which had no other
+// consumer to begin with.
 export const MECHANICS: MechanicDef[] = [
   // Community consensus 0.5 (switchbladegaming/timesaver/u4gm, 2026-07-06):
   // pack size drives splinter throughput in the fog; rarity (140%+ target)

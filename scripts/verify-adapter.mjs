@@ -473,12 +473,27 @@ check("white waystone: no mechanic recommendation, but tablets still show their 
 
 // (7) §10 skipIfBelow gate: a map whose Juice Score sits below every
 // eligible mechanic's skipIfBelow must not recommend one, even when a
-// mechanic fits well — monsterOnly (score ~21) fits Abyss/Ritual/Breach at
-// ~70, but their thresholds are all 30+. The tablet list is unaffected by
-// this gate (2026-07-10) — same reasoning as check (6).
+// mechanic fits well. Quantity is the cleanest fixture for this post-
+// 2026-07-1x (dominant-stat rework): it's explicitly NOT one of the Juice
+// Score's 5 scored signals (scoring.ts's file-level comment) but IS
+// Expedition's priority stat, so a quantity-only waystone's Juice Score
+// stays at the weak-tier floor (~10, well under Expedition's skipIfBelow
+// of 35) while Expedition's own Match Score reads legendary. The tablet
+// list is unaffected by this gate (2026-07-10) — same reasoning as check (6).
+const SAMPLE_EXPEDITION_QUANTITY_ONLY = `Item Class: Waystones
+Rarity: Rare
+Buried Cache
+Waystone (Tier 15)
+--------
+Waystone Tier: 15
+Item Level: 82
+--------
++90% increased Quantity of Items found in this Area
+--------`;
+const expeditionQuantityOnly = analyzeWaystoneText(SAMPLE_EXPEDITION_QUANTITY_ONLY);
 check("skipIfBelow gates the waystone-level recommendation, not the tablet list",
-  monsterOnly.recommendedMechanic === null &&
-  monsterOnly.tablets.some((t) => t.reason.includes("matches Ritual")));
+  expeditionQuantityOnly.recommendedMechanic === null &&
+  expeditionQuantityOnly.tablets.some((t) => t.reason.includes("matches Expedition")));
 
 // (7b) Per-tablet independence, direct regression pin (2026-07-10): a
 // waystone whose stats strongly favor Ritual GLOBALLY must not drag
@@ -567,12 +582,12 @@ check("strong Ritual-shaped stats alone (no mechanic text anywhere) still score 
 
 // ============================================================
 // MECHANIC-PATTERN CONSOLIDATION (KNOWN_ISSUES #4 follow-up, 2026-07-08):
-// mechanics.ts's detect/scoring.ts's density+display patterns now share one
-// source (mechanic-patterns.ts) and one text surface (parsed.contentText —
-// every block except the header). This pins the two score-side corrections
-// that come with it: the item NAME can no longer inflate the real Juice
-// Score, and content OUTSIDE the single mod block (e.g. an instilled
-// enchant) is no longer missed.
+// mechanics.ts's detect/scoring.ts's display patterns share one source
+// (mechanic-patterns.ts) and one text surface (parsed.contentText — every
+// block except the header). This pins the score-side correction that comes
+// with it: the item NAME can no longer inflate the "extra content: X"
+// display bonus (heat.score itself no longer reads contentText at all as
+// of the 2026-07-1x dominant-stat rework — see below).
 // ============================================================
 
 const mkScoreSample = (name, extraLine = "") => `Item Class: Waystones
@@ -590,10 +605,11 @@ ${extraLine}
 --------`;
 
 // (10) Score-side name fix: identical mods, only the name differs between
-// a mechanic keyword and a plain name → identical heat.score AND no
-// "extra content: ritual" bonus line for the keyword-named one. Both
-// assertions would have failed before this consolidation (evaluateMap used
-// to read the full raw text, name included).
+// a mechanic keyword and a plain name → identical heat.score (trivially
+// true now that heat.score doesn't read contentText at all — kept as a
+// regression pin) AND no "extra content: ritual" bonus line for the
+// keyword-named one (still a real contentText-vs-name distinction, since
+// bonusDetails/insights do read contentText).
 const scoreRitualNamed = analyzeWaystoneText(mkScoreSample("Ritual Reliquary"));
 const scorePlainNamed = analyzeWaystoneText(mkScoreSample("Forsaken Vault"));
 check("waystone NAME containing a mechanic keyword does not change heat.score",
@@ -601,53 +617,10 @@ check("waystone NAME containing a mechanic keyword does not change heat.score",
 check("waystone NAME containing a mechanic keyword grants no 'extra content' bonus",
   !scoreRitualNamed.insights.some((line) => /ritual/i.test(line)));
 
-// (11) Out-of-block content still counts for the real score: an instilled
-// "Players in Area are X% Delirious" line living in its OWN block (after
-// the mod block, not inside it) must still raise the real score's
-// mechanic-density term — extractModifiers() alone (single block) would
-// miss it, which is exactly why contentText spans every non-header block
-// instead of just the isolated mod list. (This used to also pin the Match
-// Score's detect bonus — removed 2026-07-10, see the section above.)
-const SAMPLE_INSTILLED_SEPARATE_BLOCK = `Item Class: Waystones
-Rarity: Rare
-Fogged Reliquary
-Waystone (Tier 15)
---------
-Waystone Tier: 15
-Item Level: 82
---------
-+30% increased Pack Size
---------
-Players in Area are 24% Delirious
---------`;
-const SAMPLE_NO_INSTILL = `Item Class: Waystones
-Rarity: Rare
-Fogged Reliquary
-Waystone (Tier 15)
---------
-Waystone Tier: 15
-Item Level: 82
---------
-+30% increased Pack Size
---------`;
-const instilledSeparate = analyzeWaystoneText(SAMPLE_INSTILLED_SEPARATE_BLOCK);
-const noInstill = analyzeWaystoneText(SAMPLE_NO_INSTILL);
-check("instilled Delirium line in its own block still raises heat.score (density term)",
-  instilledSeparate.heat.score > noInstill.heat.score);
-
-// (12) Anti-drift: Abyss/Essence plural mods now raise heat.score too, not
-// just the mechanic-match bonus — before consolidation, scoring.ts's
-// MECHANIC_SYNERGY_PATTERNS still had the narrow \babyss\b / \bessence\b
-// regexes even after mechanics.ts's detect was widened, so these mods
-// counted for the tablet recommendation but silently NOT for the density
-// term of the actual score.
-const abyssPlain = analyzeWaystoneText(mkScoreSample("Forsaken Vault"));
-const abyssModded = analyzeWaystoneText(mkScoreSample("Forsaken Vault", "Area contains 2 additional Abysses"));
-check("'Area contains 2 additional Abysses' raises heat.score (density term)",
-  abyssModded.heat.score > abyssPlain.heat.score);
-const essenceModded = analyzeWaystoneText(mkScoreSample("Forsaken Vault", "Area contains 2 additional Essences"));
-check("'Area contains 2 additional Essences' raises heat.score (density term)",
-  essenceModded.heat.score > abyssPlain.heat.score);
+// (11)/(12) Removed 2026-07-1x: both pinned scoring.ts's mechanic-density
+// term (an instilled/plural mechanic-keyword mod line raising heat.score),
+// which the dominant-stat rework dropped entirely — heat.score now reads
+// ONLY the 5 numeric stats, never contentText. See KNOWN_ISSUES.md.
 
 // ============================================================
 // REAL CLIPBOARD FORMAT (2026-07-09): a live paste from the game — the
@@ -793,6 +766,53 @@ check("Abyss: quantity-only waystone does NOT feed Abyss beyond the weak-tier ba
   check("tablet verdict: ok tier -> why-not", verdictOf(at(20, RARITY), "Ritual Tablet") === "why-not");
   check("tablet verdict: top tier -> run", verdictOf(at(30, RARITY), "Ritual Tablet") === "run");
   check("tablet verdict: legendary tier -> run", verdictOf(at(60, RARITY), "Ritual Tablet") === "run");
+}
+
+// ---------------------------------------------------------------------------
+// Composite Juice Score: dominant-stat model (2026-07-1x, user's own call —
+// "basé sur sa plus grosse stat, et des petits bonus si y'a d'autres stats
+// intéressantes"). Replaces the 2026-07-06 weighted-sum + multiplicative-
+// synergy model entirely. References below (Pack Size ceiling 30%, others
+// 100/120%) mirror scoring.ts's STAT_REFERENCES.
+{
+  check("a single stat alone scores exactly its own tier (Drop Chance 80% -> normalized 66.7% -> legendary -> 80, no bonus)",
+    analyzeWaystoneText(mkStatWaystone(["+80% chance to find an additional Waystone"])).heat.score === TIER_SCORE.legendary);
+
+  check("a lone weak stat floors at TIER_SCORE.weak with zero bonus (nothing else can be 'ok' if the max stat isn't)",
+    analyzeWaystoneText(mkStatWaystone(["+3% increased Pack Size"])).heat.score === TIER_SCORE.weak);
+
+  // Pack Size (ceiling 30%) at 25% normalizes to ~83% (legendary) and must
+  // outrank Item Rarity (ceiling 100%) at 40% raw, which only normalizes to
+  // 40% (top) — proves stats are compared against their OWN ceiling, not
+  // raw %, otherwise Item Rarity's bigger raw number would wrongly win.
+  const packVsRarity = analyzeWaystoneText(
+    mkStatWaystone(["+25% increased Pack Size", "+40% increased Rarity of Items found in this Area"]),
+  );
+  check("Pack Size 25% (near its own ceiling) outweighs a bigger-looking Item Rarity 40% as the dominant stat",
+    packVsRarity.heat.score === TIER_SCORE.legendary + Math.min(40 / 100, 1) * 5);
+
+  // Same dominant stat (Drop Chance, maxed) with two different secondary
+  // Monster Rarity values -> the bonus must scale with the secondary's own
+  // magnitude, not just its presence (2026-07-10's Q3 answer: "bonus
+  // proportionnel à la valeur de chaque stat").
+  const smallSecondary = analyzeWaystoneText(
+    mkStatWaystone(["+120% chance to find an additional Waystone", "+20% increased Rarity of Monsters"]),
+  );
+  const bigSecondary = analyzeWaystoneText(
+    mkStatWaystone(["+120% chance to find an additional Waystone", "+90% increased Rarity of Monsters"]),
+  );
+  check("the secondary-stat bonus is proportional to that stat's own value, not flat",
+    bigSecondary.heat.score > smallSecondary.heat.score &&
+    smallSecondary.heat.score === TIER_SCORE.legendary + Math.min(20 / 100, 1) * 5 &&
+    bigSecondary.heat.score === TIER_SCORE.legendary + Math.min(90 / 100, 1) * 5);
+
+  // A secondary stat below "ok" (< 15%) contributes nothing — matches the
+  // tablet-fit tiering, "nul" doesn't count as "intéressant".
+  const weakSecondary = analyzeWaystoneText(
+    mkStatWaystone(["+120% chance to find an additional Waystone", "+10% increased Rarity of Monsters"]),
+  );
+  check("a secondary stat under the 'ok' threshold contributes zero bonus",
+    weakSecondary.heat.score === TIER_SCORE.legendary);
 }
 
 // ---------------------------------------------------------------------------

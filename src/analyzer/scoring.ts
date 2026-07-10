@@ -1,10 +1,21 @@
 /** Juice Score engine for PoE2 waystones.
  *
- *  The actual score (`rewardScore`/`effectiveScore`/`score`) is a NORMALIZED
- *  model (2026-07-06 redesign): each loot signal contributes as a % of a
- *  "god map" reference value, not as a flat point value. This replaces the
- *  old flat-additive model, which compressed real maps into a ~0-25 band on
- *  a nominal 0-100 scale — see `computeBaseScore` below.
+ *  The actual score (`rewardScore`/`effectiveScore`/`score`) is a
+ *  DOMINANT-STAT model (2026-07-1x redesign, user's own gameplay judgment —
+ *  "basé sur sa plus grosse stat, et des petits bonus si y'a d'autres stats
+ *  intéressantes"): find the waystone's single strongest stat (normalized
+ *  against its own realistic ceiling — see `STAT_REFERENCES` — so Pack Size,
+ *  which tops out near 30%, can still "win" against Item Rarity/Drop Chance,
+ *  which run past 100%), tier it with the same 15/25/50 boundaries already
+ *  used for mechanic/tablet fit (`mechanics.ts`'s `tierForPercent`), and add
+ *  a small bonus for every OTHER stat that also clears "ok". See
+ *  `computeCompositeScore` below. This replaces the 2026-07-06 weighted-sum
+ *  model (6 signals incl. a mechanic-density term, each capped and summed,
+ *  then scaled by multiplicative mechanic/Pack-Size synergy) — that model
+ *  was found to average away genuinely strong individual stats (a real
+ *  waystone with +80% Drop Chance and +55% Item Rarity but nothing else
+ *  landed in the "MOYEN" band) and had accreted layers (synergy multipliers,
+ *  a soft overflow cap) that were hard to reason about together.
  *
  *  `breakdown`/`bonusDetails` (from the legacy `Weights`-per-field model and
  *  `POSITIVE_MOD_PATTERNS`) are kept ONLY as a display breakdown for the UI
@@ -27,7 +38,8 @@
  *  `effectiveScore`). */
 
 import { PATTERNS as NUMERIC_PATTERNS, type ModStats } from "./mod-parser";
-import { MECHANIC_PATTERNS, SYNERGY_MECHANIC_IDS, EXTRA_CONTENT_BONUS } from "./mechanic-patterns";
+import { MECHANIC_PATTERNS, EXTRA_CONTENT_BONUS } from "./mechanic-patterns";
+import { TIER_SCORE, tierForPercent, type StatTier } from "./mechanics";
 
 export interface Weights {
   itemRarity: number;
@@ -218,104 +230,64 @@ const POSITIVE_MOD_PATTERNS: Record<string, [RegExp, number]> = {
   ),
 };
 
-// Distinct league mechanics counted for both the mechanic-density term in
-// `computeBaseScore` and the stacking-synergy multiplier below — running
-// several at once compounds density and reward far more than any single
-// flat per-mechanic bonus could capture. Sourced from the shared
-// MECHANIC_PATTERNS/SYNERGY_MECHANIC_IDS (mechanic-patterns.ts) — exact
-// membership preserved (delirium, breach, ritual, abyss, expedition,
-// legion, essence, blight).
-const MECHANIC_SYNERGY_PATTERNS: Record<string, RegExp> = Object.fromEntries(
-  SYNERGY_MECHANIC_IDS.map((id) => [id, MECHANIC_PATTERNS[id]]),
-);
-
-function countActiveMechanics(text: string): number {
-  if (!text) return 0;
-  return Object.values(MECHANIC_SYNERGY_PATTERNS).filter((p) => p.test(text)).length;
-}
-
 function clamp01(x: number): number {
   return Math.max(0, Math.min(1, x));
 }
 
-// "God map" reference thresholds: the stat level at which that signal
-// counts as fully maxed (i.e. contributes its full weight below). Distinct
-// from CAPS above, which only bounds the legacy display breakdown.
-const RARITY_REFERENCE = 100; // Item Rarity %
-const MONSTER_RARITY_REFERENCE = 100; // Monster Rarity %
-const PACK_SIZE_REFERENCE = 30; // Pack Size %
-const MONSTER_EFFECTIVENESS_REFERENCE = 100; // Monster Effectiveness %
-const DROP_CHANCE_REFERENCE = 120; // Waystone Drop Chance %
-const MECHANIC_REFERENCE = 4; // distinct active mechanics
+// The 5 cahier-des-charges signals, keyed the same as `Weights`/`ModStats`.
+type StatSignal = keyof Weights;
+const STAT_SIGNALS: StatSignal[] = [
+  "itemRarity",
+  "monsterRarity",
+  "packSize",
+  "monsterEffectiveness",
+  "waystoneDropChance",
+];
 
-// Max points each signal contributes once it clears its god-map reference —
-// sums to 100, so a maxed-out map (100% rarity, 100% monster rarity, 30%
-// pack size, 100% monster effectiveness, 120% drop chance, 4+ mechanics)
-// lands `computeBaseScore` at exactly 100 before synergy/danger are even
-// applied. All 5 cahier-des-charges signals (§2/§5) are scored — the
-// original god-map redesign (2026-07-06) shipped with monsterRarity and
-// monsterEffectiveness accidentally dropped (a +90%/+80% waystone scored
-// 0/100), restored later the same day.
-const RARITY_WEIGHT = 25;
-const MONSTER_RARITY_WEIGHT = 15;
-const PACK_SIZE_WEIGHT = 20;
-const MONSTER_EFFECTIVENESS_WEIGHT = 10;
-const DROP_CHANCE_WEIGHT = 20;
-const MECHANIC_WEIGHT = 10;
+// Each stat's realistic ceiling — used ONLY to compare stats of very
+// different natural ranges on a level footing before picking "the biggest
+// one" (Pack Size tops out near 30%, Item Rarity/Drop Chance run well past
+// 100% — comparing raw %s directly would mean Pack Size could never win
+// even when maxed). Same values as the old god-map reference table.
+const STAT_REFERENCES: Record<StatSignal, number> = {
+  itemRarity: 100,
+  monsterRarity: 100,
+  packSize: 30,
+  monsterEffectiveness: 100,
+  waystoneDropChance: 120,
+};
 
-/** The actual "how good is this map" base signal: each stat contributes as
- *  a % of its own god-map reference (clamped to 100% of its own weight),
- *  not as a flat point value — so no single maxed-out stat can dominate the
- *  total, and a map doesn't need every signal maxed to reach a meaningful
- *  score. Naturally lands in [0, 100]. */
-function computeBaseScore(stats: ModStats, mechanicCount: number): number {
-  const rarityScore = clamp01(stats.itemRarity / RARITY_REFERENCE) * RARITY_WEIGHT;
-  const monsterRarityScore = clamp01(stats.monsterRarity / MONSTER_RARITY_REFERENCE) * MONSTER_RARITY_WEIGHT;
-  const packSizeScore = clamp01(stats.packSize / PACK_SIZE_REFERENCE) * PACK_SIZE_WEIGHT;
-  const monsterEffectivenessScore =
-    clamp01(stats.monsterEffectiveness / MONSTER_EFFECTIVENESS_REFERENCE) * MONSTER_EFFECTIVENESS_WEIGHT;
-  const dropScore = clamp01(stats.waystoneDropChance / DROP_CHANCE_REFERENCE) * DROP_CHANCE_WEIGHT;
-  const mechanicScore = clamp01(mechanicCount / MECHANIC_REFERENCE) * MECHANIC_WEIGHT;
-  return rarityScore + monsterRarityScore + packSizeScore + monsterEffectivenessScore + dropScore + mechanicScore;
+// Max bonus a single non-dominant stat can add, scaled by how close it is to
+// its own ceiling (100% of ceiling = full +5). With at most 4 other stats,
+// the composite score can't exceed legendary's 80 + 4*5 = 100 — no overflow
+// cap needed, unlike the old multiplicative-synergy model.
+const SECONDARY_BONUS_CAP = 5;
+
+interface DominantStat {
+  key: StatSignal;
+  normalizedPercent: number;
+  tier: StatTier;
 }
 
-// Reward stacking: 2+ distinct mechanics on one map compound each other
-// (more density, more overlapping reward triggers) rather than just adding
-// up — a multiplicative bonus on the count, not a per-mechanic flat one.
-function synergyMultiplier(mechanicCount: number): number {
-  if (mechanicCount >= 5) return 1.6;
-  if (mechanicCount === 4) return 1.4;
-  if (mechanicCount === 3) return 1.25;
-  if (mechanicCount === 2) return 1.1;
-  return 1.0;
-}
+/** The waystone's single strongest stat, tiered, plus a small bonus for
+ *  every other stat that also clears "ok" — see the file-level comment for
+ *  why. `normalizedPercent` is "how close to this stat's own ceiling", not
+ *  the raw %, so it's only meaningful for comparing stats against each
+ *  other, never shown to the player directly. */
+function computeCompositeScore(stats: ModStats): { score: number; dominant: DominantStat; bonus: number } {
+  const candidates = STAT_SIGNALS.map((key) => ({
+    key,
+    normalizedPercent: ((stats[key] ?? 0) / STAT_REFERENCES[key]) * 100,
+  }));
+  const dominant = candidates.reduce((best, c) => (c.normalizedPercent > best.normalizedPercent ? c : best));
+  const dominantTier = tierForPercent(dominant.normalizedPercent);
 
-// Pack Size amplifies whatever mechanic is stacked on top of it (more packs
-// means more delirium fog clears / breach splinters / ritual mobs, etc.).
-function statSynergyMultiplier(stats: ModStats, mechanicCount: number): number {
-  const hasPackSize = (stats.packSize ?? 0) > 0;
-  return hasPackSize && mechanicCount >= 1 ? 1.1 : 1.0;
-}
+  const bonus = candidates
+    .filter((c) => c.key !== dominant.key && tierForPercent(c.normalizedPercent) !== "weak")
+    .reduce((sum, c) => sum + clamp01(c.normalizedPercent / 100) * SECONDARY_BONUS_CAP, 0);
 
-// How many points of headroom above 100 the soft cap allows itself before
-// asymptoting, and how quickly it saturates within that headroom. Only
-// matters for `raw > 100` — see `normalizeToScale`.
-const OVERFLOW_HEADROOM = 20;
-const OVERFLOW_SOFTNESS = 50;
-
-// Identity up to 100 (a maxed-out base score, e.g. `computeBaseScore`'s own
-// ceiling, is NOT compressed — 100 in, 100 out), then a smooth asymptotic
-// cap for genuine overshoot only (synergy multipliers stacking on top of an
-// already-maxed base score). An earlier version (`100 * (1 - e^(-raw/100))`)
-// compressed EVERY input, not just overshoot — a perfect, danger-free map
-// (baseScore 100, no synergy) came out at 63, not 100. This version can
-// mathematically land a few points above 100 for extreme stacking (up to
-// 100 + OVERFLOW_HEADROOM); `effectiveScore` below still hard-clamps to
-// [0, 100], so that's the only number a player ever actually sees.
-function normalizeToScale(raw: number): number {
-  if (raw <= 100) return raw;
-  const excess = raw - 100;
-  return 100 + OVERFLOW_HEADROOM * (1 - Math.exp(-excess / OVERFLOW_SOFTNESS));
+  const score = Math.max(0, Math.min(100, TIER_SCORE[dominantTier] + bonus));
+  return { score, dominant: { key: dominant.key, normalizedPercent: dominant.normalizedPercent, tier: dominantTier }, bonus };
 }
 
 export interface FieldContribution {
@@ -443,50 +415,46 @@ export interface EvaluationResult {
    *  feeds `warning`/`warnings`/`dangerLevel` display only; never affects
    *  any score field. */
   dangerHits: DangerHit[];
-  /** The real score: each loot signal normalized against a "god map"
-   *  reference (`computeBaseScore`), scaled by mechanic-stacking synergy and
-   *  the Pack-Size/mechanic synergy bonus — "how good is this map on paper",
-   *  ignoring danger. Unchanged below 100 (no compression for a normal,
-   *  non-overshooting map); may land a few points above 100 under extreme
-   *  synergy stacking (see `normalizeToScale`) — `effectiveScore`/`score`
-   *  are what's actually clamped to [0, 100]. */
+  /** The real score: the dominant stat's tier score plus the secondary-stat
+   *  bonus (`computeCompositeScore`) — "how good is this map on paper",
+   *  ignoring danger. Naturally bounded to [0, 100] by construction (no
+   *  overshoot, unlike the old multiplicative-synergy model), so this is
+   *  already equal to `effectiveScore`/`score`. */
   rewardScore: number;
-  /** `rewardScore` hard-clamped to [0, 100]. Same value as `score`. Kept as
-   *  its own field for backward compatibility from when it also carried a
-   *  danger multiplier (removed 2026-07-08 — danger is display-only). */
+  /** Same value as `rewardScore`/`score`. Kept as its own field for
+   *  backward compatibility from when it also carried a danger multiplier
+   *  (removed 2026-07-08 — danger is display-only) and a soft overflow cap
+   *  (removed 2026-07-1x — the new model can't overshoot 100). */
   effectiveScore: number;
-  /** `computeBaseScore`'s output before synergy/soft-cap are applied
-   *  — the normalized-but-unscaled signal, for display layers that want to
-   *  show "raw stats vs. synergy" as separate numbers (see
-   *  displayAdapter.ts) instead of re-deriving them from scratch. */
+  /** The dominant stat's tier score (10/25/55/80, `mechanics.ts`'s
+   *  `TIER_SCORE`) alone, before the secondary-stat bonus — for display
+   *  layers that want to show "main stat vs. bonus" as separate numbers
+   *  (see displayAdapter.ts) instead of re-deriving them from scratch. */
   baseScore: number;
-  /** Points gained from `rewardScore` vs. `baseScore` alone — the
-   *  mechanic/Pack-Size synergy multipliers' net effect after the soft cap.
-   *  Always >= 0 (multipliers are all >= 1, soft cap is monotonic). */
+  /** The secondary-stat bonus alone (`rewardScore` - `baseScore`) — every
+   *  other stat that also cleared "ok", each contributing up to
+   *  `SECONDARY_BONUS_CAP` scaled by how close it is to its own ceiling.
+   *  Always >= 0. */
   synergyBonus: number;
 }
 
-/** Composite Juice Score (2026-07-06 normalized-model redesign): each loot
- *  signal contributes as a % of a "god map" reference value (`computeBaseScore`
- *  — Item Rarity/100%, Monster Rarity/100%, Pack Size/30%, Monster
- *  Effectiveness/100%, Waystone Drop Chance/120%, 4+
- *  mechanics), not as a flat point value, so real maps land across the full
- *  [0, 100] range instead of compressing into ~0-25. From there: a
- *  mechanic-stacking synergy multiplier and a Pack-Size/mechanic synergy
- *  bonus (`rewardScore` — unchanged below 100, only overshoot past 100 gets
- *  smoothed, see `normalizeToScale`), then a hard clamp to [0, 100]
- *  (`effectiveScore`). Danger mods never reduce the score — they surface as
- *  display-only warnings (see the file-level comment). `score` =
- *  `effectiveScore`, so existing callers (adapter.ts's tier/verdict/rating,
- *  all already reading `effectiveScore` directly) need no changes.
- *  `breakdown`/`bonusDetails` are still computed from the old flat model,
- *  but purely for UI display now — see the file-level comment.
+/** Composite Juice Score (2026-07-1x dominant-stat redesign — see the
+ *  file-level comment for the "why"): `computeCompositeScore` finds the
+ *  waystone's single strongest stat (normalized against its own realistic
+ *  ceiling), tiers it (same 15/25/50 boundaries as mechanic/tablet fit),
+ *  and adds a small bonus for every other stat that's also at least "ok".
+ *  Bounded to [0, 100] by construction — `rewardScore`/`effectiveScore`/
+ *  `score` are all the same number now (kept as separate fields for
+ *  backward compatibility, see their own doc comments). Danger mods never
+ *  reduce the score — they surface as display-only warnings (see the
+ *  file-level comment). `breakdown`/`bonusDetails` are still computed from
+ *  the old flat model, but purely for UI display now — see the file-level
+ *  comment.
  *
  *  `contentText` (parser.ts's `ParsedWaystone.contentText` — every block
- *  except the header) is what mechanic/positive-mod/danger keyword
- *  matching runs against, so the item's own NAME can never false-positive
- *  a match (KNOWN_ISSUES #4's follow-up, 2026-07-08: a waystone named
- *  "Ritual Reliquary" must not inflate the mechanic-density term). */
+ *  except the header) is what positive-mod/danger keyword matching runs
+ *  against, so the item's own NAME can never false-positive a match
+ *  (KNOWN_ISSUES #4's follow-up, 2026-07-08). */
 export function evaluateMap(
   stats: ModStats,
   contentText = "",
@@ -497,17 +465,13 @@ export function evaluateMap(
   const bonusDetails = detectPositiveMods(contentText);
   const dangerHits = detectDangerHits(contentText);
 
-  const mechanicCount = countActiveMechanics(contentText);
-  const baseScore = computeBaseScore(stats, mechanicCount);
-  const synergized = baseScore * synergyMultiplier(mechanicCount) * statSynergyMultiplier(stats, mechanicCount);
-  const rewardScore = round2(normalizeToScale(synergized));
-
-  const effectiveScore = round2(Math.max(0, Math.min(100, rewardScore)));
-
+  const { score: composite, dominant, bonus } = computeCompositeScore(stats);
+  const rewardScore = round2(composite);
+  const effectiveScore = rewardScore;
   const score = effectiveScore;
   const decision = score >= threshold ? "run" : "skip";
-
-  const synergyBonus = round2(Math.max(0, rewardScore - baseScore));
+  const baseScore = round2(TIER_SCORE[dominant.tier]);
+  const synergyBonus = round2(bonus);
 
   return {
     score,
@@ -517,7 +481,7 @@ export function evaluateMap(
     dangerHits,
     rewardScore,
     effectiveScore,
-    baseScore: round2(baseScore),
+    baseScore,
     synergyBonus,
   };
 }

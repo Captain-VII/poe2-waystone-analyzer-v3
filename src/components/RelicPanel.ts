@@ -18,17 +18,6 @@ import {
 } from "../overlaySettings";
 import { DEFAULT_HOTKEY_BASE, hotkeyLabel, keyEventToBase } from "../hotkeys";
 
-// Disabled 2026-07-10 pending the tablet-scoring rework (KNOWN_ISSUES.md):
-// the Heat Breakdown column's composite score/rating was found misleading
-// mid-rework (a real waystone showed a "35" Abyss fit next to a huge
-// Monster Rarity roll purely from a since-fixed formula bug) — the user
-// asked to stop DISPLAYING a score there temporarily without removing any
-// markup, so it's a straightforward re-enable once the rework has been
-// validated against more real waystones. The per-stat % rows
-// (data-breakdown) are untouched — those just mirror the item's own
-// tooltip and were never in question. Flip back to `true` to restore.
-const HEAT_SCORE_VISIBLE = false;
-
 export interface OverlayOptions {
   mode: Mode;
   /** OS reduced-motion OR the user's reduceEffects setting (§10). */
@@ -468,26 +457,19 @@ export function mountOverlay(
     ratingEl.className = `rating-pill rec-rating-${heat.rating}`;
     ratingEl.title = `Rating: ${heat.rating} (${heat.score.toFixed(1)})`;
 
-    // Heat Breakdown's composite score/rating (Full mode only) is
-    // temporarily off — see HEAT_SCORE_VISIBLE's doc comment. The per-stat
-    // % rows below are unaffected.
-    if (HEAT_SCORE_VISIBLE) {
-      miniBadge.textContent = BADGE_LABEL[heat.tierClass];
-      scoreFull.textContent = heat.score.toFixed(1);
-      q("[data-total]").textContent = heat.score.toFixed(1);
-      const ratingFullEl = q("[data-rating-full]");
-      ratingFullEl.textContent = heat.rating;
-      ratingFullEl.className = `rating-pill rec-rating-${heat.rating}`;
-      ratingFullEl.title = `Rating: ${heat.rating} (${heat.score.toFixed(1)})`;
-    } else {
-      miniBadge.textContent = "—";
-      scoreFull.textContent = "—";
-      q("[data-total]").textContent = "—";
-      const ratingFullEl = q("[data-rating-full]");
-      ratingFullEl.textContent = "";
-      ratingFullEl.className = "rating-pill";
-      ratingFullEl.title = "";
-    }
+    // Heat Breakdown's composite score/rating (Full mode). Re-enabled
+    // 2026-07-1x once the underlying formula was rebuilt around the
+    // waystone's own dominant stat (scoring.ts) — was temporarily hidden
+    // 2026-07-10 while the old weighted-sum model was found misleading
+    // mid-rework (KNOWN_ISSUES.md). The per-stat % rows below were never
+    // affected either way.
+    miniBadge.textContent = BADGE_LABEL[heat.tierClass];
+    scoreFull.textContent = heat.score.toFixed(1);
+    q("[data-total]").textContent = heat.score.toFixed(1);
+    const ratingFullEl = q("[data-rating-full]");
+    ratingFullEl.textContent = heat.rating;
+    ratingFullEl.className = `rating-pill rec-rating-${heat.rating}`;
+    ratingFullEl.title = `Rating: ${heat.rating} (${heat.score.toFixed(1)})`;
 
     // "Stat fit: 45" / "Reward: +9" / a value-less qualitative note like
     // "Confidence: medium (×0.92)" — see Tablet.breakdown's doc comment for

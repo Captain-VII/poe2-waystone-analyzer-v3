@@ -564,6 +564,76 @@ when its priority stat is completely absent — the old formula could hit
 a true zero. `verify-adapter.mjs`'s "no longer feeds X at all" checks were
 updated to assert the weak-tier baseline instead of zero, not loosened.
 
+**Update (2026-07-1x) — the Juice Score itself replaced with a dominant-
+stat model, and `HEAT_SCORE_VISIBLE` re-enabled:** the tier-based rework
+above only ever touched the Mechanic Match Score/tablet verdict; the real
+Juice Score (`scoring.ts`'s `evaluateMap`) kept its 2026-07-06 weighted-sum
++ multiplicative-synergy formula, still hidden behind `HEAT_SCORE_VISIBLE
+= false`. A real waystone surfaced why that formula stayed wrong even
+after the tablet fixes: **"Putrid Bearings"** (+55% Item Rarity, +80%
+Waystone Drop Chance, nothing else) landed in the "MOYEN" band under the
+old weighted-sum — averaging 6 signals (including a mechanic-density term)
+diluted two genuinely strong stats down to mediocre. The user's call:
+*"on va réactiver le score principal mais il sera basé sur ça plus grosse
+stat, et des petits bonus si y'a d'autres stats intéressantes"* — same
+philosophy as the tablet-fit rework, applied to the waystone's own
+composite score.
+
+**What changed** (`scoring.ts`'s `computeCompositeScore`, replacing
+`computeBaseScore`/`synergyMultiplier`/`statSynergyMultiplier`/
+`normalizeToScale` entirely):
+1. Each of the 5 cahier-des-charges stats is normalized against its OWN
+   realistic ceiling (`STAT_REFERENCES` — Item Rarity/Monster Rarity/100%,
+   Pack Size/30%, Monster Effectiveness/100%, Drop Chance/120%, same
+   values the old god-map references used) — asked and confirmed with the
+   user first: comparing raw %s directly would mean Pack Size (tops out
+   near 30%) could never "win" against Item Rarity/Drop Chance (run past
+   100%) even when maxed. The stat with the highest normalized value is
+   the **dominant stat**.
+2. The dominant stat is tiered with the exact same 15/25/50 boundaries as
+   the Mechanic Match Score (`mechanics.ts`'s `tierForPercent`, extracted
+   from `priorityStatTier` for this reuse) — one mental model for "how
+   strong is this stat" across the whole app now. `TIER_SCORE[tier]`
+   (10/25/55/80) is the base score.
+3. Every OTHER stat that also clears "ok" (>= 15% normalized) adds a small
+   bonus, proportional to how close it is to its own ceiling (0 to
+   `SECONDARY_BONUS_CAP = 5`, confirmed with the user as "proportionnel à
+   la valeur" over a flat +5) — a "nul" secondary contributes nothing.
+   With at most 4 other stats, legendary(80) + 4×5 = 100 exactly, so the
+   score can never overshoot 100 by construction — no soft overflow cap
+   needed, unlike the old model.
+4. The mechanic-density term (counting distinct league-mechanic keywords
+   in the item text) is dropped outright, not folded in as a 6th "stat" —
+   the user's wording was specifically about *stats*. Its only remaining
+   consumers (Blight/Legion/Essence's `MECHANIC_PATTERNS` entries,
+   `SYNERGY_MECHANIC_IDS`) had no other use once the density term was
+   gone, so they were removed from `mechanic-patterns.ts` rather than left
+   dead — the other six tablet-less mechanics (Heist/Sanctum/Harvest/
+   Metamorph/Incursion/Bestiary) had already been cut the same way on
+   2026-07-10.
+
+**Item Quantity stays excluded** from the Juice Score (unchanged from the
+2026-07-06 design, see the file-level comment) — it's Expedition's
+priority stat for the Mechanic Match Score, but contributes nothing to the
+dominant-stat comparison. Verified directly: a quantity-only waystone's
+Juice Score floors at the weak-tier baseline (~10) while its Expedition
+Match Score reads legendary — the §10 `skipIfBelow` gate still correctly
+withholds the waystone-level recommendation in that case
+(`verify-adapter.mjs`).
+
+`HEAT_SCORE_VISIBLE` removed (was `RelicPanel.ts`'s temporary display
+toggle from earlier this session) — the Heat Breakdown column's composite
+score/rating is shown again unconditionally, now backed by this formula.
+
+Verified against real data: "Putrid Bearings" now scores **82.75,
+Legendaire** (was "MOYEN"); "Rotting Course" (the original Abyss bug
+report waystone) scores **81.5, Legendaire**, consistent with its Abyss
+Tablet fit of 100/100. `verify-adapter.mjs` pins the formula directly —
+a lone stat scores exactly its tier, a lone weak stat floors at 10 with
+zero bonus, Pack Size at 25% (near its ceiling) outranks a bigger-looking
+Item Rarity at 40% as the dominant stat, and the secondary-stat bonus
+scales with the secondary's own magnitude rather than being a flat award.
+
 ## 4. ~~Mechanic-presence detection is a simple keyword match~~ (resolved 2026-07-08)
 
 "Mecanique naturelle presente sur la map" (§2/§8/§9) is detected by a regex
