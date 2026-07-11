@@ -29,6 +29,13 @@ Validé, mais pas urgent :
 
 Vrac à trier :
 
+- [ ] Afficher quel « maître de l'Atlas » (spécialisation d'arbre Atlas)
+      convient le mieux à la mécanique dominante de la waystone analysée.
+      Source pressentie : les strats Fubgun sur Mobalytics
+      (<https://mobalytics.gg/poe-2/atlas-trees/fubgun-atlas-tree-strats>) —
+      attention, la page bloque le scraping (403) et ses onglets sont en JS
+      côté client : le contenu devra être collé à la main depuis le
+      navigateur, comme pour la recalibration Breach/Abyss du 2026-07-10.
 - [ ] Bug écran noir (KNOWN_ISSUES #1) : ne rouvrir que si l'hypothèse
       WebView2 process-reuse se confirme chez les testeurs — dernière
       tentative (rafale de nudges différés) le 2026-07-11, sans succès.
