@@ -225,6 +225,43 @@ cross-checked against maxroll.gg's rolling guide. Findings:
   explicitly say they don't cover these three, consistent with the
   poe2db.tw finding already on record.
 
+**Update (2026-07-12) — mostly closed, real data-mined source found:**
+user pointed at `github.com/repoe-fork/repoe`, which turned out to host a
+genuinely data-mined (not wiki-summary) PoE2 export at
+`repoe-fork.github.io/poe2/mods.json` — a `"domain": "tablet"` filter
+yields all 125 real tablet mods straight from the game's files. Two
+concrete corrections came out of it:
+- **"Standard Precursor Tablet" was never real** — the data-mined source
+  only has an implicit "Adds [mechanic] to a Map" mod for exactly eight
+  real base types (Breach/Ritual/Delirium/Expedition/Irradiated/Overseer/
+  Abyss/Temple), no generic ninth. Removed from `tablets.ts` and every
+  `mechanics.ts` `recommendedTablets` reference (replaced with Overseer
+  Precursor Tablet, the one remaining general-purpose type) rather than
+  kept as a plausible-looking fiction.
+- **The "every real tablet is Magic rarity, 1 prefix + 1 suffix" premise
+  from the 2026-07-11 update above was also wrong** — two real in-game
+  item texts (pasted by the user) proved a Normal-rarity tablet has zero
+  mods while a well-rolled Rare tablet carries 4 (2 prefixes + 2
+  suffixes). Every tablet's `mods` entry now represents a well-rolled
+  Rare tablet instead of a single representative line — see
+  `tablets.ts`'s header comment and each entry's own comment for the
+  exact real ranges and the reasoning behind which stats were picked when
+  a slot had more than one tracked-stat option.
+- Overseer Precursor Tablet's two boss-scoped suffix values were also
+  corrected against the same source: Item Rarity of Map Boss drops is
+  really (35-60)%, not the old 20%; Waystone Quantity from Map Bosses is
+  really (18-30)%, not the old 8% — both had been guessed too low by the
+  wiki-summary sourcing used previously.
+- Confidence bumped from "medium"/"low" to "high" across the board
+  (source `"poe2db"`) — no longer a plausible guess, a real data-mined
+  range with a documented, reasoned pick within it.
+- **Still not done**: Magic Monsters/Gold/Experience remain untracked and
+  out of scope (same reasoning as before — would touch the stabilized
+  Juice Score formula, issue #3). The mechanic-specific currency
+  suffixes (Splinters, Artifacts, Tribute, etc.) are real and now fully
+  visible in the data-mined source too, but deliberately stay out of
+  `mods` — that's `rewards.ts`'s job, unchanged by this pass.
+
 ## 3. Juice Score weights and Mechanic Match Score formula are a first pass
 
 The Juice Score's god-map references/weights (`src/analyzer/scoring.ts`'s

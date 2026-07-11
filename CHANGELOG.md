@@ -5,6 +5,10 @@ utilisateur (pas de détails internes). La section la plus récente en premier.
 Ce fichier est embarqué dans l'app (panneau "Quoi de neuf" + Réglages) et
 sert de description à la release GitHub — écrire pour les joueurs.
 
+## 0.2.9
+
+- **More accurate "Recommended Tablets" list**: every tablet's stats are now sourced from real game data instead of guesses, including corrected values for the Overseer tablet. Also removed a "Standard Precursor Tablet" that turned out to never actually exist in the game.
+
 ## 0.2.8
 
 - **Removed the "Secondary 1/2" dropdowns** from Settings' Meta section and the tablet-click popup — they stopped affecting scoring a while ago and were just confusing to fiddle with. Priority stat and skip threshold still work exactly the same.

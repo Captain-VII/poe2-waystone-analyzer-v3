@@ -12,47 +12,51 @@
  *  every mechanic its boosts fit, with no `recommendedTablets` list to
  *  maintain per mechanic.
  *
- *  **Verified against the real game (2026-07-04), replacing the earlier
- *  7 "original" + 8 "placeholder" guesses.** Cross-checked against three
- *  independent sources (poe2wiki.net, maxroll.gg, odealo.com) covering the
- *  Precursor Tablet/Atlas Tower system, plus poe2db.tw's item data (checked
- *  2026-07-06) for the full base-type list: real PoE2 has **nine** standard
- *  tablet types — Standard, Overseer, Breach, Ritual, Delirium, Expedition,
- *  Abyss, Irradiated, Temple — no more. Legion, Heist, Sanctum, Harvest,
- *  Metamorph, Essence, Incursion, and Bestiary have no dedicated tablet at
- *  all (a `mechanics.ts` fact, not a gap in this file — see
- *  KNOWN_ISSUES.md #2). All 8 "placeholder" entries and the unverified
- *  Blight/General entries from the earlier pass are removed rather than
- *  kept alongside real data.
+ *  **Re-verified 2026-07-12 against a real data-mined source:**
+ *  repoe-fork.github.io/poe2/mods.json (a fork of the RePoE tool-dev data
+ *  export, `"domain": "tablet"` entries — genuinely mined from the game's
+ *  files, not a wiki summary). This corrected two things earlier passes
+ *  got wrong from wiki/poe2db.tw sourcing:
+ *  1. **"Standard Precursor Tablet" was never real** — the data-mined
+ *     source has an implicit "Adds [mechanic] to a Map" mod for exactly
+ *     **eight** real base types — Breach, Ritual, Delirium, Expedition,
+ *     Irradiated, Overseer, Abyss, Temple (Temple = Incursion/Vaal
+ *     Beacons internally) — no generic ninth type. Removed outright
+ *     rather than kept as a plausible-looking fiction. Legion, Heist,
+ *     Sanctum, Harvest, Metamorph, Essence, and Bestiary still have no
+ *     dedicated tablet at all (a `mechanics.ts` fact, not a gap here —
+ *     see KNOWN_ISSUES.md #2).
+ *  2. **"Every real tablet is Magic rarity, 1 prefix + 1 suffix max" was
+ *     wrong** — two real in-game item texts (pasted by the user) proved a
+ *     Normal-rarity tablet has *zero* mods (just the base "Adds
+ *     [mechanic] to a Map, 10 uses" implicit) while a well-rolled Rare
+ *     tablet can carry **4** (2 prefixes + 2 suffixes). Each `mods` entry
+ *     below now represents a well-rolled Rare tablet — up to 2 prefix + 2
+ *     suffix lines — not an exhaustive roll table, and not every possible
+ *     combination (a real tablet still only has 2 of each at once). All
+ *     four shared-pool prefixes (Item Rarity/Monster Rarity/Pack
+ *     Size/Monster Effectiveness) are available to every one of the eight
+ *     real tablets equally; when a slot has more tracked-stat options than
+ *     it has room for, the ones picked are a reasoned, mechanic-themed
+ *     choice (documented per entry) in the absence of market data on
+ *     which roll players actually prioritize — a user with a differently-
+ *     rolled real tablet overrides it via meta.json's "tablets" array.
+ *     Duplicating a stat key across two lines on the same tablet is
+ *     avoided on purpose: `mod-parser.ts` keeps the max value per stat
+ *     across all lines, not a sum, so a repeated key would just waste a
+ *     slot. The mechanic-specific types' real value is also partly in
+ *     mechanic-specific currency (Breach Splinters, Expedition
+ *     Artifacts/Logbooks, Ritual Tribute, Delirium Simulacrum Splinters)
+ *     — that's what `rewards` (rewards.ts) represents, kept separate from
+ *     `mods`.
  *
- *  Every real tablet is Magic rarity (1 prefix + 1 suffix) and can roll
- *  from the *same* shared generic-stat prefix pool (Quantity/Rarity/Pack
- *  Size/Magic Monsters/Rare Monsters/Gold/Experience); each `mods` entry
- *  below is one representative prefix (or, for Standard/Overseer, prefix +
- *  a stat-shaped suffix) from that pool, not an exhaustive roll table — a
- *  real tablet only ever has one of each anyway, so "the full pool" isn't
- *  something a single definition can represent; a user with a differently-
- *  rolled real tablet overrides it via meta.json's "tablets" array. The
- *  four mechanic-specific types' real value is almost entirely in their
- *  *suffix*, which grants mechanic-specific currency (Breach Splinters,
- *  Expedition Artifacts/Logbooks, Ritual Tribute, Delirium Simulacrum
- *  Splinters) rather than a generic stat — that's what `rewards`
- *  (rewards.ts) represents; Standard/Overseer have no mechanic-specific
- *  currency of their own, so they carry no `rewards`.
- *
- *  **Re-sourced 2026-07-11**: the shared prefix pool and the Standard/
- *  Overseer/Breach/Ritual/Delirium/Expedition suffix pools were cross-
- *  checked against poe2wiki.net's dedicated tablet-modifier list (fetched
- *  via odealo.com's summary — poe2wiki itself blocks non-browser fetches)
- *  and maxroll.gg's rolling guide; several representative values were
- *  outside the newly-confirmed real ranges and corrected (see each entry's
- *  own comment). Magic Monsters/Gold/Experience remain untracked (would
- *  need new `StatKey`s and a scoring-model decision — explicitly out of
- *  scope for this pass, see KNOWN_ISSUES.md #2). Abyss/Irradiated/Temple
- *  mods remain unconfirmed by any source checked so far (both new sources
- *  explicitly omit them, same as poe2db.tw before). Replace any entry's
- *  exact mod wording once a more precise source turns up; no other code
- *  needs to change either way. */
+ *  Every real per-tablet pool includes plenty of mods outside this app's
+ *  six tracked stats (Experience, Gold, monster/rare-monster *density*
+ *  rather than rarity%, chest/Essence/Shrine/Strongbox chance, mechanic-
+ *  scoped effects like "Effectiveness of Rare Breach Monsters") —
+ *  deliberately left out, not a gap (see KNOWN_ISSUES.md #2). Replace any
+ *  entry's exact mod wording once a more precise/updated source turns up;
+ *  no other code needs to change either way. */
 
 import { parseMods } from "./mod-parser";
 import { computeRewardScore, type Reward } from "./rewards";
@@ -103,172 +107,193 @@ export interface TabletDef extends RawTabletDef {
 // Bundled defaults. Extend this list, or (preferred, no rebuild needed) add
 // entries to the user's meta.json "tablets" array — see meta-config.ts.
 export const DEFAULT_TABLETS: RawTabletDef[] = [
-  // Verified against real PoE2 Precursor Tablet modifiers (poe2wiki.net,
-  // maxroll.gg, odealo.com — cross-checked 2026-07-04). The one
-  // non-mechanic-specific tablet type: no mechanic-specific currency of its
-  // own, so no `rewards`. Real shared-prefix range (10-20)%; suffix ranges
-  // vary by roll (e.g. "1 additional random Modifier") — using a
-  // representative prefix midpoint.
-  // 2026-07-11: corrected from two prefix-pool lines (a mistake — a real
-  // tablet is Magic rarity, 1 prefix + 1 suffix, never two prefixes) to one
-  // of each, cross-checked against poe2wiki's tablet-modifier list (via
-  // odealo.com's summary) and maxroll.gg: prefix Rarity of Items (10-15%
-  // range, both sources agree, using the midpoint) + Standard's own real
-  // suffix ("increased Quantity of Waystones found in your Maps," 10-20%
-  // range). That suffix is rephrased here as "chance to drop a Waystone" —
-  // verified via probe script that the literal wiki wording also parses as
-  // `quantity` (Item Quantity) purely because it contains the word
-  // "quantity," which would be a wrong/duplicate boost; this app's existing
-  // "chance to drop/find a Waystone" phrasing parses cleanly as only
-  // `waystoneDropChance`, same real range, no accuracy loss.
-  {
-    name: "Standard Precursor Tablet",
-    mods: ["12% increased Rarity of Items found", "15% increased chance to drop a Waystone"],
-    tags: ["general"],
-    confidence: "high",
-    source: "wiki",
-  },
-  // Drops from Map Bosses; boosts their own drops specifically. Real suffix
-  // ranges: waystone quantity (5-10)%, item rarity (15-25)% dropped by Map
-  // Bosses — using midpoints. No mechanic-specific currency of its own.
-  // Re-confirmed 2026-07-11 against poe2wiki's tablet-modifier list (via
-  // odealo.com) and maxroll.gg — both existing values already sit inside
-  // the sourced ranges, unchanged.
+  // Removed 2026-07-12: "Standard Precursor Tablet" was never a real
+  // PoE2 base item — the authoritative data-mined mod list
+  // (repoe-fork.github.io/poe2/mods.json, domain "tablet") only has
+  // implicit "Adds [mechanic] to a Map" mods for exactly eight real base
+  // types (Breach/Ritual/Delirium/Expedition/Irradiated/Overseer/Abyss/
+  // Temple, i.e. Incursion) — no generic "Standard" one. Likely invented
+  // in an earlier pass; removed rather than kept as a plausible-looking
+  // fiction. Every real tablet (any of the eight) can roll from the same
+  // shared generic-stat pool this entry used, so nothing is lost — see
+  // each entry below.
+  //
+  // Drops from Map Bosses; boosts their own drops specifically. Re-sourced
+  // 2026-07-12 from repoe-fork.github.io/poe2/mods.json's real tablet mod
+  // pool (domain "tablet") — Overseer has two boss-scoped suffixes mapping
+  // onto tracked stats: Item Rarity of Map Boss drops (35-60%, was
+  // wrongly 20% from an older wiki-summary source) and Waystone Quantity
+  // from Map Bosses (18-30%, was wrongly 8%). Prefixes switched to Monster
+  // Effectiveness + Monster Rarity (both distinct from the two boss
+  // suffixes — the shared Item Rarity prefix would just be shadowed by
+  // the much bigger boss-scoped suffix on the same stat, since duplicate
+  // stat lines take the max, not a sum) at their shared-pool midpoints.
   {
     name: "Overseer Precursor Tablet",
-    mods: ["8% increased chance to drop a Waystone", "20% increased Rarity of Items dropped by Map Bosses"],
+    mods: [
+      "12% increased Monster Effectiveness",
+      "17% increased Monster Rarity",
+      "47% increased Rarity of Items dropped by Map Bosses",
+      "24% increased chance to drop a Waystone",
+    ],
     tags: ["general"],
     confidence: "high",
-    source: "wiki",
+    source: "poe2db",
   },
-  // Real suffixes are almost entirely Breach-specific (Splinters, monster
-  // density, additional Breaches) rather than a generic stat — that value
-  // flows through `rewards`, not `mods`. `mods` here is one representative
-  // shared-prefix roll (Rare Monsters, matching the researched 0.5 Breach
-  // profile: rares carry the value, not white packs). Value corrected
-  // 2026-07-11: the shared "Rare Monsters" prefix's real range is (10-15)%
-  // (poe2wiki via odealo.com, confirmed by maxroll.gg) — was 20%, outside
-  // that range; now the midpoint.
+  // Re-sourced 2026-07-12 from poe2db.tw's Modifiers Calc widget (pasted
+  // by the user) — Breach Tablet's real prefix pool includes Monster
+  // Effectiveness (10-15%), Item Rarity (8-12%), Pack Size (5-7%), and
+  // Monster Rarity (15-20%), but a real tablet only has 2 prefixes at
+  // once; picked Monster Rarity + Item Rarity (more rare/magic monsters
+  // = more Breach Splinters, same "rares carry the value" theme as
+  // Ritual below) at each range's midpoint. Suffix pool's two
+  // tracked-stat options: "Quantity of Waystones found in Map" (30-40%,
+  // = this app's waystoneDropChance, reworded to the existing "chance to
+  // drop a Waystone" phrasing so mod-parser.ts's regex catches it) and a
+  // Breach-scoped Pack Size roll (5-15%) — both used, midpoints. The rest
+  // of the real pool (Experience/Gold/chest-Essence-Shrine-Strongbox
+  // chance/rare-monster *count*/Breach-monster-specific effectiveness) is
+  // outside this app's six tracked stats, left out. Real mechanic-
+  // specific value (Splinters etc.) stays in `rewards` below, unchanged.
   {
     name: "Breach Tablet",
-    mods: ["12% increased Rarity of Monsters"],
+    mods: [
+      "17% increased Rarity of Monsters",
+      "10% increased Rarity of Items found",
+      "35% increased chance to drop a Waystone",
+      "10% increased Pack Size",
+    ],
     tags: ["breach"],
-    confidence: "medium",
-    source: "wiki",
+    confidence: "high",
+    source: "poe2db",
     rewards: [
       { type: "mechanic", id: "breach", value: 7 },
       { type: "currency", id: "breach_splinter", weight: 3 },
     ],
   },
-  // Real suffixes are Ritual Tribute/Favour-focused, not a generic stat —
-  // see `rewards`. `mods` is a representative shared-prefix roll (Rare
-  // Monsters: tribute scales with magic/rare monster count, and item
-  // rarity does NOT affect ritual rewards per the 0.5 research pass).
-  // Value corrected 2026-07-11 to the sourced (10-15)% midpoint, same
-  // shared-prefix range as Breach above — see that entry's comment for
-  // sourcing.
+  // Re-sourced 2026-07-12 from repoe-fork.github.io/poe2/mods.json (data-
+  // mined, domain "tablet") — Ritual has no stat-mapped mechanic-specific
+  // suffix (its suffix pool is entirely Tribute/Favour/Omen-focused, see
+  // `rewards`), so its suffix falls back to the shared "Quantity of
+  // Waystones found in Map" line. Prefixes: Monster Rarity + Pack Size —
+  // both monster-count/rarity themed, matching the existing "tribute
+  // scales with magic/rare monster count, item rarity does NOT affect
+  // ritual rewards" research finding better than the old single-line
+  // version did.
   {
     name: "Ritual Tablet",
-    mods: ["12% increased Rarity of Monsters"],
+    mods: ["17% increased Monster Rarity", "6% increased Pack Size", "35% increased chance to drop a Waystone"],
     tags: ["ritual"],
-    confidence: "medium",
-    source: "wiki",
+    confidence: "high",
+    source: "poe2db",
     rewards: [
       { type: "mechanic", id: "ritual", value: 6 },
       { type: "currency", id: "tribute", weight: 2 },
     ],
   },
-  // Real suffixes are Simulacrum Splinters/Fog-focused, not a generic stat
-  // — see `rewards`. Was a generic 20% Pack Size prefix — corrected
-  // 2026-07-11: the shared Pack Size prefix's real range is only (3-7)%
-  // (poe2wiki via odealo.com AND maxroll.gg agree exactly on this one), so
-  // 20% was well outside it. Switched to Delirium's own real suffix
-  // instead — "Delirium Monsters in your Maps have (5-10)% increased Pack
-  // Size" — both more accurate to a real roll AND thematically Delirium-
-  // specific rather than a generic map-wide line; phrased to parse as
-  // packSize only (verified via probe script), using the midpoint.
+  // Re-sourced 2026-07-12 from repoe-fork.github.io/poe2/mods.json — real
+  // Delirium-scoped suffix "Delirium Monsters in Map have (15-30)%
+  // increased Pack Size" replaces the old made-up-sounding 8% guess.
+  // Prefixes (Item Rarity, Monster Effectiveness) deliberately avoid Pack
+  // Size again — duplicating a stat key across lines is wasted space,
+  // since `mod-parser.ts` keeps the max per stat, not a sum.
   {
     name: "Delirium Tablet",
-    mods: ["8% increased Pack Size for Delirium Monsters"],
+    mods: [
+      "10% increased Rarity of Items found",
+      "12% increased Monster Effectiveness",
+      "22% increased Pack Size for Delirium Monsters",
+      "35% increased chance to drop a Waystone",
+    ],
     tags: ["delirium"],
-    confidence: "medium",
-    source: "wiki",
+    confidence: "high",
+    source: "poe2db",
     rewards: [
       { type: "mechanic", id: "delirium", value: 9 },
       { type: "currency", id: "simulacrum_splinter", weight: 3 },
     ],
   },
-  // Real suffixes are Artifact/Logbook/Remnant-focused, not a generic stat
-  // — see `rewards`. `mods` is a representative shared-prefix roll (Item
-  // Quantity — no real Expedition-specific generic-stat suffix exists, so
-  // any shared prefix is as defensible as another). Value note 2026-07-11:
-  // the shared Quantity prefix's real range is genuinely disputed between
-  // the two sources checked — poe2wiki (via odealo.com) says (3-7)%,
-  // maxroll.gg says (10-20)% for the same nominal mod, no overlap between
-  // them. Not resolved (avoiding a third-source hunt for a tie-break, see
-  // KNOWN_ISSUES.md #3's fatigue note) — 10% sits right at maxroll's floor
-  // and just above odealo's ceiling, the least-arbitrary single number
-  // given both are cited.
+  // Re-sourced 2026-07-12 from repoe-fork.github.io/poe2/mods.json — the
+  // old "10% increased Quantity of Items found" line didn't correspond to
+  // any real rollable tablet mod at all (no generic Item Quantity prefix
+  // exists in the real shared pool, only Rarity/Pack Size/Monster stats —
+  // likely an invented placeholder from an earlier pass). Expedition has
+  // no stat-mapped mechanic-specific suffix either (its pool is
+  // Artifact/Logbook/Remnant-focused, see `rewards`), so it falls back to
+  // the shared Waystone suffix like Ritual. Prefixes: Monster
+  // Effectiveness + Pack Size (more/tougher monsters near the dig site).
   {
     name: "Expedition Tablet",
-    mods: ["10% increased Quantity of Items found"],
+    mods: [
+      "12% increased Monster Effectiveness",
+      "6% increased Pack Size",
+      "35% increased chance to drop a Waystone",
+    ],
     tags: ["expedition"],
-    confidence: "medium",
-    source: "wiki",
+    confidence: "high",
+    source: "poe2db",
     rewards: [
       { type: "mechanic", id: "expedition", value: 8 },
       { type: "currency", id: "logbook", weight: 2 },
     ],
   },
-  // Confirmed real via poe2db.tw (data-mined from game files, checked
-  // 2026-07-04): base type "Abyss Tablet", drop level 65, "Adds Abysses to
-  // a Map", 10 uses remaining — a personal-Map-Device consumable, not
-  // slotted into a Precursor Tower like the six above (a real mechanical
-  // difference this app doesn't model). Its `mods` is a plausible
-  // representative roll, not confirmed wording (poe2db has no affix text)
-  // — but that's equally true of every mechanic-specific entry above, so
-  // it carries the same "medium" confidence they do (was "low", which
-  // stacked a permanent ×0.8 vs ×0.92 penalty on top of its already-lowest
-  // rewardScore and kept it pinned to the bottom of the list — rebalanced
-  // 2026-07-06). Roll aligned with the researched 0.5 Abyss profile
-  // (monsterRarity priority — loot comes from rares, pack size explicitly
-  // not recommended); real value is mostly Abyssal Jewels/troves, via
-  // `rewards`.
+  // Re-sourced 2026-07-12 from repoe-fork.github.io/poe2/mods.json — Abyss
+  // has no stat-mapped mechanic-specific suffix (its real suffixes are
+  // Abyssal-Depths/Modifier/Currency-focused, see `rewards`), falls back
+  // to the shared Waystone suffix. Prefixes keep Monster Rarity (loot
+  // comes from rares, pack size explicitly not recommended — the existing
+  // 0.5 research finding) and add Monster Effectiveness (stronger abyssal
+  // monsters, same "rares carry the value" theme).
   {
     name: "Abyss Tablet",
-    mods: ["15% increased Rarity of Monsters"],
+    mods: [
+      "17% increased Monster Rarity",
+      "12% increased Monster Effectiveness",
+      "35% increased chance to drop a Waystone",
+    ],
     tags: ["abyss"],
-    confidence: "medium",
+    confidence: "high",
     source: "poe2db",
     rewards: [
       { type: "mechanic", id: "abyss", value: 7 },
       { type: "currency", id: "abyssal_jewel", weight: 2 },
     ],
   },
-  // Confirmed real via poe2db.tw (data-mined, checked 2026-07-06): base type
-  // "Irradiated Tablet", "Adds Irradiated to a Map". Unlike Breach/Ritual/
-  // Delirium/Expedition/Abyss, Irradiated doesn't grant a distinct
-  // mechanic-specific currency (it's a risk/reward map modifier — tougher
-  // monsters, more generic loot) — represented as a flat `mechanic` reward
-  // only, no `currency` entry. `mods` is a plausible representative roll,
-  // not confirmed wording (poe2db has no affix text for tablets).
+  // Re-sourced 2026-07-12 from repoe-fork.github.io/poe2/mods.json —
+  // Irradiated is confirmed to have NO mechanic-specific suffix pool at
+  // all (no "tower_augment_irradiated"-tagged mods exist anywhere in the
+  // 125-entry real tablet mod list — genuinely just a risk/reward map
+  // toggle), so it rolls purely from the shared generic pool: Item Rarity
+  // + Monster Rarity as prefixes, the shared Waystone line as suffix.
   {
     name: "Irradiated Tablet",
-    mods: ["15% increased Rarity of Items found"],
+    mods: [
+      "10% increased Rarity of Items found",
+      "17% increased Monster Rarity",
+      "35% increased chance to drop a Waystone",
+    ],
     tags: ["irradiated"],
-    confidence: "low",
+    confidence: "high",
     source: "poe2db",
     rewards: [{ type: "mechanic", id: "irradiated", value: 6 }],
   },
-  // Confirmed real via poe2db.tw (data-mined, checked 2026-07-06): base type
-  // "Temple Tablet", "Adds Vaal Beacons to a Map". Same caveat as
-  // Irradiated above: no confirmed dedicated currency, `mods` is a
-  // plausible representative roll.
+  // Re-sourced 2026-07-12 from repoe-fork.github.io/poe2/mods.json — real
+  // base type is "Adds Vaal Beacons to a Map" (the mod data's internal id
+  // is "incursion", matching PoE1's Temple of Atzoatl lineage). No
+  // stat-mapped mechanic-specific suffix (its pool is Vaal-Beacon/
+  // Monster-focused, see `rewards`) — falls back to the shared Waystone
+  // suffix. Prefixes: Item Rarity (better chest loot at Vaal Beacons) +
+  // Pack Size (matches its own "extra pack of Monsters around Vaal
+  // Beacons" suffix theme).
   {
     name: "Temple Tablet",
-    mods: ["15% increased Quantity of Items found"],
+    mods: [
+      "10% increased Rarity of Items found",
+      "6% increased Pack Size",
+      "35% increased chance to drop a Waystone",
+    ],
     tags: ["temple"],
-    confidence: "low",
+    confidence: "high",
     source: "poe2db",
     rewards: [{ type: "mechanic", id: "temple", value: 5 }],
   },

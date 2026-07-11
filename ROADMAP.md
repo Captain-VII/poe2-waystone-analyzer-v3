@@ -66,8 +66,6 @@ Vrac à trier :
       WebView2 process-reuse se confirme chez les testeurs — dernière
       tentative (rafale de nudges différés) le 2026-07-11, sans succès.
 - [ ] Stats de session enrichies (historique par jour, export).
-- [ ] Confirmer les mods réels des tablettes Abyss/Irradiated/Temple quand
-      une source fiable apparaît (KNOWN_ISSUES #2).
 - [ ] Vérifier que `scripts/verify-adapter.mjs` n'a plus de dépendance à un
       checkout sibling v2 (fragilité CI potentielle relevée le 2026-07-11).
 - [ ] Lint JS/TS (eslint) — aucun configuré aujourd'hui.

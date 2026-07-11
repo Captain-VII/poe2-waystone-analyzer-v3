@@ -292,14 +292,14 @@ function buildTabletBreakdown(statFit: number, rewardScore: number): { label: st
  *  across every tablet, and (2026-07-10 rework, user report) no longer the
  *  tablet's own small 10-25% boost roll either. A tablet's mechanic
  *  identity comes from `tablet.tags` resolved to a `TABLET_LINKED_MECHANICS`
- *  entry — Standard/Overseer Precursor (`tags: ["general"]`) resolve to
- *  "General", Breach/Ritual/Delirium/etc. resolve to their own name. Direct
- *  tag lookup, not a search for whichever of the 8 mechanics numerically
- *  scores highest — an argmax search was tried and discarded: it let e.g.
- *  Standard Precursor Tablet's Quantity+Item Rarity boosts "match"
- *  Irradiated purely by numeric coincidence, a confusing label with no real
- *  identity behind it. A tablet's declared tag is curated data (tablets.ts),
- *  not something to rediscover per analysis.
+ *  entry — Overseer Precursor (`tags: ["general"]`) resolves to "General",
+ *  Breach/Ritual/Delirium/etc. resolve to their own name. Direct tag
+ *  lookup, not a search for whichever of the 8 mechanics numerically scores
+ *  highest — an argmax search was tried and discarded: it let e.g. a
+ *  general-purpose tablet's boosts "match" a mechanic-specific one purely
+ *  by numeric coincidence, a confusing label with no real identity behind
+ *  it. A tablet's declared tag is curated data (tablets.ts), not something
+ *  to rediscover per analysis.
  *
  *  Reused directly from `scoreMechanicFitRaw(stats, mech, ...)` — the exact
  *  same formula and caps `computeMechanicScores` uses for the Mechanic
