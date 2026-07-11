@@ -211,6 +211,8 @@ implementation log all live in [docs/](docs/):
   mode).
 - [`docs/release-checklist.md`](docs/release-checklist.md) — what to verify
   before shipping a new build.
+- [`ROADMAP.md`](ROADMAP.md) — what's planned for upcoming versions (the
+  forward-looking counterpart of [`CHANGELOG.md`](CHANGELOG.md)).
 
 ### Requirements (build from source)
 
