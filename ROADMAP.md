@@ -19,11 +19,6 @@ quand elle existe.
       `.mode-compact .p-sub { display: none; }` dans `compact.css`
       (même traitement que `.mode-mini .p-sub`, `panel.css:163-164`) pour
       que tout le groupe se colle naturellement à gauche.
-- [ ] En Full, le badge "LEGENDARY" à côté du score peut passer à la ligne
-      en dessous au lieu de rester collé au score — `.score-row`
-      (`full.css:57-64`) a `flex-wrap: wrap` sans raison fonctionnelle
-      (`.halo` est `position:absolute`, ne compte pas dans la largeur).
-      Fix : `flex-wrap: nowrap;` sur `.score-row` (`full.css:59`).
 - [ ] Après un premier drag de l'overlay, impossible de le re-drag
       (surtout loin de sa position de départ) — root-cause confirmée :
       `reportInteractiveRegions()` (`src/interactive-rect.ts`) calcule les

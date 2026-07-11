@@ -59,8 +59,12 @@ function fixture(
       // `br` doubles as the real stat % here (2026-07-06: matches the real
       // adapter's contract — display/max — so this dev fixture demonstrates
       // the same real-percentage rendering production data does).
+      // Row order matches the real in-game stat order (2026-07-12) — Pack
+      // Size before Monster Rarity, same as the real adapter's
+      // DEFAULT_WEIGHTS key order now drives in production.
       breakdown: [
         { key: "itemRarity", label: "Item Rarity", value: br[0], display: formatPercent(br[0]), max: CAPS.itemRarity },
+        { key: "packSize", label: "Pack Size", value: br[2], display: formatPercent(br[2]), max: CAPS.packSize },
         {
           key: "monsterRarity",
           label: "Monster Rarity",
@@ -68,7 +72,6 @@ function fixture(
           display: formatPercent(br[1]),
           max: CAPS.monsterRarity,
         },
-        { key: "packSize", label: "Pack Size", value: br[2], display: formatPercent(br[2]), max: CAPS.packSize },
         {
           key: "monsterEffectiveness",
           label: "Monster Effectiveness",

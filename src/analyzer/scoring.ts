@@ -68,10 +68,14 @@ export const CAPS: Record<keyof Weights, number> = {
 // CAPS/DEFAULT_THRESHOLD/the pattern tables below) are hardcoded here and
 // read by nothing in meta-config.ts. Tuning them requires editing this file
 // and rebuilding — see README's "Tuning via meta.json" section.
+// Key order here drives the Heat Breakdown UI's row order (breakdownFields
+// iterates Object.keys(weights)) — matches the real in-game stat order
+// (2026-07-12, user report), not the Weights/ModStats type declaration
+// order above.
 export const DEFAULT_WEIGHTS: Weights = {
   itemRarity: 22 / CAPS.itemRarity,
-  monsterRarity: 20 / CAPS.monsterRarity,
   packSize: 22 / CAPS.packSize,
+  monsterRarity: 20 / CAPS.monsterRarity,
   monsterEffectiveness: 16 / CAPS.monsterEffectiveness,
   waystoneDropChance: 10 / CAPS.waystoneDropChance,
 };

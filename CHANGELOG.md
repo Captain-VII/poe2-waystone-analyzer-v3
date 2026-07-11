@@ -5,6 +5,11 @@ utilisateur (pas de détails internes). La section la plus récente en premier.
 Ce fichier est embarqué dans l'app (panneau "Quoi de neuf" + Réglages) et
 sert de description à la release GitHub — écrire pour les joueurs.
 
+## 0.2.10
+
+- **Fixed: the "LEGENDARY" pill next to the score in Full mode could drop to its own line** instead of staying beside the number, hurting readability.
+- **Heat Breakdown order fixed**: Pack Size now shows before Monster Rarity, matching the real in-game stat order.
+
 ## 0.2.9
 
 - **More accurate "Recommended Tablets" list**: every tablet's stats are now sourced from real game data instead of guesses, including corrected values for the Overseer tablet. Also removed a "Standard Precursor Tablet" that turned out to never actually exist in the game.
