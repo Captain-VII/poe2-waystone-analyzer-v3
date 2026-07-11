@@ -11,14 +11,6 @@ quand elle existe.
 
 ## Prochaine version
 
-- [ ] En Compact, le header parait décentré (glyphe seul à gauche, groupe
-      badge/toggle/settings/minimize loin à droite) — causé par `.p-sub`
-      (`panel.css:151-153`, `flex:1; min-width:0;`) qui reste dans le flux
-      flex même invisible en Compact et agit comme un spacer élastique
-      depuis qu'on a caché `.p-title` (`compact.css:13`). Fix : ajouter
-      `.mode-compact .p-sub { display: none; }` dans `compact.css`
-      (même traitement que `.mode-mini .p-sub`, `panel.css:163-164`) pour
-      que tout le groupe se colle naturellement à gauche.
 - [ ] Après un premier drag de l'overlay, impossible de le re-drag
       (surtout loin de sa position de départ) — root-cause confirmée :
       `reportInteractiveRegions()` (`src/interactive-rect.ts`) calcule les

@@ -5,6 +5,10 @@ utilisateur (pas de détails internes). La section la plus récente en premier.
 Ce fichier est embarqué dans l'app (panneau "Quoi de neuf" + Réglages) et
 sert de description à la release GitHub — écrire pour les joueurs.
 
+## 0.3.0
+
+- **Fixed: the Compact header looked off-center**, with the icons bunched up on the right and empty space on the left — the whole row now sits together on the left like it should.
+
 ## 0.2.10
 
 - **Fixed: the "LEGENDARY" pill next to the score in Full mode could drop to its own line** instead of staying beside the number, hurting readability.

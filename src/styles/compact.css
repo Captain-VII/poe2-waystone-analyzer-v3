@@ -12,6 +12,15 @@
 .mode-compact .p-head { gap: 4px; padding-right: 6px; }
 .mode-compact .p-title { display: none; }
 .mode-compact .badge { max-width: 118px; }
+/* `.p-sub` (the "T15 · Name" subtitle) is invisible in Compact (opacity: 0,
+ * panel.css) but still `flex: 1; min-width: 0;` — an elastic spacer that
+ * grew once `.p-title` above was hidden, pushing the whole
+ * badge/toggle/settings/minimize group far right and leaving the glyph
+ * stranded alone on the left (reported 2026-07-12, real in-game
+ * screenshot). Taking it out of the flex flow entirely (same treatment
+ * `.mode-mini .p-sub` already gets, panel.css) lets the group pack
+ * naturally against the left edge instead. */
+.mode-compact .p-sub { display: none; }
 
 .hero-v {
   flex: none;
