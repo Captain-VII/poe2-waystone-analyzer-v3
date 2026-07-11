@@ -5009,7 +5009,7 @@ dependencies = [
 
 [[package]]
 name = "waystone-overlay"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "enigo",
  "serde",
