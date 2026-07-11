@@ -191,8 +191,9 @@ export interface AnalysisResult {
   /** 0–3 short lines, Full mode only. */
   insights: string[];
   /** Mechanic Match Score per detected/candidate mechanic (§7), desc sorted.
-   *  Not currently used in UI. REQUIRED by verify-adapter.mjs tests and
-   *  part of the data contract. Do not remove without updating tests. */
+   *  The overlay renders the top 3 as a "Breach 84% · …" line (Compact hero
+   *  + Full Heat column, 2026-07-11). REQUIRED by verify-adapter.mjs tests
+   *  and part of the data contract. Do not remove without updating tests. */
   mechanicScores: MechanicScore[];
   /** Best mechanic to target, or null if none scored above zero. */
   recommendedMechanic: string | null;

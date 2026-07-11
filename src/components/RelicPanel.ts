@@ -241,6 +241,7 @@ export function mountOverlay(
               <div class="score-wrap" data-hero-compact><span class="halo"></span><span class="score-num" data-score></span></div>
               <div class="tier-name"><span data-tiername></span> <span class="rating-pill" data-rating></span></div>
               <div class="action-chip" data-action></div>
+              <div class="top-mechs" data-top-mechs title="Best mechanics for this waystone (Mechanic Match Score)"></div>
             </div>
             <div class="sep"></div>
             <div class="tabs-v">
@@ -264,6 +265,7 @@ export function mountOverlay(
                 </div>
                 <div data-breakdown></div>
                 <div class="total-row"><span class="t-lab">Total Heat</span><span class="t-right"><span class="t-val" data-total></span><span class="rating-pill" data-rating-full></span></span></div>
+                <div class="top-mechs" data-top-mechs-full title="Best mechanics for this waystone (Mechanic Match Score)"></div>
               </div>
               <div class="col" data-col-insights>
                 <div class="insights-block" data-insights-block>
@@ -429,6 +431,8 @@ export function mountOverlay(
   const scoreCompact = q("[data-score]");
   const scoreFull = q("[data-score-full]");
   const chip = q("[data-action]");
+  const topMechs = q("[data-top-mechs]");
+  const topMechsFull = q("[data-top-mechs-full]");
   const statusChip = q("[data-status]");
   const warn = q("[data-warn]");
   const toggleBtn = q("[data-toggle]");
@@ -502,6 +506,15 @@ export function mountOverlay(
     q("[data-sub]").textContent = `T${waystone.tier} · ${waystone.name}`;
     q("[data-tiername]").textContent = heat.tierLabel;
     chip.textContent = heat.verdict;
+    // Top 3 mechanics in % — the same Mechanic Match Scores that already
+    // drive the tablet list, surfaced directly (user request 2026-07-11).
+    // Display only: the Juice Score formula is untouched.
+    const top3 = result.mechanicScores.slice(0, 3);
+    const topLine = top3.map((m) => `${esc(m.mechanic)} <b>${Math.round(m.score)}%</b>`).join(" · ");
+    topMechs.innerHTML = topLine;
+    topMechs.hidden = top3.length === 0;
+    topMechsFull.innerHTML = topLine;
+    topMechsFull.hidden = top3.length === 0;
     const ratingEl = q("[data-rating]");
     ratingEl.textContent = heat.rating;
     ratingEl.className = `rating-pill rec-rating-${heat.rating}`;

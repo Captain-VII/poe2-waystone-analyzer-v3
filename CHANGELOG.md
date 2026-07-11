@@ -5,6 +5,10 @@ utilisateur (pas de détails internes). La section la plus récente en premier.
 Ce fichier est embarqué dans l'app (panneau "Quoi de neuf" + Réglages) et
 sert de description à la release GitHub — écrire pour les joueurs.
 
+## 0.2.4
+
+- **Top 3 mechanics at a glance**: the card now shows the three best mechanics for the analyzed waystone as percentages (e.g. "Breach 84% · Ritual 62% · Abyss 55%"), right under the verdict in Compact and under Total Heat in Full.
+
 ## 0.2.3
 
 - **Notes de version dans l'app** : ce panneau "Quoi de neuf" s'affiche une fois après chaque mise à jour, et reste lisible à tout moment via Réglages → Notes de version.
