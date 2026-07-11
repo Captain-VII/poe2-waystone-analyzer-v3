@@ -5,6 +5,11 @@ utilisateur (pas de détails internes). La section la plus récente en premier.
 Ce fichier est embarqué dans l'app (panneau "Quoi de neuf" + Réglages) et
 sert de description à la release GitHub — écrire pour les joueurs.
 
+## 0.2.3
+
+- **Notes de version dans l'app** : ce panneau "Quoi de neuf" s'affiche une fois après chaque mise à jour, et reste lisible à tout moment via Réglages → Notes de version.
+- Le fichier du programme s'appelle maintenant `Waystone-Analyzer.exe` (il avait gardé son ancien nom lors du renommage).
+
 ## 0.2.2
 
 - L'application s'appelle désormais **Waystone-Analyzer**.
