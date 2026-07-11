@@ -4,9 +4,9 @@
  *  DOMINANT-STAT model (2026-07-1x redesign, user's own gameplay judgment —
  *  "basé sur sa plus grosse stat, et des petits bonus si y'a d'autres stats
  *  intéressantes"): find the waystone's single strongest stat (normalized
- *  against its own realistic ceiling — see `STAT_REFERENCES`, all 5 stats
- *  now share the same 100/120 ceilings after the 2026-07-11 Pack Size fix
- *  below), tier it with the same 15/25/50 boundaries already used for
+ *  against its own realistic ceiling — see `STAT_REFERENCES`, sourced
+ *  2026-07-11 from the user's own observed market min/max per stat), tier
+ *  it with the same 15/25/50 boundaries already used for
  *  mechanic/tablet fit (`mechanics.ts`'s `tierForPercent`), and add a small
  *  bonus for every OTHER stat that also clears "ok". See
  *  `computeCompositeScore` below. This replaces the 2026-07-06 weighted-sum
@@ -246,24 +246,24 @@ const STAT_SIGNALS: StatSignal[] = [
 
 // Each stat's realistic ceiling — used ONLY to compare stats of very
 // different natural ranges on a level footing before picking "the biggest
-// one". packSize was 30 at launch (copied from the old god-map reference
-// table without re-checking it) — far too low: a real T15's base Pack Size
-// mod alone rolls (41-50)% (maxroll.gg, already sourced for the same
-// constant on the Mechanic Match Score side, KNOWN_ISSUES #3's 2026-07-10
-// update), so 30 meant a completely ordinary 15% roll normalized to 50%
-// of "ceiling" — instant legendary tier for nearly every real waystone
-// with any Pack Size at all (user report, 2026-07-11: "le rating est tout
-// le temps en légendaire"). Raised to 100, matching every other stat here
-// (same generous-ceiling-over-tight-fit reasoning already used for that
-// other constant) — real Pack Size (up to ~64% observed) now needs to
-// actually be strong to dominate, same bar as Item Rarity/Monster Rarity/
-// Monster Effectiveness.
-const STAT_REFERENCES: Record<StatSignal, number> = {
+// one". Sourced 2026-07-11 from the user's own observation of the item
+// market's min/max roll range per stat (not a web guide — explicitly "pas
+// une vérité absolue" per the user, but the closest thing to real
+// population data this project has had): Item Rarity 10-100%, Pack Size
+// 6-63%, Monster Rarity 18-103%, Monster Effectiveness 13-70%, Waystone
+// Drop Chance 10-155%. Ceilings below are those observed maxima, rounded
+// up slightly for headroom (same "generous ceiling over a tight fit"
+// policy used everywhere else in this file) — replaces the flat-100-for-
+// everything guess from the 2026-07-11 Pack Size fix above, which was
+// itself already known to be provisional. A stat below the market's own
+// observed minimum doesn't need special-casing here: it simply doesn't
+// appear as a mod line, so parseMods already reads it as 0.
+export const STAT_REFERENCES: Record<StatSignal, number> = {
   itemRarity: 100,
-  monsterRarity: 100,
-  packSize: 100,
-  monsterEffectiveness: 100,
-  waystoneDropChance: 120,
+  monsterRarity: 105,
+  packSize: 65,
+  monsterEffectiveness: 70,
+  waystoneDropChance: 155,
 };
 
 // Max bonus a single non-dominant stat can add, scaled by how close it is to

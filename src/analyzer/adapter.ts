@@ -13,6 +13,7 @@ import {
   evaluateMap,
   CAPS,
   DEFAULT_THRESHOLD,
+  STAT_REFERENCES,
   DANGER_SEVERITY_ORDER,
   type DangerHit,
   type DangerLevel,
@@ -459,7 +460,7 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
   };
 }
 
-export { DEFAULT_THRESHOLD };
+export { DEFAULT_THRESHOLD, STAT_REFERENCES };
 // Re-exported for verify-adapter.mjs's unit-level danger-logic tests only —
 // not used by the overlay UI (which only ever sees the AnalysisResult
 // contract fields: warning/warnings/dangerLevel/dangerLabel).

@@ -736,6 +736,38 @@ everything" fixture (nothing above 20% on any stat) now scores 25.8/100
 "Moyen" (was wrongly 56.8/100 "Bon"), and "Putrid Bearings"/"Rotting
 Course" above are unaffected (neither has meaningful Pack Size).
 
+**Update (2026-07-11, later) — all five `STAT_REFERENCES` replaced with
+the user's own observed market data, not guesses:** the user collected
+min/max roll ranges directly from the in-game item market for all five
+stats — "pas une vérité absolue" (his own words) but real population data,
+the first of its kind for this project (every prior calibration pass used
+either a single sample waystone or a web guide's qualitative claims).
+Observed ranges: Item Rarity 10-100%, Pack Size 6-63%, Monster Rarity
+18-103%, Monster Effectiveness 13-70%, Waystone Drop Chance 10-155%.
+Cross-checked against everything already on record in this section and
+found consistent on all three points where a comparison exists: Pack Size
+max (63% observed vs. a real 64% market listing already cited above),
+Monster Effectiveness max (70% observed vs. Fubgun's ~70% self-craft
+ceiling), and Drop Chance max (155% observed comfortably covers the 140%
+real roll already measured). Three independent agreements — good sign the
+new numbers are sound.
+
+**Fix**: `STAT_REFERENCES` — previously `{ itemRarity: 100, monsterRarity:
+100, packSize: 100, monsterEffectiveness: 100, waystoneDropChance: 120 }`
+(itemRarity/monsterRarity/monsterEffectiveness had never been individually
+verified; they'd inherited the flat-100 fallback from the Pack Size fix
+above) — now `{ itemRarity: 100, monsterRarity: 105, packSize: 65,
+monsterEffectiveness: 70, waystoneDropChance: 155 }`. Pack Size and Monster
+Effectiveness drop the most (100→65, 100→70): both were being compared
+against an artificially generous ceiling, meaning a genuinely strong roll
+on either stat under-scored relative to Item Rarity/Drop Chance, which
+already had realistic-ish ceilings. Now exported as `STAT_REFERENCES` from
+scoring.ts (was module-private) so `verify-adapter.mjs`'s composite-score
+tests read the real constant instead of re-hardcoding it — the exact drift
+risk that bit the Drop-Chance-vs-Item-Rarity test in this same block
+during this change (the test's own hardcoded `120` no longer matched
+scoring.ts's new `155` until fixed to import the export).
+
 ## 4. ~~Mechanic-presence detection is a simple keyword match~~ (resolved 2026-07-08)
 
 "Mecanique naturelle presente sur la map" (§2/§8/§9) is detected by a regex

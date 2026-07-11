@@ -5,6 +5,10 @@ utilisateur (pas de détails internes). La section la plus récente en premier.
 Ce fichier est embarqué dans l'app (panneau "Quoi de neuf" + Réglages) et
 sert de description à la release GitHub — écrire pour les joueurs.
 
+## 0.2.5
+
+- **More accurate Juice Score**: the per-stat ceilings the score compares against are now based on real market data instead of estimates — Pack Size and Monster Effectiveness in particular were being held to an unrealistically high bar and could lose out to Item Rarity/Drop Chance even on a genuinely strong roll. This should read as noticeably more consistent scoring, especially on Pack-Size- or Monster-Effectiveness-heavy waystones.
+
 ## 0.2.4
 
 - **Top 3 mechanics at a glance**: the card now shows the three best mechanics for the analyzed waystone as percentages (e.g. "Breach 84% · Ritual 62% · Abyss 55%"), right under the verdict in Compact and under Total Heat in Full.

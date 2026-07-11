@@ -18,6 +18,7 @@ import {
   MECHANICS,
   TIER_SCORE,
   priorityStatTier,
+  STAT_REFERENCES,
 } from "./.adapter-bundle.mjs";
 
 const SAMPLE = `Item Class: Waystones
@@ -772,59 +773,63 @@ check("Abyss: quantity-only waystone does NOT feed Abyss beyond the weak-tier ba
 // Composite Juice Score: dominant-stat model (2026-07-1x, user's own call —
 // "basé sur sa plus grosse stat, et des petits bonus si y'a d'autres stats
 // intéressantes"). Replaces the 2026-07-06 weighted-sum + multiplicative-
-// synergy model entirely. References below (100 for 4 of the 5 stats, 120
-// for Waystone Drop Chance) mirror scoring.ts's STAT_REFERENCES.
+// synergy model entirely. References read from the real STAT_REFERENCES
+// export (sourced 2026-07-11 from the user's observed market min/max per
+// stat) rather than being re-hardcoded here, so this file can't silently
+// drift from scoring.ts's actual constants.
 {
-  check("a single stat alone scores exactly its own tier (Drop Chance 80% -> normalized 66.7% -> legendary -> 80, no bonus)",
-    analyzeWaystoneText(mkStatWaystone(["+80% chance to find an additional Waystone"])).heat.score === TIER_SCORE.legendary);
+  check("a single stat alone scores exactly its own tier (Drop Chance at its own ceiling -> normalized 100% -> legendary -> 80, no bonus)",
+    analyzeWaystoneText(mkStatWaystone([`+${STAT_REFERENCES.waystoneDropChance}% chance to find an additional Waystone`])).heat.score === TIER_SCORE.legendary);
 
   check("a lone weak stat floors at TIER_SCORE.weak with zero bonus (nothing else can be 'ok' if the max stat isn't)",
     analyzeWaystoneText(mkStatWaystone(["+3% increased Pack Size"])).heat.score === TIER_SCORE.weak);
 
   // Regression pin (2026-07-11 bug report: "le rating est tout le temps en
   // légendaire") — Pack Size's reference used to be 30, so an ordinary 15%
-  // roll normalized to 50% of "ceiling" and hit legendary on its own. Now
-  // shares the same 100 reference as itemRarity/monsterRarity/
-  // monsterEffectiveness: 15% Pack Size alone must land at "ok" (25), and
-  // it takes a real 50%+ roll to reach legendary, same bar as every other
-  // stat here.
+  // roll normalized to 50% of "ceiling" and hit legendary on its own. Its
+  // reference has moved twice since (100, then 65 once the user's own
+  // observed market range — 6-63% — replaced the flat guess) but the actual
+  // bar is unchanged: a bare 15% roll must still land at "ok", not
+  // legendary, and needs a real ~50%-of-ceiling roll to reach legendary.
   check("an ordinary 15% Pack Size roll alone is 'ok', NOT legendary (2026-07-11 fix)",
     analyzeWaystoneText(mkStatWaystone(["+15% increased Pack Size"])).heat.score === TIER_SCORE.ok);
-  check("a 50%+ Pack Size roll alone IS legendary — the bar didn't move, only the reference did",
-    analyzeWaystoneText(mkStatWaystone(["+50% increased Pack Size"])).heat.score === TIER_SCORE.legendary);
+  check("a Pack Size roll at its own ceiling IS legendary — the bar didn't move, only the reference did",
+    analyzeWaystoneText(mkStatWaystone([`+${STAT_REFERENCES.packSize}% increased Pack Size`])).heat.score === TIER_SCORE.legendary);
 
-  // Waystone Drop Chance (ceiling 120%) at 55% normalizes to ~45.8% (top)
-  // and must lose to Item Rarity (ceiling 100%) at the SAME raw 55%, which
-  // normalizes to 55% (legendary) — proves stats are still compared
-  // against their OWN ceiling, not raw %, using the one pair of stats that
-  // still has genuinely different references post-fix.
+  // Waystone Drop Chance at 55% normalizes to under its own (higher)
+  // ceiling and must lose to Item Rarity at the SAME raw 55%, which
+  // normalizes to 55% of ITS ceiling (legendary) — proves stats are still
+  // compared against their OWN ceiling, not raw %, using the one pair of
+  // stats with genuinely different references.
   const dropVsRarity = analyzeWaystoneText(
     mkStatWaystone(["+55% chance to find an additional Waystone", "+55% increased Rarity of Items found in this Area"]),
   );
-  const dropNormalized = (55 / 120) * 100;
+  const dropNormalized = (55 / STAT_REFERENCES.waystoneDropChance) * 100;
   const dropVsRarityExpected = Math.round((TIER_SCORE.legendary + Math.min(dropNormalized / 100, 1) * 5) * 100) / 100;
-  check("Item Rarity 55% (ceiling 100) outranks the SAME raw 55% on Drop Chance (ceiling 120) as the dominant stat",
+  check("Item Rarity 55% (ceiling 100) outranks the SAME raw 55% on Drop Chance (higher ceiling) as the dominant stat",
     dropVsRarity.heat.score === dropVsRarityExpected);
 
-  // Same dominant stat (Drop Chance, maxed) with two different secondary
-  // Monster Rarity values -> the bonus must scale with the secondary's own
-  // magnitude, not just its presence (2026-07-10's Q3 answer: "bonus
-  // proportionnel à la valeur de chaque stat").
+  // Same dominant stat (Drop Chance, at its own ceiling) with two different
+  // secondary Monster Rarity values -> the bonus must scale with the
+  // secondary's own magnitude relative to ITS ceiling, not just its
+  // presence (2026-07-10's Q3 answer: "bonus proportionnel à la valeur de
+  // chaque stat").
   const smallSecondary = analyzeWaystoneText(
-    mkStatWaystone(["+120% chance to find an additional Waystone", "+20% increased Rarity of Monsters"]),
+    mkStatWaystone([`+${STAT_REFERENCES.waystoneDropChance}% chance to find an additional Waystone`, "+20% increased Rarity of Monsters"]),
   );
   const bigSecondary = analyzeWaystoneText(
-    mkStatWaystone(["+120% chance to find an additional Waystone", "+90% increased Rarity of Monsters"]),
+    mkStatWaystone([`+${STAT_REFERENCES.waystoneDropChance}% chance to find an additional Waystone`, "+90% increased Rarity of Monsters"]),
   );
+  const secondaryBonus = (raw) => Math.round(Math.min(raw / STAT_REFERENCES.monsterRarity, 1) * 5 * 100) / 100;
   check("the secondary-stat bonus is proportional to that stat's own value, not flat",
     bigSecondary.heat.score > smallSecondary.heat.score &&
-    smallSecondary.heat.score === TIER_SCORE.legendary + Math.min(20 / 100, 1) * 5 &&
-    bigSecondary.heat.score === TIER_SCORE.legendary + Math.min(90 / 100, 1) * 5);
+    smallSecondary.heat.score === Math.round((TIER_SCORE.legendary + secondaryBonus(20)) * 100) / 100 &&
+    bigSecondary.heat.score === Math.round((TIER_SCORE.legendary + secondaryBonus(90)) * 100) / 100);
 
   // A secondary stat below "ok" (< 15%) contributes nothing — matches the
   // tablet-fit tiering, "nul" doesn't count as "intéressant".
   const weakSecondary = analyzeWaystoneText(
-    mkStatWaystone(["+120% chance to find an additional Waystone", "+10% increased Rarity of Monsters"]),
+    mkStatWaystone([`+${STAT_REFERENCES.waystoneDropChance}% chance to find an additional Waystone`, "+10% increased Rarity of Monsters"]),
   );
   check("a secondary stat under the 'ok' threshold contributes zero bonus",
     weakSecondary.heat.score === TIER_SCORE.legendary);
