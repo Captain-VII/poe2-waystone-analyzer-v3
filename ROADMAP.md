@@ -24,16 +24,22 @@ Validé, mais pas urgent :
       panneau Réglages — ils n'ont plus aucun effet sur le scoring depuis le
       rework tier-based, source de confusion (KNOWN_ISSUES #3).
 - [ ] `cargo clippy` + `cargo fmt --check` dans le job rust-checks de la CI.
+- [ ] Passer toute l'application en anglais (décision 2026-07-11 : la
+      majorité des joueurs PoE2 jouent en anglais). Concerne : les libellés
+      encore français du panneau Réglages, les textes du flux de mise à
+      jour (« Vérifier / Installer / À jour / Téléchargement / Échec »),
+      les notifications (notify.ts), le panneau « Quoi de neuf », et les
+      prochaines sections de CHANGELOG.md (qui alimentent aussi le corps
+      des releases GitHub) — l'historique déjà publié reste tel quel.
 - [ ] Réorganiser le panneau Réglages — les rows se sont accumulées sans
-      ordre (affichage, comportement, app et session entremêlés) et les
-      libellés mélangent anglais et français. Plan proposé, en sections
-      titrées (`sec-h`, comme « Session » et « Méta » aujourd'hui) :
-      **Affichage** (Overlay Mode, Opacité, Échelle, Compact compressé,
-      Réduire les effets, Insights) · **Contrôles** (Hotkey, Position,
-      Lancement avec Windows) · **Session** (inchangé) · **Méta**
-      (inchangé) · **Application** (Version, Mise à jour, Notes de version,
-      Masquer l'overlay) — et tout passer en français au passage.
-      Réordonnancement de HTML + libellés uniquement, aucune logique.
+      ordre (affichage, comportement, app et session entremêlés). Plan
+      validé, en sections titrées (`sec-h`, comme « Session » et « Méta »
+      aujourd'hui) : **Display** (Overlay Mode, Opacity, Scale, Compact
+      Compressed, Reduce Effects, Insights) · **Controls** (Hotkey,
+      Position, Launch with Windows) · **Session** (inchangé) · **Meta**
+      (inchangé) · **Application** (Version, Update, Patch notes, Hide
+      Overlay). Réordonnancement de HTML + libellés uniquement, aucune
+      logique — à faire avec (ou après) le passage en anglais ci-dessus.
 
 ## Idées
 
