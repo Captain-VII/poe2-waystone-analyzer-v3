@@ -24,6 +24,16 @@ Validé, mais pas urgent :
       panneau Réglages — ils n'ont plus aucun effet sur le scoring depuis le
       rework tier-based, source de confusion (KNOWN_ISSUES #3).
 - [ ] `cargo clippy` + `cargo fmt --check` dans le job rust-checks de la CI.
+- [ ] Réorganiser le panneau Réglages — les rows se sont accumulées sans
+      ordre (affichage, comportement, app et session entremêlés) et les
+      libellés mélangent anglais et français. Plan proposé, en sections
+      titrées (`sec-h`, comme « Session » et « Méta » aujourd'hui) :
+      **Affichage** (Overlay Mode, Opacité, Échelle, Compact compressé,
+      Réduire les effets, Insights) · **Contrôles** (Hotkey, Position,
+      Lancement avec Windows) · **Session** (inchangé) · **Méta**
+      (inchangé) · **Application** (Version, Mise à jour, Notes de version,
+      Masquer l'overlay) — et tout passer en français au passage.
+      Réordonnancement de HTML + libellés uniquement, aucune logique.
 
 ## Idées
 
