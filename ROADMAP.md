@@ -52,6 +52,11 @@ Vrac à trier :
       attention, la page bloque le scraping (403) et ses onglets sont en JS
       côté client : le contenu devra être collé à la main depuis le
       navigateur, comme pour la recalibration Breach/Abyss du 2026-07-10.
+      Placement décidé (2026-07-11, capture utilisateur) : en bas de la
+      colonne « Tablettes Recommandées » du mode Full, sous la liste, avec
+      l'icône du maître directement visible. Prévoir la question des
+      assets d'icônes (glyphes texte comme TABLET_ICONS, ou images à
+      fournir).
 - [ ] Bug écran noir (KNOWN_ISSUES #1) : ne rouvrir que si l'hypothèse
       WebView2 process-reuse se confirme chez les testeurs — dernière
       tentative (rafale de nudges différés) le 2026-07-11, sans succès.
