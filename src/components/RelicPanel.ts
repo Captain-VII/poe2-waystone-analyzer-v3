@@ -17,6 +17,7 @@ import {
   saveScale,
 } from "../overlaySettings";
 import { DEFAULT_HOTKEY_BASE, hotkeyLabel, keyEventToBase } from "../hotkeys";
+import { parseChangelog } from "../changelog";
 
 export interface OverlayOptions {
   mode: Mode;
@@ -117,6 +118,10 @@ export interface OverlayHandle {
    *  startup check (main.ts) finds a newer version, so the row is already
    *  actionable when the user opens Settings after the toast. */
   setUpdateAvailable(version: string): void;
+  /** Opens the "Quoi de neuf" panel (CHANGELOG.md) — called once by
+   *  main.ts on the first launch after an update; also reachable any time
+   *  from the Settings row. */
+  showChangelog(): void;
   /** Renders the session-stats rows in Settings (count / average / best).
    *  Called at startup with the persisted stats, after every applied
    *  analysis, and after a reset. */
@@ -339,6 +344,10 @@ export function mountOverlay(
                 <span class="set-val set-update-msg" data-update-msg hidden></span>
                 <button class="set-btn" data-update-btn type="button">Vérifier</button>
               </div>
+              <div class="set-row" title="Historique des changements, version par version — s'affiche aussi automatiquement une fois après chaque mise à jour">
+                <span class="set-lab">Notes de version</span>
+                <button class="set-btn" data-changelog-show type="button">Afficher</button>
+              </div>
               <div class="set-sep"></div>
               <div class="sec-h" title="Depuis le dernier Réinitialiser — chaque waystone compte une fois (la re-analyser met à jour son score)">Session</div>
               <div class="set-row">
@@ -397,6 +406,15 @@ export function mountOverlay(
               </div>
             </div>
           </div>
+          <div class="body body-changelog" data-changelog-panel>
+            <div class="settings-scroll">
+              <div class="cl-head">
+                <div class="sec-h">Quoi de neuf</div>
+                <button class="set-btn" data-changelog-close type="button">Fermer</button>
+              </div>
+              <div data-changelog-list></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>`;
@@ -435,6 +453,10 @@ export function mountOverlay(
   const appVersionEl = q("[data-app-version]");
   const updateBtn = q("[data-update-btn]") as HTMLButtonElement;
   const updateMsg = q("[data-update-msg]");
+  const changelogPanel = q("[data-changelog-panel]");
+  const changelogList = q("[data-changelog-list]");
+  const changelogShowBtn = q("[data-changelog-show]");
+  const changelogCloseBtn = q("[data-changelog-close]");
   const statCountEl = q("[data-stat-count]");
   const statAvgEl = q("[data-stat-avg]");
   const statBestEl = q("[data-stat-best]");
@@ -624,6 +646,7 @@ export function mountOverlay(
 
   function analyze(): void {
     if (settingsOpen) toggleSettings(); // a fresh analysis should be seen, not hidden behind Settings
+    if (changelogOpen) toggleChangelog(); // same — the result must not stay hidden behind the notes
     syncReducedClass();
     if (opts.isReduced()) return; // §10: color states stay, motion doesn't
     retrigger(scoreCompact, "pulse");
@@ -690,6 +713,7 @@ export function mountOverlay(
     // only fires on an actual layout switch, not every re-application of
     // the same mode. Avoids a stale Settings panel over the new layout.
     if (settingsOpen && modeChanged) toggleSettings();
+    if (changelogOpen && modeChanged) toggleChangelog(); // same staleness reasoning as Settings
     // The tablet-mechanic popup is Full-only UI anchored to Full-mode DOM —
     // a real mode switch invalidates it even if Settings wasn't open.
     if (modeChanged) closeTabletPopup();
@@ -720,11 +744,46 @@ export function mountOverlay(
     if (!settingsOpen) stopHotkeyCapture(); // a half-finished capture must not outlive its UI
     if (!settingsOpen) openDropdownClose?.(); // an open dropdown must not outlive its panel
     if (settingsOpen && compareActive) closeCompare();
+    if (settingsOpen && changelogOpen) toggleChangelog();
     if (settingsOpen) closeTabletPopup(); // the popup lives outside .bodies, CSS cross-fade alone won't hide it
     if (settingsOpen) void loadMetaEditor(); // fresh model on every open — a hand-edit of the file mid-session shows up
     overlayEl.classList.toggle("settings-open", settingsOpen);
     settingsBtn.classList.toggle("active", settingsOpen);
     opts.onInteractiveChange?.();
+  }
+
+  /** "Quoi de neuf" panel — a fifth `.body` following the Settings-panel
+   *  pattern (same region, no window resize). Content is static
+   *  (CHANGELOG.md bundled at build time), rendered once at mount. */
+  let changelogOpen = false;
+
+  function toggleChangelog(): void {
+    changelogOpen = !changelogOpen;
+    if (changelogOpen && settingsOpen) toggleSettings();
+    if (changelogOpen && compareActive) closeCompare();
+    if (changelogOpen) closeTabletPopup(); // same reason as toggleSettings
+    overlayEl.classList.toggle("changelog-open", changelogOpen);
+    opts.onInteractiveChange?.();
+  }
+
+  function showChangelog(): void {
+    if (!changelogOpen) toggleChangelog();
+  }
+
+  // The only markdown allowed through: **bold** (escaped first, so this
+  // can't open an HTML injection surface via the changelog file).
+  const clText = (s: string): string => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+
+  function renderChangelog(): void {
+    changelogList.innerHTML = parseChangelog()
+      .map(
+        (s) => `
+        <div class="cl-section">
+          <div class="cl-ver">${esc(s.version)}</div>
+          ${s.bullets.map((b) => `<div class="cl-li">${clText(b)}</div>`).join("")}
+        </div>`,
+      )
+      .join("");
   }
 
   /** Méta editor (meta.json). One set of controls navigated by a mechanic
@@ -1254,6 +1313,7 @@ export function mountOverlay(
     const els = opts.onDragStart ? [headEl] : [toggleBtn, settingsBtn];
     if (!opts.onDragStart && opts.onCycleTier) els.push(badge);
     if (settingsOpen) return [...els, settingsPanel]; // whole panel as one rect
+    if (changelogOpen) return [...els, changelogPanel]; // scroll + Fermer button
     if (compareActive) return [...els, compareGrid]; // per-card pin/remove buttons (#8)
     // Same reasoning as settingsOpen above: the popup's own dropdowns can
     // overflow past its small box (makeDropdown's clamping), so the whole
@@ -1332,6 +1392,8 @@ export function mountOverlay(
   });
   setHideBtn.addEventListener("click", opts.onHide);
   setResetPositionBtn.addEventListener("click", () => opts.onResetPosition?.());
+  changelogShowBtn.addEventListener("click", toggleChangelog); // toggleChangelog closes Settings itself
+  changelogCloseBtn.addEventListener("click", toggleChangelog);
   if (opts.onCheckUpdate && opts.onInstallUpdate) {
     const { onCheckUpdate, onInstallUpdate } = opts;
     updateBtn.addEventListener("click", () => {
@@ -1424,6 +1486,7 @@ export function mountOverlay(
   applyOpacity(loadOpacity());
   applyScale(loadScale());
   applyHotkeyLabel();
+  renderChangelog(); // static content (bundled CHANGELOG.md) — once is enough
   setResult(initial);
   return {
     setResult,
@@ -1436,6 +1499,7 @@ export function mountOverlay(
     setAutostartChecked,
     setAppVersion,
     setUpdateAvailable,
+    showChangelog,
     setSessionStats,
     panelEl: panel,
     interactiveEls,

@@ -380,6 +380,59 @@
   pointer-events: auto;
 }
 
+/* "Quoi de neuf" panel: a fifth `.body`, same pattern as .body-settings
+ * (shares .bodies' region, fades on opacity alone, no window resize). */
+.changelog-open .body-compact,
+.changelog-open .body-full,
+.changelog-open .body-compare {
+  opacity: 0;
+  pointer-events: none;
+}
+.body-changelog {
+  transform: none;
+  transition: opacity 120ms ease-out;
+}
+.changelog-open .body-changelog {
+  opacity: 1;
+  pointer-events: auto;
+}
+/* Settings wins if both classes are ever set in the same tick (the toggle
+ * functions close each other first — this mirrors the .compare-active
+ * ordering note above). */
+.settings-open .body-changelog {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cl-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.cl-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cl-ver {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--gold-hi);
+  letter-spacing: 0.04em;
+}
+.cl-li {
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--grey);
+  padding-left: 12px;
+  position: relative;
+}
+.cl-li::before {
+  content: "•";
+  position: absolute;
+  left: 2px;
+}
+
 .settings-scroll {
   height: 100%;
   overflow-y: auto;

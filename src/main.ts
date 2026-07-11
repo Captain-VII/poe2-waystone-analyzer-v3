@@ -35,6 +35,7 @@ import { loadMetaConfig, readRawMetaFile, saveMetaFile, resetMetaFile } from "./
 import { buildEditorModel, buildMetaFile, type MechanicEdit, type MetaEditorModel } from "./analyzer/meta-schema";
 import { notifyLegendaryWaystone, notifyUpdateAvailable } from "./notify";
 import { checkForUpdate, installUpdate } from "./updater";
+import { shouldShowChangelog, markChangelogSeen } from "./changelog";
 import type { AnalysisResult, TierClass } from "./types";
 
 let tier: TierClass = "god";
@@ -358,7 +359,16 @@ async function init(): Promise<void> {
   void (async () => {
     if (!("__TAURI_INTERNALS__" in window)) return;
     const { getVersion } = await import("@tauri-apps/api/app");
-    overlay.setAppVersion(await getVersion());
+    const version = await getVersion();
+    overlay.setAppVersion(version);
+    // First launch of a new version (i.e. right after an update, or a fresh
+    // install): show the patch notes once. Marked seen immediately — if the
+    // user closes without reading, re-showing every launch would be nagging;
+    // the Settings row keeps them reachable.
+    if (shouldShowChangelog(version)) {
+      overlay.showChangelog();
+      markChangelogSeen(version);
+    }
     const info = await checkForUpdate();
     if (info) {
       overlay.setUpdateAvailable(info.version);

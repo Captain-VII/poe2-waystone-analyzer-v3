@@ -1,0 +1,22 @@
+# Notes de version
+
+Format : une section `## X.Y.Z` par release, puces courtes orientées
+utilisateur (pas de détails internes). La section la plus récente en premier.
+Ce fichier est embarqué dans l'app (panneau "Quoi de neuf" + Réglages) et
+sert de description à la release GitHub — écrire pour les joueurs.
+
+## 0.2.2
+
+- L'application s'appelle désormais **Waystone-Analyzer**.
+- Nouveau schéma de version simple : 0.2.2, puis 0.2.3, etc. à chaque mise à jour.
+- Correction : le démarrage automatique avec Windows suit maintenant l'application après une mise à jour.
+
+## 0.2.0-beta.2
+
+- **Mises à jour automatiques** : l'app vérifie au démarrage si une nouvelle version existe, prévient par une notification, et l'installe en un clic depuis les Réglages (jamais toute seule).
+- Nouvelle ligne "Version" dans les Réglages.
+
+## 0.2.0-beta.1
+
+- Première bêta restreinte.
+- Analyse de waystone à la volée (Ins), score Juice, recommandations de mécaniques et de tablettes, mode comparaison, stats de session, éditeur méta.

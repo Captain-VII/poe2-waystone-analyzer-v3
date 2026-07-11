@@ -37,6 +37,25 @@ jobs:
           [ "v$PKG" = "$GITHUB_REF_NAME" ] && [ "$PKG" = "$CONF" ] || {
             echo "Tag $GITHUB_REF_NAME vs package.json $PKG vs tauri.conf.json $CONF mismatch"; exit 1; }
       - run: npm ci
+      # The release body = this version's CHANGELOG.md section (the same
+      # text the in-app "Quoi de neuf" panel shows). Missing section fails
+      # the build: every release must have written patch notes.
+      - name: Extract release notes from CHANGELOG.md
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v ver="$VERSION" '
+            $0 ~ "^## "ver"$" { hit=1; next }
+            /^## / { hit=0 }
+            hit { print }
+          ' CHANGELOG.md | sed -e '/./,$!d' > "$RUNNER_TEMP/release-notes.md"
+          [ -s "$RUNNER_TEMP/release-notes.md" ] || {
+            echo "No '## $VERSION' section found in CHANGELOG.md — write the patch notes before tagging."; exit 1; }
+          {
+            echo "RELEASE_NOTES<<NOTES_EOF"
+            cat "$RUNNER_TEMP/release-notes.md"
+            echo "NOTES_EOF"
+          } >> "$GITHUB_ENV"
       # Re-run the cheap checks here rather than depending on ci.yml —
       # `needs:` can't cross workflow files, and a release must never ship
       # from a commit whose checks were red.
@@ -52,6 +71,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: ${{ github.ref_name }}
+          releaseBody: ${{ env.RELEASE_NOTES }}
           releaseDraft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
           includeUpdaterJson: true
