@@ -5,6 +5,11 @@ utilisateur (pas de détails internes). La section la plus récente en premier.
 Ce fichier est embarqué dans l'app (panneau "Quoi de neuf" + Réglages) et
 sert de description à la release GitHub — écrire pour les joueurs.
 
+## 0.2.8
+
+- **Removed the "Secondary 1/2" dropdowns** from Settings' Meta section and the tablet-click popup — they stopped affecting scoring a while ago and were just confusing to fiddle with. Priority stat and skip threshold still work exactly the same.
+- Dev-infra only: the CI now enforces consistent formatting and lints the Rust side (`cargo fmt`/`cargo clippy`) on every push — no player-visible change.
+
 ## 0.2.7
 
 - **Fixed: dragging the overlay by its header didn't work when you clicked on the tier badge** (e.g. the "Legendary" pill) — it silently ate the drag instead of moving the window.

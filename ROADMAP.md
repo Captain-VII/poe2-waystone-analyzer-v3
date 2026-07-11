@@ -45,9 +45,6 @@ Validé, mais pas urgent :
 - [ ] Test multi-écrans réel — la cascade de fallback (Full → Compact → Mini)
       n'a jamais été exercée sur du vrai matériel multi-moniteur/DPI mixte
       (KNOWN_ISSUES #6).
-- [ ] Masquer (ou marquer inertes) les dropdowns « Secondary 1/2 » du
-      panneau Settings — ils n'ont plus aucun effet sur le scoring depuis le
-      rework tier-based, source de confusion (KNOWN_ISSUES #3).
 
 ## Idées
 

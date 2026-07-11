@@ -368,14 +368,6 @@ export function mountOverlay(
                   <span class="set-lab">Priority stat</span>
                   <button class="set-select" type="button" data-meta-priority aria-haspopup="listbox" aria-label="Priority stat"></button>
                 </div>
-                <div class="set-row">
-                  <span class="set-lab">Secondary 1</span>
-                  <button class="set-select" type="button" data-meta-sec1 aria-haspopup="listbox" aria-label="First secondary stat"></button>
-                </div>
-                <div class="set-row">
-                  <span class="set-lab">Secondary 2</span>
-                  <button class="set-select" type="button" data-meta-sec2 aria-haspopup="listbox" aria-label="Second secondary stat"></button>
-                </div>
                 <div class="set-row set-col" title="Below this Juice Score, the mechanic isn't recommended">
                   <div class="set-row">
                     <span class="set-lab">Skip if score below</span>
@@ -469,8 +461,6 @@ export function mountOverlay(
   const metaSection = q("[data-meta-section]");
   const metaMechSel = q("[data-meta-mech]") as HTMLButtonElement;
   const metaPrioritySel = q("[data-meta-priority]") as HTMLButtonElement;
-  const metaSec1Sel = q("[data-meta-sec1]") as HTMLButtonElement;
-  const metaSec2Sel = q("[data-meta-sec2]") as HTMLButtonElement;
   const metaSkipInput = q("[data-meta-skip]") as HTMLInputElement;
   const metaSkipVal = q("[data-meta-skip-val]");
   const metaTabletsEl = q("[data-meta-tablets]");
@@ -808,7 +798,7 @@ export function mountOverlay(
   }
 
   function setMetaControlsDisabled(disabled: boolean): void {
-    for (const el of [metaMechSel, metaPrioritySel, metaSec1Sel, metaSec2Sel, metaSkipInput, metaResetBtn]) {
+    for (const el of [metaMechSel, metaPrioritySel, metaSkipInput, metaResetBtn]) {
       el.disabled = disabled;
     }
     for (const input of metaTabletsEl.querySelectorAll("input")) input.disabled = disabled;
@@ -935,8 +925,6 @@ export function mountOverlay(
     renderMetaEditor(); // navigation only — nothing saved
   });
   const priorityDropdown = makeDropdown(metaPrioritySel, () => collectMechanicEdit());
-  const sec1Dropdown = makeDropdown(metaSec1Sel, () => collectMechanicEdit());
-  const sec2Dropdown = makeDropdown(metaSec2Sel, () => collectMechanicEdit());
 
   function renderMetaEditor(): void {
     const model = metaModel;
@@ -951,10 +939,7 @@ export function mountOverlay(
     const mech = model.mechanics.find((m) => m.name === selectedMech);
     if (!mech) return;
     const statOptions = model.statOptions.map((s) => ({ value: s.key as string, label: s.label }));
-    const withNone = [{ value: "", label: "—" }, ...statOptions];
     priorityDropdown.set(statOptions, mech.effective.priorityStat);
-    sec1Dropdown.set(withNone, mech.effective.secondaryStats[0] ?? "");
-    sec2Dropdown.set(withNone, mech.effective.secondaryStats[1] ?? "");
     metaSkipInput.value = String(mech.effective.skipIfBelow);
     metaSkipVal.textContent = String(mech.effective.skipIfBelow);
     metaTabletsEl.innerHTML = model.tablets
@@ -1002,11 +987,14 @@ export function mountOverlay(
   function collectMechanicEdit(): void {
     const mech = metaModel?.mechanics.find((m) => m.name === selectedMech);
     if (!mech) return;
-    const secondaryStats = [sec1Dropdown.value, sec2Dropdown.value].filter((v) => v !== "");
+    // Secondary stats no longer have a UI (dead weight, KNOWN_ISSUES #3 —
+    // scoring.ts stopped reading them) — carry the mechanic's current
+    // value through unchanged instead of wiping any existing meta.json
+    // override to [].
     void metaAction((ed) =>
       ed.saveMechanic(mech.name, {
         priorityStat: priorityDropdown.value as MechanicEdit["priorityStat"],
-        secondaryStats: secondaryStats as MechanicEdit["secondaryStats"],
+        secondaryStats: mech.effective.secondaryStats,
         skipIfBelow: Number(metaSkipInput.value),
       }),
     );
@@ -1057,14 +1045,6 @@ export function mountOverlay(
         <span class="set-lab">Priority stat</span>
         <button class="set-select" type="button" data-tmp-priority aria-haspopup="listbox" aria-label="Priority stat"></button>
       </div>
-      <div class="set-row">
-        <span class="set-lab">Secondary 1</span>
-        <button class="set-select" type="button" data-tmp-sec1 aria-haspopup="listbox" aria-label="First secondary stat"></button>
-      </div>
-      <div class="set-row">
-        <span class="set-lab">Secondary 2</span>
-        <button class="set-select" type="button" data-tmp-sec2 aria-haspopup="listbox" aria-label="Second secondary stat"></button>
-      </div>
       <div class="set-row" title="Below this Juice Score, the mechanic isn't recommended">
         <span class="set-lab">Skip if score below</span>
         <span class="set-val" data-tmp-skip-val></span>
@@ -1073,34 +1053,32 @@ export function mountOverlay(
     panel.appendChild(el);
 
     const priorityBtn = el.querySelector("[data-tmp-priority]") as HTMLButtonElement;
-    const sec1Btn = el.querySelector("[data-tmp-sec1]") as HTMLButtonElement;
-    const sec2Btn = el.querySelector("[data-tmp-sec2]") as HTMLButtonElement;
     const skipInput = el.querySelector("[data-tmp-skip]") as HTMLInputElement;
     const skipVal = el.querySelector("[data-tmp-skip-val]") as HTMLElement;
     const closeBtn = el.querySelector("[data-tmp-close]") as HTMLButtonElement;
 
     function collectPopupEdit(): void {
-      const secondaryStats = [tmpSec1.value, tmpSec2.value].filter((v) => v !== "");
+      const m = metaModel?.mechanics.find((x) => x.name === mechanicName);
+      if (!m) return;
+      // Secondary stats no longer have a UI (dead weight, KNOWN_ISSUES #3 —
+      // scoring.ts stopped reading them) — carry the mechanic's current
+      // value through unchanged instead of wiping any existing meta.json
+      // override to [].
       void metaAction((ed) =>
         ed.saveMechanic(mechanicName, {
           priorityStat: tmpPriority.value as MechanicEdit["priorityStat"],
-          secondaryStats: secondaryStats as MechanicEdit["secondaryStats"],
+          secondaryStats: m.effective.secondaryStats,
           skipIfBelow: Number(skipInput.value),
         }),
       );
     }
     const tmpPriority = makeDropdown(priorityBtn, collectPopupEdit, el);
-    const tmpSec1 = makeDropdown(sec1Btn, collectPopupEdit, el);
-    const tmpSec2 = makeDropdown(sec2Btn, collectPopupEdit, el);
 
     function renderPopupFields(): void {
       const m = metaModel?.mechanics.find((x) => x.name === mechanicName);
       if (!m || !metaModel) return;
       const statOptions = metaModel.statOptions.map((s) => ({ value: s.key as string, label: s.label }));
-      const withNone = [{ value: "", label: "—" }, ...statOptions];
       tmpPriority.set(statOptions, m.effective.priorityStat);
-      tmpSec1.set(withNone, m.effective.secondaryStats[0] ?? "");
-      tmpSec2.set(withNone, m.effective.secondaryStats[1] ?? "");
       skipInput.value = String(m.effective.skipIfBelow);
       skipVal.textContent = String(m.effective.skipIfBelow);
     }
