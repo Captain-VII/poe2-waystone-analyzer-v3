@@ -272,6 +272,30 @@ export const STAT_REFERENCES: Record<StatSignal, number> = {
 // cap needed, unlike the old multiplicative-synergy model.
 const SECONDARY_BONUS_CAP = 5;
 
+// Sourced 2026-07-11 from 6 real T15 waystones the user pasted: Waystone
+// Drop Chance was the dominant stat in all 6, and cleared the shared 50%
+// legendary boundary (~77.5% raw, out of its 155 ceiling) in 3 of them — a
+// materially higher hit rate than any other stat individually reaching
+// legendary in the same sample. Its real range (10-155%) is wider and
+// skews toward high common rolls more than the other four. Its legendary
+// bar alone is raised to 70% of ceiling (~108.5% raw); weak/ok/top stay on
+// the shared 15/25/50 boundaries (tierForPercent), and the other four
+// stats are untouched. Only the DOMINANT stat's tier is affected — a
+// secondary stat's bonus eligibility (below) always uses the shared
+// boundaries, since that's a different question ("is this stat at least
+// decent") from "does the dominant stat deserve the top label".
+const DOMINANT_LEGENDARY_OVERRIDE: Partial<Record<StatSignal, number>> = {
+  waystoneDropChance: 70,
+};
+
+function dominantTierFor(key: StatSignal, normalizedPercent: number): StatTier {
+  const legendaryAt = DOMINANT_LEGENDARY_OVERRIDE[key] ?? 50;
+  if (normalizedPercent < 15) return "weak";
+  if (normalizedPercent < 25) return "ok";
+  if (normalizedPercent < legendaryAt) return "top";
+  return "legendary";
+}
+
 interface DominantStat {
   key: StatSignal;
   normalizedPercent: number;
@@ -289,7 +313,7 @@ function computeCompositeScore(stats: ModStats): { score: number; dominant: Domi
     normalizedPercent: ((stats[key] ?? 0) / STAT_REFERENCES[key]) * 100,
   }));
   const dominant = candidates.reduce((best, c) => (c.normalizedPercent > best.normalizedPercent ? c : best));
-  const dominantTier = tierForPercent(dominant.normalizedPercent);
+  const dominantTier = dominantTierFor(dominant.key, dominant.normalizedPercent);
 
   const bonus = candidates
     .filter((c) => c.key !== dominant.key && tierForPercent(c.normalizedPercent) !== "weak")

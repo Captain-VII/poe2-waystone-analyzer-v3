@@ -51,7 +51,7 @@ export async function getHotkeyBase(): Promise<string> {
  *  reserved key, unparseable key, or registration conflict). */
 export async function setHotkeyBase(base: string): Promise<string> {
   if (!("__TAURI_INTERNALS__" in window)) {
-    throw new Error("indisponible hors overlay");
+    throw new Error("unavailable outside the overlay");
   }
   const { invoke } = await import("@tauri-apps/api/core");
   return invoke<string>("set_hotkey_base", { base });

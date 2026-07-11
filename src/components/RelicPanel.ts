@@ -63,14 +63,14 @@ export interface OverlayOptions {
    *  synchronously from the header's mousedown, see that function's doc
    *  for why. Omitted = unavailable (plain-browser dev). */
   onDragStart?(): void;
-  /** Settings' "Réinitialiser" position button — clears the saved custom
+  /** Settings' "Reset" position button — clears the saved custom
    *  position and re-anchors top-right. */
   onResetPosition?(): void;
-  /** Settings' session-stats "Réinitialiser" button — clears the persisted
+  /** Settings' session-stats "Reset" button — clears the persisted
    *  stats to start a fresh farming session (main.ts owns the storage and
    *  calls setSessionStats back with the emptied view). */
   onResetStats?(): void;
-  /** Settings' Méta editor (meta.json). main.ts owns all IO: every action
+  /** Settings' Meta editor (meta.json). main.ts owns all IO: every action
    *  re-reads the file, writes a diff-only rebuild, hot-reloads the
    *  analyzer tables, and returns a fresh model to render. A rejected
    *  promise means the write failed — the panel shows the error and
@@ -114,11 +114,11 @@ export interface OverlayHandle {
   /** Renders the app version in Settings — called once at startup
    *  (getVersion() is async, the row shows "—" until then). */
   setAppVersion(version: string): void;
-  /** Flips the update row to "Installer vX.Y.Z" — called when the silent
+  /** Flips the update row to "Install vX.Y.Z" — called when the silent
    *  startup check (main.ts) finds a newer version, so the row is already
    *  actionable when the user opens Settings after the toast. */
   setUpdateAvailable(version: string): void;
-  /** Opens the "Quoi de neuf" panel (CHANGELOG.md) — called once by
+  /** Opens the "What's New" panel (CHANGELOG.md) — called once by
    *  main.ts on the first launch after an update; also reachable any time
    *  from the Settings row. */
   showChangelog(): void;
@@ -136,11 +136,11 @@ export interface OverlayHandle {
 const TIER_CLASSES: TierClass[] = ["trash", "low", "good", "splus", "god"];
 
 const BADGE_LABEL: Record<TierClass, string> = {
-  trash: "FAIBLE",
-  low: "MOYEN",
-  good: "BON",
+  trash: "WEAK",
+  low: "AVERAGE",
+  good: "GOOD",
   splus: "EXCELLENT",
-  god: "LEGENDAIRE ✦",
+  god: "LEGENDARY ✦",
 };
 
 /** Row icon per tablet, keyed by the display short name (name minus the
@@ -159,7 +159,7 @@ const TABLET_ICONS: Record<string, string> = {
 };
 
 // 2026-07-10 (user request): the row shows this label instead of the raw
-// fit number/bar — mirrors the SKIP/RUN/GARDER wording already used for
+// fit number/bar — mirrors the SKIP/RUN/KEEP wording already used for
 // the waystone-level verdict. Keyed by `Tablet.verdict` (adapter.ts's
 // `tabletVerdict`); the exact number/breakdown is still one hover away.
 const TABLET_VERDICT_LABEL: Record<AnalysisResult["tablets"][number]["verdict"], string> = {
@@ -221,7 +221,7 @@ export function mountOverlay(
           <path d="M1 5.5 H7 M15 5.5 H21" stroke="currentColor" stroke-width="1" opacity=".7"/>
         </svg>
         <div class="status-chip" data-status hidden><span class="s-ic" data-status-icon></span><span data-status-text></span></div>
-        <div class="p-head" data-head title="Glisser pour déplacer l'overlay">
+        <div class="p-head" data-head title="Drag to move the overlay">
           <svg class="glyph" viewBox="0 0 16 16" aria-hidden="true">
             <path d="M8 1 L14 8 L8 15 L2 8 Z" fill="none" stroke="currentColor" stroke-width="1.4"/>
             <path d="M8 4.5 L11.2 8 L8 11.5 L4.8 8 Z" fill="currentColor" opacity=".7"/>
@@ -241,11 +241,10 @@ export function mountOverlay(
               <div class="score-wrap" data-hero-compact><span class="halo"></span><span class="score-num" data-score></span></div>
               <div class="tier-name"><span data-tiername></span> <span class="rating-pill" data-rating></span></div>
               <div class="action-chip" data-action></div>
-              <div class="top-mechs" data-top-mechs title="Best mechanics for this waystone (Mechanic Match Score)"></div>
             </div>
             <div class="sep"></div>
             <div class="tabs-v">
-              <div class="sec-h">Tablettes Recommandées</div>
+              <div class="sec-h">Recommended Tablets</div>
               <div data-tablets></div>
             </div>
             <div class="warn-strip" data-warn hidden><span class="w-ic">⚠</span><span data-warntext></span><span class="w-level" data-warnlevel></span></div>
@@ -254,7 +253,7 @@ export function mountOverlay(
           <div class="body body-full">
             <div class="cols">
               <div class="col" data-col-tablets>
-                <div class="sec-h">Tablettes Recommandées</div>
+                <div class="sec-h">Recommended Tablets</div>
                 <div data-tablets-full></div>
               </div>
               <div class="col" data-col-heat>
@@ -265,7 +264,6 @@ export function mountOverlay(
                 </div>
                 <div data-breakdown></div>
                 <div class="total-row"><span class="t-lab">Total Heat</span><span class="t-right"><span class="t-val" data-total></span><span class="rating-pill" data-rating-full></span></span></div>
-                <div class="top-mechs" data-top-mechs-full title="Best mechanics for this waystone (Mechanic Match Score)"></div>
               </div>
               <div class="col" data-col-insights>
                 <div class="insights-block" data-insights-block>
@@ -281,7 +279,7 @@ export function mountOverlay(
           </div>
           <div class="body body-settings" data-settings-panel>
             <div class="settings-scroll">
-              <div class="sec-h">Settings</div>
+              <div class="sec-h">Display</div>
               <div class="set-row">
                 <span class="set-lab">Overlay Mode</span>
                 <button class="set-btn" data-set-mode type="button"></button>
@@ -307,13 +305,6 @@ export function mountOverlay(
                   <span class="set-switch-track"></span>
                 </label>
               </div>
-              <div class="set-row" title="Lance l'overlay automatiquement à l'ouverture de session Windows (reste discret : cliquez-à-travers, se cache normalement)">
-                <span class="set-lab">Lancement avec Windows</span>
-                <label class="set-switch">
-                  <input type="checkbox" data-set-autostart />
-                  <span class="set-switch-track"></span>
-                </label>
-              </div>
               <div class="set-row set-col">
                 <div class="set-row">
                   <span class="set-lab">Overlay Opacity</span>
@@ -328,80 +319,90 @@ export function mountOverlay(
                 </div>
                 <input class="set-slider" type="range" min="0.8" max="1.05" step="0.05" data-set-scale />
               </div>
-              <div class="set-row" title="Cliquez puis appuyez sur la nouvelle touche (Échap annule). Shift+touche bascule Compact/Full, Ctrl+touche ouvre Compare.">
+              <div class="set-sep"></div>
+              <div class="sec-h">Controls</div>
+              <div class="set-row" title="Click, then press the new key (Escape cancels). Shift+key toggles Compact/Full, Ctrl+key opens Compare.">
                 <span class="set-lab">Hotkey</span>
                 <span class="set-val set-hotkey-msg" data-hotkey-msg hidden></span>
                 <button class="set-hotkey" data-set-hotkey type="button" aria-label="Remap the analyze hotkey"><kbd data-hotkey-kbd>Ins</kbd></button>
               </div>
-              <div class="set-row" title="Glissez la barre de titre pour déplacer l'overlay ailleurs à l'écran — ce bouton annule et revient au coin haut-droit par défaut">
+              <div class="set-row" title="Drag the title bar to move the overlay elsewhere on screen — this button cancels that and returns to the default top-right corner">
                 <span class="set-lab">Position</span>
-                <button class="set-btn" data-set-reset-position type="button">Réinitialiser</button>
+                <button class="set-btn" data-set-reset-position type="button">Reset</button>
               </div>
+              <div class="set-row" title="Launches the overlay automatically at Windows sign-in (stays unobtrusive: click-through, hides normally)">
+                <span class="set-lab">Launch with Windows</span>
+                <label class="set-switch">
+                  <input type="checkbox" data-set-autostart />
+                  <span class="set-switch-track"></span>
+                </label>
+              </div>
+              <div class="set-sep"></div>
+              <div class="sec-h" title="Since the last Reset — each waystone counts once (re-analyzing it updates its score)">Session</div>
+              <div class="set-row">
+                <span class="set-lab">Waystones analyzed</span>
+                <span class="set-val" data-stat-count>0</span>
+              </div>
+              <div class="set-row">
+                <span class="set-lab">Average score</span>
+                <span class="set-val" data-stat-avg>—</span>
+              </div>
+              <div class="set-row">
+                <span class="set-lab">Best find</span>
+                <span class="set-val set-stat-best" data-stat-best>—</span>
+              </div>
+              <div class="set-row" title="Resets session stats to zero to start a fresh farming session">
+                <span class="set-lab">Stats</span>
+                <button class="set-btn" data-stat-reset type="button">Reset</button>
+              </div>
+              <div class="set-group" data-meta-section>
+                <div class="set-sep"></div>
+                <div class="sec-h" title="Customizes per-mechanic recommendations (meta.json). Only values that differ from the defaults are written to the file.">Meta</div>
+                <span class="set-val set-meta-msg" data-meta-msg hidden></span>
+                <div class="set-row">
+                  <span class="set-lab">Mechanic</span>
+                  <button class="set-select" type="button" data-meta-mech aria-haspopup="listbox" aria-label="Mechanic to customize"></button>
+                </div>
+                <div class="set-row">
+                  <span class="set-lab">Priority stat</span>
+                  <button class="set-select" type="button" data-meta-priority aria-haspopup="listbox" aria-label="Priority stat"></button>
+                </div>
+                <div class="set-row">
+                  <span class="set-lab">Secondary 1</span>
+                  <button class="set-select" type="button" data-meta-sec1 aria-haspopup="listbox" aria-label="First secondary stat"></button>
+                </div>
+                <div class="set-row">
+                  <span class="set-lab">Secondary 2</span>
+                  <button class="set-select" type="button" data-meta-sec2 aria-haspopup="listbox" aria-label="Second secondary stat"></button>
+                </div>
+                <div class="set-row set-col" title="Below this Juice Score, the mechanic isn't recommended">
+                  <div class="set-row">
+                    <span class="set-lab">Skip if score below</span>
+                    <span class="set-val" data-meta-skip-val></span>
+                  </div>
+                  <input class="set-slider" type="range" min="0" max="100" step="1" data-meta-skip aria-label="Skip threshold" />
+                </div>
+                <div class="set-group" data-meta-tablets></div>
+                <div class="set-row" title="Rewrites meta.json empty: every mechanic and tablet reverts to the code's defaults">
+                  <span class="set-lab">Meta</span>
+                  <button class="set-btn" data-meta-reset type="button">Restore defaults</button>
+                </div>
+              </div>
+              <div class="set-sep"></div>
+              <div class="sec-h">Application</div>
               <div class="set-row">
                 <span class="set-lab">Version</span>
                 <span class="set-val" data-app-version>—</span>
               </div>
-              <div class="set-row" title="Vérifie sur GitHub ; l'installation ne démarre que sur clic — jamais automatiquement">
-                <span class="set-lab">Mise à jour</span>
+              <div class="set-row" title="Checks GitHub; installation only ever starts on click — never automatically">
+                <span class="set-lab">Update</span>
                 <span class="set-val set-update-msg" data-update-msg hidden></span>
-                <button class="set-btn" data-update-btn type="button">Vérifier</button>
+                <button class="set-btn" data-update-btn type="button">Check for updates</button>
               </div>
-              <div class="set-row" title="Historique des changements, version par version — s'affiche aussi automatiquement une fois après chaque mise à jour">
-                <span class="set-lab">Notes de version</span>
-                <button class="set-btn" data-changelog-show type="button">Afficher</button>
+              <div class="set-row" title="Change history, version by version — also shown automatically once after each update">
+                <span class="set-lab">Patch Notes</span>
+                <button class="set-btn" data-changelog-show type="button">Show</button>
               </div>
-              <div class="set-sep"></div>
-              <div class="sec-h" title="Depuis le dernier Réinitialiser — chaque waystone compte une fois (la re-analyser met à jour son score)">Session</div>
-              <div class="set-row">
-                <span class="set-lab">Waystones analysées</span>
-                <span class="set-val" data-stat-count>0</span>
-              </div>
-              <div class="set-row">
-                <span class="set-lab">Score moyen</span>
-                <span class="set-val" data-stat-avg>—</span>
-              </div>
-              <div class="set-row">
-                <span class="set-lab">Meilleure trouvaille</span>
-                <span class="set-val set-stat-best" data-stat-best>—</span>
-              </div>
-              <div class="set-row" title="Remet les stats de session à zéro pour démarrer une nouvelle session de farm">
-                <span class="set-lab">Stats</span>
-                <button class="set-btn" data-stat-reset type="button">Réinitialiser</button>
-              </div>
-              <div class="set-group" data-meta-section>
-                <div class="set-sep"></div>
-                <div class="sec-h" title="Personnalise les recommandations par mécanique (meta.json). Seules les valeurs différentes des défauts sont écrites dans le fichier.">Méta</div>
-                <span class="set-val set-meta-msg" data-meta-msg hidden></span>
-                <div class="set-row">
-                  <span class="set-lab">Mécanique</span>
-                  <button class="set-select" type="button" data-meta-mech aria-haspopup="listbox" aria-label="Mécanique à personnaliser"></button>
-                </div>
-                <div class="set-row">
-                  <span class="set-lab">Stat prioritaire</span>
-                  <button class="set-select" type="button" data-meta-priority aria-haspopup="listbox" aria-label="Stat prioritaire"></button>
-                </div>
-                <div class="set-row">
-                  <span class="set-lab">Secondaire 1</span>
-                  <button class="set-select" type="button" data-meta-sec1 aria-haspopup="listbox" aria-label="Première stat secondaire"></button>
-                </div>
-                <div class="set-row">
-                  <span class="set-lab">Secondaire 2</span>
-                  <button class="set-select" type="button" data-meta-sec2 aria-haspopup="listbox" aria-label="Seconde stat secondaire"></button>
-                </div>
-                <div class="set-row set-col" title="Sous ce Juice Score, la mécanique n'est pas recommandée">
-                  <div class="set-row">
-                    <span class="set-lab">Skip si score sous</span>
-                    <span class="set-val" data-meta-skip-val></span>
-                  </div>
-                  <input class="set-slider" type="range" min="0" max="100" step="1" data-meta-skip aria-label="Seuil de skip" />
-                </div>
-                <div class="set-group" data-meta-tablets></div>
-                <div class="set-row" title="Réécrit meta.json vide : toutes les mécaniques et tablettes reviennent aux défauts du code">
-                  <span class="set-lab">Méta</span>
-                  <button class="set-btn" data-meta-reset type="button">Rétablir les défauts</button>
-                </div>
-              </div>
-              <div class="set-sep"></div>
               <div class="set-row">
                 <span class="set-lab">Hide Overlay</span>
                 <button class="set-btn" data-set-hide type="button" title="Sends the overlay to the system tray. Right-click the tray icon to quit for good.">Hide</button>
@@ -411,8 +412,8 @@ export function mountOverlay(
           <div class="body body-changelog" data-changelog-panel>
             <div class="settings-scroll">
               <div class="cl-head">
-                <div class="sec-h">Quoi de neuf</div>
-                <button class="set-btn" data-changelog-close type="button">Fermer</button>
+                <div class="sec-h">What's New</div>
+                <button class="set-btn" data-changelog-close type="button">Close</button>
               </div>
               <div data-changelog-list></div>
             </div>
@@ -431,8 +432,6 @@ export function mountOverlay(
   const scoreCompact = q("[data-score]");
   const scoreFull = q("[data-score-full]");
   const chip = q("[data-action]");
-  const topMechs = q("[data-top-mechs]");
-  const topMechsFull = q("[data-top-mechs-full]");
   const statusChip = q("[data-status]");
   const warn = q("[data-warn]");
   const toggleBtn = q("[data-toggle]");
@@ -506,15 +505,6 @@ export function mountOverlay(
     q("[data-sub]").textContent = `T${waystone.tier} · ${waystone.name}`;
     q("[data-tiername]").textContent = heat.tierLabel;
     chip.textContent = heat.verdict;
-    // Top 3 mechanics in % — the same Mechanic Match Scores that already
-    // drive the tablet list, surfaced directly (user request 2026-07-11).
-    // Display only: the Juice Score formula is untouched.
-    const top3 = result.mechanicScores.slice(0, 3);
-    const topLine = top3.map((m) => `${esc(m.mechanic)} <b>${Math.round(m.score)}%</b>`).join(" · ");
-    topMechs.innerHTML = topLine;
-    topMechs.hidden = top3.length === 0;
-    topMechsFull.innerHTML = topLine;
-    topMechsFull.hidden = top3.length === 0;
     const ratingEl = q("[data-rating]");
     ratingEl.textContent = heat.rating;
     ratingEl.className = `rating-pill rec-rating-${heat.rating}`;
@@ -676,8 +666,8 @@ export function mountOverlay(
   // alone (§6): "clipboard" is a real malfunction (danger red), while
   // "not-waystone" means the app worked correctly on the wrong item (info).
   const STATUS_CONTENT: Record<AnalyzeFailure, { icon: string; text: string; cls: string }> = {
-    clipboard: { icon: "⚠", text: "Copie impossible — presse-papiers vide", cls: "status-err" },
-    "not-waystone": { icon: "◆", text: "Pas une Waystone", cls: "status-info" },
+    clipboard: { icon: "⚠", text: "Copy failed — clipboard empty", cls: "status-err" },
+    "not-waystone": { icon: "◆", text: "Not a Waystone", cls: "status-info" },
   };
 
   let statusTimer: ReturnType<typeof setTimeout> | undefined;
@@ -765,7 +755,7 @@ export function mountOverlay(
     opts.onInteractiveChange?.();
   }
 
-  /** "Quoi de neuf" panel — a fifth `.body` following the Settings-panel
+  /** "What's New" panel — a fifth `.body` following the Settings-panel
    *  pattern (same region, no window resize). Content is static
    *  (CHANGELOG.md bundled at build time), rendered once at mount. */
   let changelogOpen = false;
@@ -829,7 +819,7 @@ export function mountOverlay(
       metaModel = await opts.metaEditor.load();
       renderMetaEditor();
     } catch {
-      showMetaMsg("Lecture de meta.json impossible");
+      showMetaMsg("Could not read meta.json");
     } finally {
       setMetaControlsDisabled(false);
     }
@@ -980,7 +970,7 @@ export function mountOverlay(
       });
     }
     if (model.fileCorrupt) {
-      showMetaMsg("meta.json illisible — le prochain changement le réécrira", { persistent: true });
+      showMetaMsg("meta.json unreadable — the next change will rewrite it", { persistent: true });
     } else if (!metaMsg.classList.contains("err") || metaMsg.hidden) {
       metaMsg.hidden = true;
     }
@@ -999,7 +989,7 @@ export function mountOverlay(
       renderMetaEditor();
       tabletPopupRenderFields?.(); // a save from EITHER surface (Settings or the tablet popup) refreshes both
     } catch {
-      showMetaMsg("Écriture de meta.json impossible");
+      showMetaMsg("Could not write meta.json");
       renderMetaEditor();
       tabletPopupRenderFields?.();
     } finally {
@@ -1059,25 +1049,25 @@ export function mountOverlay(
     el.innerHTML = `
       <div class="tmp-head">
         <span class="tmp-title">${esc(mechanicName)}</span>
-        <button type="button" class="tmp-close" data-tmp-close aria-label="Fermer">×</button>
+        <button type="button" class="tmp-close" data-tmp-close aria-label="Close">×</button>
       </div>
       <div class="set-row">
-        <span class="set-lab">Stat prioritaire</span>
-        <button class="set-select" type="button" data-tmp-priority aria-haspopup="listbox" aria-label="Stat prioritaire"></button>
+        <span class="set-lab">Priority stat</span>
+        <button class="set-select" type="button" data-tmp-priority aria-haspopup="listbox" aria-label="Priority stat"></button>
       </div>
       <div class="set-row">
-        <span class="set-lab">Secondaire 1</span>
-        <button class="set-select" type="button" data-tmp-sec1 aria-haspopup="listbox" aria-label="Première stat secondaire"></button>
+        <span class="set-lab">Secondary 1</span>
+        <button class="set-select" type="button" data-tmp-sec1 aria-haspopup="listbox" aria-label="First secondary stat"></button>
       </div>
       <div class="set-row">
-        <span class="set-lab">Secondaire 2</span>
-        <button class="set-select" type="button" data-tmp-sec2 aria-haspopup="listbox" aria-label="Seconde stat secondaire"></button>
+        <span class="set-lab">Secondary 2</span>
+        <button class="set-select" type="button" data-tmp-sec2 aria-haspopup="listbox" aria-label="Second secondary stat"></button>
       </div>
-      <div class="set-row" title="Sous ce Juice Score, la mécanique n'est pas recommandée">
-        <span class="set-lab">Skip si score sous</span>
+      <div class="set-row" title="Below this Juice Score, the mechanic isn't recommended">
+        <span class="set-lab">Skip if score below</span>
         <span class="set-val" data-tmp-skip-val></span>
       </div>
-      <input class="set-slider" type="range" min="0" max="100" step="1" data-tmp-skip aria-label="Seuil de skip" />`;
+      <input class="set-slider" type="range" min="0" max="100" step="1" data-tmp-skip aria-label="Skip threshold" />`;
     panel.appendChild(el);
 
     const priorityBtn = el.querySelector("[data-tmp-priority]") as HTMLButtonElement;
@@ -1231,7 +1221,7 @@ export function mountOverlay(
   function setUpdateAvailable(version: string): void {
     updateVersion = version;
     updateMsg.hidden = true;
-    updateBtn.textContent = `Installer v${version}`;
+    updateBtn.textContent = `Install v${version}`;
     updateBtn.disabled = false;
   }
 
@@ -1273,7 +1263,7 @@ export function mountOverlay(
       .then((stored) => {
         hotkeyBase = stored;
         applyHotkeyLabel();
-        showHotkeyMsg("Enregistré ✓", false);
+        showHotkeyMsg("Saved ✓", false);
       })
       .catch((err: unknown) => {
         showHotkeyMsg(err instanceof Error ? err.message : String(err), true);
@@ -1297,10 +1287,10 @@ export function mountOverlay(
         <div class="cmp-card${isBest ? " best" : ""}${e.pinned ? " pinned" : ""}">
           <div class="cmp-ctl">
             <button class="cmp-btn cmp-pin" data-cmp-pin="${i}" type="button"
-              title="${e.pinned ? "Désépingler" : "Épingler (survit aux nouvelles analyses, 2 max)"}"
+              title="${e.pinned ? "Unpin" : "Pin (survives new analyses, max 2)"}"
               aria-label="${e.pinned ? "Unpin this waystone" : "Pin this waystone"}">📌</button>
             <button class="cmp-btn cmp-remove" data-cmp-remove="${i}" type="button"
-              title="Retirer de la comparaison" aria-label="Remove this waystone from compare">×</button>
+              title="Remove from comparison" aria-label="Remove this waystone from compare">×</button>
           </div>
           <div class="cmp-name" title="${esc(r.waystone.name)}">${esc(r.waystone.name)}${isBest ? " ★" : ""}</div>
           <div class="cmp-sub">T${r.waystone.tier} · ${esc(BADGE_LABEL[r.heat.tierClass])}</div>
@@ -1415,26 +1405,26 @@ export function mountOverlay(
         // ever starts (in-game overlay: never auto-install).
         const version = updateVersion;
         updateBtn.disabled = true;
-        showUpdateMsg("Téléchargement…", false, false);
+        showUpdateMsg("Downloading…", false, false);
         onInstallUpdate((pct) => {
-          showUpdateMsg(pct === null ? "Téléchargement…" : `Téléchargement… ${pct} %`, false, false);
+          showUpdateMsg(pct === null ? "Downloading…" : `Downloading… ${pct}%`, false, false);
         }).catch(() => {
           // The pending update is still valid — restore the install button.
-          showUpdateMsg("Échec de la mise à jour", true, true);
+          showUpdateMsg("Update failed", true, true);
           setUpdateAvailable(version);
         });
         // Success needs no handler: the passive NSIS updater relaunches
         // the app, this whole DOM is torn down mid-install.
       } else {
         updateBtn.disabled = true;
-        updateBtn.textContent = "Vérification…";
+        updateBtn.textContent = "Checking…";
         void onCheckUpdate().then((info) => {
           if (info) {
             setUpdateAvailable(info.version);
           } else {
-            updateBtn.textContent = "Vérifier";
+            updateBtn.textContent = "Check for updates";
             updateBtn.disabled = false;
-            showUpdateMsg("À jour", false, true);
+            showUpdateMsg("Up to date", false, true);
           }
         });
       }

@@ -38,11 +38,11 @@ const TIER_BANDS: { max: number; tierClass: TierClass }[] = [
 ];
 
 const TIER_LABELS: Record<TierClass, string> = {
-  trash: "Faible",
-  low: "Moyen",
-  good: "Bon",
+  trash: "Weak",
+  low: "Average",
+  good: "Good",
   splus: "Excellent",
-  god: "Legendaire",
+  god: "Legendary",
 };
 
 // dangerLevel → user-facing label. Purely a display mapping over a signal
@@ -127,17 +127,17 @@ function scoreToRating(score: number): Rating {
 /** §9 verdict logic: Skip / Run / Garder — purely a function of the Juice
  *  Score (loot potential) and tier. Danger/annoyance mods never factor in
  *  here; they only ever surface via `warning`/`warnings`. Tier is used as
- *  the "high tier" signal for Garder — waystones tier III+ worth keeping
+ *  the "high tier" signal for Keep — waystones tier III+ worth keeping
  *  for a good tablet rather than running immediately. */
 function classifyVerdict(score: number, tier: number): Verdict {
   if (score < DEFAULT_THRESHOLD) return "SKIP";
-  if (score >= 50 && tier >= 3) return "GARDER";
+  if (score >= 50 && tier >= 3) return "KEEP";
   return "RUN";
 }
 
 // 2026-07-10 (user request, revised same day): the tablet row no longer
 // shows its raw fit number/bar — a 3-tier "Run/Why not/Don't run" verdict
-// reads faster at a glance, mirroring the SKIP/RUN/GARDER vocabulary
+// reads faster at a glance, mirroring the SKIP/RUN/KEEP vocabulary
 // already used for the waystone-level verdict above. Originally bucketed
 // on the numeric `fit` (30/55 thresholds); revised the same day to read
 // straight off the tablet's own mechanic's `priorityStatTier` instead —

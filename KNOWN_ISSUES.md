@@ -768,6 +768,34 @@ risk that bit the Drop-Chance-vs-Item-Rarity test in this same block
 during this change (the test's own hardcoded `120` no longer matched
 scoring.ts's new `155` until fixed to import the export).
 
+**Update (2026-07-11, later still) — Waystone Drop Chance's own legendary
+bar raised; almost every score was reading Legendaire:** user report — "je
+ne vois que des légendaires et très peu de nul." Root-caused with 6 real
+T15 waystones the user pasted directly from the game: Drop Chance was the
+dominant stat in all 6, and 3 of them cleared the shared 50%-of-ceiling
+legendary boundary (~77.5% raw out of the new 155 reference above) on Drop
+Chance alone — a materially higher hit rate than any other stat
+individually reaching legendary in the same sample. Drop Chance's real
+range (10-155%) is wider and skews toward high common rolls (90-110%
+observed 3 times out of 6) more than the other four stats, which never
+exceeded 41% in the sample.
+
+**Fix**: Drop Chance's own legendary bar (only) raised from 50% to 70% of
+its ceiling (~108.5% raw, up from ~77.5%) — `scoring.ts`'s new
+`DOMINANT_LEGENDARY_OVERRIDE`. The shared weak/ok/top boundaries
+(`tierForPercent`, 15/25/50) are untouched, the other four stats keep the
+50% legendary bar, and the secondary-stat bonus eligibility (a different
+question — "is this stat at least decent") still reads the shared
+boundaries regardless of which stat is dominant. Verified against the same
+6 real waystones: "Cabal Gambit" (110% Drop Chance) stays Légendaire
+(83.96, barely — its normalized value is 70.97%, just over the new bar);
+"Ancient Carving" (105%) and "Rotting Charge" (90%) both drop out of
+Légendaire into Excellent/Bon. Net: 3 of 6 Légendaire before this fix, 1 of
+6 after — pinned directly in `verify-adapter.mjs` (`Cabal Gambit`/
+`Rotting Charge` regression checks, plus boundary-crossing checks at
+108%/109% raw Drop Chance and a control check proving Item Rarity's own
+bar is untouched).
+
 ## 4. ~~Mechanic-presence detection is a simple keyword match~~ (resolved 2026-07-08)
 
 "Mecanique naturelle presente sur la map" (§2/§8/§9) is detected by a regex

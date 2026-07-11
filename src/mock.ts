@@ -96,25 +96,25 @@ const VERDICT: Record<TierClass, Verdict> = {
   trash: "SKIP",
   low: "RUN",
   good: "RUN",
-  splus: "GARDER",
-  god: "GARDER",
+  splus: "KEEP",
+  god: "KEEP",
 };
 
 export const MOCK_RESULTS: Record<TierClass, AnalysisResult> = {
   trash: fixture(
-    { score: 12.6, tierClass: "trash", tierLabel: "Faible", verdict: VERDICT.trash, rating: "D" },
+    { score: 12.6, tierClass: "trash", tierLabel: "Weak", verdict: VERDICT.trash, rating: "D" },
     [3.0, 2.0, 4.0, 3.6],
     [],
     "Re-roll or vendor this Waystone",
   ),
   low: fixture(
-    { score: 32.2, tierClass: "low", tierLabel: "Moyen", verdict: VERDICT.low, rating: "C" },
+    { score: 32.2, tierClass: "low", tierLabel: "Average", verdict: VERDICT.low, rating: "C" },
     [8.0, 6.0, 9.0, 9.2],
     [],
     "Run only to sustain Waystones",
   ),
   good: fixture(
-    { score: 52.5, tierClass: "good", tierLabel: "Bon", verdict: VERDICT.good, rating: "B" },
+    { score: 52.5, tierClass: "good", tierLabel: "Good", verdict: VERDICT.good, rating: "B" },
     [12.0, 10.0, 14.0, 16.5],
     [],
     "Worth a mid-tier tablet slot",
@@ -131,7 +131,7 @@ export const MOCK_RESULTS: Record<TierClass, AnalysisResult> = {
   // even with multiple simultaneous danger mods — danger only ever shows up
   // via warnings, never by pulling the score down.
   god: fixture(
-    { score: 94.2, tierClass: "god", tierLabel: "Legendaire", verdict: VERDICT.god, rating: "S" },
+    { score: 94.2, tierClass: "god", tierLabel: "Legendary", verdict: VERDICT.god, rating: "S" },
     [20.0, 19.0, 21.0, 25.0],
     [
       { id: "reflect-damage", severity: "reflect" },

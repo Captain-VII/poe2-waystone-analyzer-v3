@@ -5,6 +5,14 @@ utilisateur (pas de détails internes). La section la plus récente en premier.
 Ce fichier est embarqué dans l'app (panneau "Quoi de neuf" + Réglages) et
 sert de description à la release GitHub — écrire pour les joueurs.
 
+## 0.2.6
+
+- **The app is now fully in English.** Every screen, message, and button was previously a mix of English and French — everything is English now, including hotkey remap errors and update-flow messages.
+- **Settings has been reorganized** into clear sections: Display, Controls, Session, Meta, and Application — instead of one long unsorted list.
+- **Legendary is rarer and more meaningful.** Waystone Drop Chance alone needed too small a roll to trigger it, so nearly every waystone with a decent Drop Chance roll read as Legendary regardless of its other stats. It now needs a genuinely high roll (~108%+) to hit Legendary on its own, matching the bar every other stat already had.
+- Removed the "top 3 mechanics" percentage line added last update — it didn't read well visually.
+- The waystone-level verdict is now labeled **KEEP** instead of the previous French wording.
+
 ## 0.2.5
 
 - **More accurate Juice Score**: the per-stat ceilings the score compares against are now based on real market data instead of estimates — Pack Size and Monster Effectiveness in particular were being held to an unrealistically high bar and could lose out to Item Rarity/Drop Chance even on a genuinely strong roll. This should read as noticeably more consistent scoring, especially on Pack-Size- or Monster-Effectiveness-heavy waystones.

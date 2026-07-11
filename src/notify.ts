@@ -12,7 +12,7 @@ export async function notifyLegendaryWaystone(name: string, score: number): Prom
     if (!granted) granted = (await requestPermission()) === "granted";
     if (!granted) return;
     sendNotification({
-      title: "Legendaire ✦",
+      title: "Legendary ✦",
       body: `${name} — Juice Score ${score}/100`,
     });
   } catch {
@@ -32,8 +32,8 @@ export async function notifyUpdateAvailable(version: string): Promise<void> {
     if (!granted) granted = (await requestPermission()) === "granted";
     if (!granted) return;
     sendNotification({
-      title: "Mise à jour disponible",
-      body: `Waystone-Analyzer v${version} — ouvrez les Réglages pour l'installer.`,
+      title: "Update available",
+      body: `Waystone-Analyzer v${version} — open Settings to install it.`,
     });
   } catch {
     // Same nice-to-have policy as above.

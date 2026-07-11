@@ -404,25 +404,6 @@
   pointer-events: none;
 }
 
-/* Top-3 mechanics line ("Breach 84% · Ritual 62% · Abyss 55%") — quiet,
-   informational, must never compete with the verdict chip above it. */
-.top-mechs {
-  font-size: 10px;
-  color: var(--grey);
-  text-align: center;
-  letter-spacing: 0.02em;
-}
-.top-mechs b {
-  color: var(--ivory);
-  font-weight: 600;
-}
-.top-mechs[hidden] { display: none; }
-/* Full mode: lives under the Total Heat row, left-aligned like that column */
-.body-full .top-mechs {
-  text-align: left;
-  margin-top: 4px;
-}
-
 .cl-head {
   display: flex;
   align-items: center;

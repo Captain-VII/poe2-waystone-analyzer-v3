@@ -66,7 +66,7 @@ check("waystone.modCount === modifiers.length", result.waystone.modCount === res
 check("tierClass is one of the five valid values",
   ["trash", "low", "good", "splus", "god"].includes(result.heat.tierClass));
 check("verdict is one of the three valid values (§9: Skip/Run/Garder)",
-  ["SKIP", "RUN", "GARDER"].includes(result.heat.verdict));
+  ["SKIP", "RUN", "KEEP"].includes(result.heat.verdict));
 check("score is within 0-100 (§6 Juice Score)", result.heat.score >= 0 && result.heat.score <= 100);
 
 check("insights has at most 3 entries", result.insights.length <= 3);
@@ -833,6 +833,39 @@ check("Abyss: quantity-only waystone does NOT feed Abyss beyond the weak-tier ba
   );
   check("a secondary stat under the 'ok' threshold contributes zero bonus",
     weakSecondary.heat.score === TIER_SCORE.legendary);
+
+  // Drop Chance's legendary boundary override (2026-07-11, sourced from 6
+  // real T15 waystones the user pasted — see scoring.ts's
+  // DOMINANT_LEGENDARY_OVERRIDE comment): its own bar alone moves from 50%
+  // to 70% of its 155 ceiling (~108.5% raw); every other stat keeps the
+  // shared 50% bar. 108% raw -> 69.68% normalized -> still "top", not
+  // legendary; 109% raw -> 70.32% -> legendary.
+  check("Drop Chance just under its raised 70% boundary is 'top', NOT legendary",
+    analyzeWaystoneText(mkStatWaystone(["+108% chance to find an additional Waystone"])).heat.score === TIER_SCORE.top);
+  check("Drop Chance just over its raised 70% boundary IS legendary",
+    analyzeWaystoneText(mkStatWaystone(["+109% chance to find an additional Waystone"])).heat.score === TIER_SCORE.legendary);
+  check("Item Rarity at exactly its own (unmoved) 50% boundary is still legendary — the override is Drop-Chance-only",
+    analyzeWaystoneText(mkStatWaystone(["+50% increased Rarity of Items found in this Area"])).heat.score === TIER_SCORE.legendary);
+
+  // Real-waystone regression pins (2026-07-11, user-pasted T15 text) — the
+  // exact reports that motivated the override above.
+  const cabalGambit = analyzeWaystoneText(mkStatWaystone([
+    "+36% increased Rarity of Items found in this Area",
+    "+16% increased Pack Size",
+    "+13% Monster Effectiveness",
+    "+110% chance to find an additional Waystone",
+  ]));
+  check("'Cabal Gambit' (110% Drop Chance) stays legendary — 83.96",
+    cabalGambit.heat.score === 83.96);
+
+  const rottingCharge = analyzeWaystoneText(mkStatWaystone([
+    "+28% increased Rarity of Items found in this Area",
+    "+15% increased Pack Size",
+    "+41% increased Rarity of Monsters",
+    "+90% chance to find an additional Waystone",
+  ]));
+  check("'Rotting Charge' (90% Drop Chance) is no longer legendary — 59.51, was 84.5 before the fix",
+    rottingCharge.heat.score === 59.51);
 }
 
 // ---------------------------------------------------------------------------

@@ -351,17 +351,17 @@ fn hotkey_accels(base: &str) -> Vec<(String, &'static str)> {
 /// plugin's parser accepts).
 fn validate_hotkey_base(base: &str) -> Result<(), String> {
     if base.is_empty() || base.contains('+') || base.contains(char::is_whitespace) {
-        return Err("touche invalide".into());
+        return Err("invalid key".into());
     }
     if HOTKEY_BLOCKLIST.iter().any(|b| b.eq_ignore_ascii_case(base)) {
-        return Err("touche réservée (Échap, Entrée, chat)".into());
+        return Err("reserved key (Escape, Enter, chat)".into());
     }
     if is_printable_key(base) {
-        return Err("touche de frappe — elle serait avalée partout, chat compris".into());
+        return Err("typing key — it would get swallowed everywhere, chat included".into());
     }
     for (accel, _) in hotkey_accels(base) {
         if accel.parse::<Shortcut>().is_err() {
-            return Err("touche non supportée".into());
+            return Err("unsupported key".into());
         }
     }
     Ok(())
@@ -436,7 +436,7 @@ fn set_hotkey_base(
                 for (accel, _) in hotkey_accels(&old) {
                     let _ = gs.register(accel.as_str());
                 }
-                return Err("touche déjà prise par une autre application".into());
+                return Err("key already taken by another application".into());
             }
         }
     }
