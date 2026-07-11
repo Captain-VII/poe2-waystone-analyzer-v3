@@ -11,7 +11,22 @@ quand elle existe.
 
 ## Prochaine version
 
-*(rien d'engagé pour l'instant — remonter ici ce qui partira dans la 0.2.4)*
+- [ ] Remonter la barre « Légendaire » du Waystone Drop Chance dans le Juice
+      Score. Diagnostic fait et validé (2026-07-11) sur 6 waystones T15
+      réelles collées par l'utilisateur : Drop Chance était la stat
+      dominante dans les 6, et touchait la barre légendaire actuelle (50%
+      de son plafond 155, ~77.5% brut) dans 3 des 6 — bien plus souvent que
+      les 4 autres stats. Fix validé : sa barre légendaire seule passe à
+      70% du plafond (~108.5% brut) ; les seuils faible/correct/top
+      partagés, les 4 autres stats et le système de bonus secondaire restent
+      inchangés. Effet vérifié à la main : 3/6 Légendaire → 1/6.
+      Implémentation : `computeCompositeScore` (scoring.ts) — remplacer
+      l'appel direct à `tierForPercent(dominant.normalizedPercent)` par une
+      variante locale avec un override par stat (`DOMINANT_LEGENDARY_OVERRIDE`),
+      + tests de régression `verify-adapter.mjs` pinnant les cas Cabal
+      Gambit (reste légendaire) et Rotting Charge (ne l'est plus). Détail
+      complet (code, checks, textes des 6 waystones) dans l'historique de
+      conversation du 2026-07-11 si besoin de le retrouver.
 
 ## Ensuite
 
