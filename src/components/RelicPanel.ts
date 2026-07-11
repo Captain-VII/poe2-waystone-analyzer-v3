@@ -233,6 +233,7 @@ export function mountOverlay(
           <button class="badge" data-badge></button>
           <button class="toggle-btn" data-toggle title="Toggle Compact / Full (Shift+Ins)" aria-label="Toggle compact or full view">⤢</button>
           <button class="settings-btn" data-settings title="Settings" aria-label="Toggle settings panel">⚙</button>
+          <button class="minimize-btn" data-minimize title="Minimize to tray (Esc)" aria-label="Minimize overlay to tray">–</button>
         </div>
         <div class="bodies">
           <div class="body body-compact">
@@ -441,6 +442,7 @@ export function mountOverlay(
   const tabletsFullEl = q("[data-tablets-full]");
   const compareGrid = q("[data-compare]");
   const settingsBtn = q("[data-settings]");
+  const minimizeBtn = q("[data-minimize]");
   const settingsPanel = q("[data-settings-panel]");
   const setModeBtn = q("[data-set-mode]") as HTMLButtonElement;
   const setInsightsInput = q("[data-set-insights]") as HTMLInputElement;
@@ -1313,7 +1315,7 @@ export function mountOverlay(
     // drag support (plain-browser dev), fall back to the narrower
     // toggle/settings-only zone the header used to report — the badge is
     // only interactive there in dev builds anyway (mock-tier cycling).
-    const els = opts.onDragStart ? [headEl] : [toggleBtn, settingsBtn];
+    const els = opts.onDragStart ? [headEl] : [toggleBtn, settingsBtn, minimizeBtn];
     if (!opts.onDragStart && opts.onCycleTier) els.push(badge);
     if (settingsOpen) return [...els, settingsPanel]; // whole panel as one rect
     if (changelogOpen) return [...els, changelogPanel]; // scroll + Fermer button
@@ -1347,6 +1349,7 @@ export function mountOverlay(
   }
   toggleBtn.addEventListener("click", opts.onToggleMode);
   settingsBtn.addEventListener("click", toggleSettings);
+  minimizeBtn.addEventListener("click", opts.onHide);
   setModeBtn.addEventListener("click", opts.onToggleMode);
   setInsightsInput.addEventListener("change", () => {
     const show = setInsightsInput.checked;
@@ -1456,9 +1459,12 @@ export function mountOverlay(
   if (opts.onDragStart) {
     const onDragStart = opts.onDragStart;
     headEl.addEventListener("mousedown", (ev) => {
-      // Let the badge/toggle/settings buttons handle their own click —
-      // only the header's background starts a drag.
-      if ((ev.target as HTMLElement).closest("button")) return;
+      // Let the toggle/settings/minimize buttons handle their own click —
+      // only the header's background (and the tier badge, which is only
+      // clickable in dev via onCycleTier) starts a drag. In production the
+      // badge is an inert <button> and must not swallow the drag gesture.
+      const btn = (ev.target as HTMLElement).closest("button");
+      if (btn && (btn !== badge || opts.onCycleTier)) return;
       onDragStart();
     });
   }

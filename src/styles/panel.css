@@ -766,7 +766,8 @@
 .cmp-verdict { font-size: 11px; letter-spacing: 0.05em; opacity: 0.85; }
 
 .toggle-btn,
-.settings-btn {
+.settings-btn,
+.minimize-btn {
   flex: none;
   width: 26px;
   height: 26px;
@@ -784,22 +785,26 @@
     border-color 120ms ease-out, transform 120ms ease-out;
 }
 .toggle-btn:hover,
-.settings-btn:hover {
+.settings-btn:hover,
+.minimize-btn:hover {
   color: var(--gold-hi);
   border-color: var(--gold-hi);
   background: rgba(240, 184, 74, 0.08);
 }
 .toggle-btn:active,
-.settings-btn:active { transform: scale(0.97); }
+.settings-btn:active,
+.minimize-btn:active { transform: scale(0.97); }
 .toggle-btn:focus-visible,
-.settings-btn:focus-visible { outline: 2px solid var(--gold-hi); outline-offset: 2px; }
+.settings-btn:focus-visible,
+.minimize-btn:focus-visible { outline: 2px solid var(--gold-hi); outline-offset: 2px; }
 .settings-btn.active {
   color: var(--gold-hi);
   border-color: var(--gold-hi);
   background: rgba(240, 184, 74, 0.12);
 }
-/* Mini fallback (240×84, §2) has no room for a settings affordance. */
-.mode-mini .settings-btn { display: none; }
+/* Mini fallback (240×84, §2) has no room for a settings/minimize affordance. */
+.mode-mini .settings-btn,
+.mode-mini .minimize-btn { display: none; }
 
 /* ---- tier states (§6) ---- */
 .tier-trash { --tier: #8a5a4a; --tier-glow: transparent; }

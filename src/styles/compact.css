@@ -1,14 +1,17 @@
 /* Compact mode — vertical quick-decision card, docs/overlay-ui-spec.md §4 */
 
 /* §2/panel.css: at 292px, the header's fixed-width controls (glyph, badge,
- * toggle, settings) plus a worst-case badge label ("LEGENDA...") no longer
- * fit `.p-head`'s content width alongside the new settings-btn — it was
- * pushed ~17px past the panel's right edge (measured via Playwright
- * bounding-box, same class of bug as the badge max-width comment in
- * panel.css). Trim padding/gap and the badge's worst-case width, Compact
- * only — Full's 580px header has ample room and is untouched. */
+ * toggle, settings, minimize) don't fit `.p-head`'s content width alongside
+ * a worst-case badge label ("LEGENDARY ✦") — it was pushed past the panel's
+ * right edge (measured via Playwright bounding-box, same class of bug as
+ * the badge max-width comment in panel.css). Trim padding/gap and hide the
+ * static "Waystone" title (p-sub is already invisible here, opacity: 0 —
+ * see panel.css — so nothing readable is lost), freeing enough room for
+ * the badge to show its full label instead of ellipsis-truncating.
+ * Full's 580px header has ample room and is untouched. */
 .mode-compact .p-head { gap: 4px; padding-right: 6px; }
-.mode-compact .badge { max-width: 76px; }
+.mode-compact .p-title { display: none; }
+.mode-compact .badge { max-width: 118px; }
 
 .hero-v {
   flex: none;

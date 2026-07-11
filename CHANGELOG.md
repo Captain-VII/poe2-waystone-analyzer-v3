@@ -5,6 +5,12 @@ utilisateur (pas de détails internes). La section la plus récente en premier.
 Ce fichier est embarqué dans l'app (panneau "Quoi de neuf" + Réglages) et
 sert de description à la release GitHub — écrire pour les joueurs.
 
+## 0.2.7
+
+- **Fixed: dragging the overlay by its header didn't work when you clicked on the tier badge** (e.g. the "Legendary" pill) — it silently ate the drag instead of moving the window.
+- **New: a minimize button** in the top-right of the header, next to Settings, sends the overlay to the tray without opening Settings first.
+- **Fixed: the tier badge text (e.g. "Legendary") was cut off in Compact mode** — it now always displays in full.
+
 ## 0.2.6
 
 - **The app is now fully in English.** Every screen, message, and button was previously a mix of English and French — everything is English now, including hotkey remap errors and update-flow messages.
