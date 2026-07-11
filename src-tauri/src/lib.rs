@@ -26,7 +26,9 @@ const DEFAULT_META_JSON: &str = include_str!("../default-meta.json");
 const WINDOW_LOGICAL_SIZE: (f64, f64) = (620.0, 416.0);
 
 fn seed_meta_json(app: &tauri::AppHandle) {
-    let Ok(dir) = app.path().app_config_dir() else { return };
+    let Ok(dir) = app.path().app_config_dir() else {
+        return;
+    };
     if fs::create_dir_all(&dir).is_err() {
         return;
     }
@@ -61,8 +63,14 @@ fn recompose_nudge(window: &tauri::WebviewWindow) {
         return;
     }
     if let Ok(size) = window.inner_size() {
-        let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize::new(size.width + 1, size.height)));
-        let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize::new(size.width, size.height)));
+        let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize::new(
+            size.width + 1,
+            size.height,
+        )));
+        let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize::new(
+            size.width,
+            size.height,
+        )));
     }
 }
 
@@ -203,8 +211,14 @@ async fn log_window_diagnostics(window: tauri::WebviewWindow) -> Result<(), Stri
 
     println!("=== window diagnostics ===");
     println!("label:            {label}");
-    println!("outer_size:       {}x{}", outer_size.width, outer_size.height);
-    println!("inner_size:       {}x{}", inner_size.width, inner_size.height);
+    println!(
+        "outer_size:       {}x{}",
+        outer_size.width, outer_size.height
+    );
+    println!(
+        "inner_size:       {}x{}",
+        inner_size.width, inner_size.height
+    );
     println!("outer_position:   ({}, {})", outer_pos.x, outer_pos.y);
     println!("scale_factor:     {scale}");
     if let Some(m) = &monitor {
@@ -231,7 +245,10 @@ async fn log_window_diagnostics(window: tauri::WebviewWindow) -> Result<(), Stri
         "OVERLAY_SKIP_TASKBAR",
         "OVERLAY_CLICK_THROUGH",
     ] {
-        println!("{key}: {}", env::var(key).unwrap_or_else(|_| "(unset)".into()));
+        println!(
+            "{key}: {}",
+            env::var(key).unwrap_or_else(|_| "(unset)".into())
+        );
     }
     println!("==========================");
     Ok(())
@@ -308,7 +325,12 @@ const DEFAULT_HOTKEY_BASE: &str = "Insert";
 /// included (and Control+C is what `simulate_copy` *sends*: grabbing C
 /// would make the overlay swallow its own copy keystroke).
 const HOTKEY_BLOCKLIST: &[&str] = &[
-    "Escape", "Enter", "NumpadEnter", "Space", "Tab", "Backspace",
+    "Escape",
+    "Enter",
+    "NumpadEnter",
+    "Space",
+    "Tab",
+    "Backspace",
 ];
 
 /// W3C `KeyboardEvent.code` values that produce text — all rejected as
@@ -327,8 +349,20 @@ fn is_printable_key(base: &str) -> bool {
     }
     matches!(
         base,
-        "Comma" | "Period" | "Slash" | "Semicolon" | "Quote" | "BracketLeft" | "BracketRight"
-            | "Backslash" | "Backquote" | "Minus" | "Equal" | "IntlBackslash" | "IntlRo" | "IntlYen"
+        "Comma"
+            | "Period"
+            | "Slash"
+            | "Semicolon"
+            | "Quote"
+            | "BracketLeft"
+            | "BracketRight"
+            | "Backslash"
+            | "Backquote"
+            | "Minus"
+            | "Equal"
+            | "IntlBackslash"
+            | "IntlRo"
+            | "IntlYen"
     )
 }
 
@@ -353,7 +387,10 @@ fn validate_hotkey_base(base: &str) -> Result<(), String> {
     if base.is_empty() || base.contains('+') || base.contains(char::is_whitespace) {
         return Err("invalid key".into());
     }
-    if HOTKEY_BLOCKLIST.iter().any(|b| b.eq_ignore_ascii_case(base)) {
+    if HOTKEY_BLOCKLIST
+        .iter()
+        .any(|b| b.eq_ignore_ascii_case(base))
+    {
         return Err("reserved key (Escape, Enter, chat)".into());
     }
     if is_printable_key(base) {
@@ -368,7 +405,10 @@ fn validate_hotkey_base(base: &str) -> Result<(), String> {
 }
 
 fn hotkey_file(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
-    app.path().app_config_dir().ok().map(|d| d.join("hotkey.txt"))
+    app.path()
+        .app_config_dir()
+        .ok()
+        .map(|d| d.join("hotkey.txt"))
 }
 
 fn persist_hotkey_base(app: &tauri::AppHandle, base: &str) {
@@ -472,15 +512,20 @@ fn register_hotkeys(app: &tauri::AppHandle, base: &str) {
             // A remap (set_hotkey_base) may have landed while waiting —
             // don't resurrect accelerators for a base the user replaced.
             let current = handle.state::<HotkeyBase>().0.lock().unwrap().clone();
-            let live: Vec<String> = hotkey_accels(&current).into_iter().map(|(a, _)| a).collect();
+            let live: Vec<String> = hotkey_accels(&current)
+                .into_iter()
+                .map(|(a, _)| a)
+                .collect();
             pending.retain(|a| live.contains(a));
-            pending.retain(|accel| match handle.global_shortcut().register(accel.as_str()) {
-                Ok(()) => {
-                    println!("[hotkey] {accel} registered after retry");
-                    false
-                }
-                Err(_) => true,
-            });
+            pending.retain(
+                |accel| match handle.global_shortcut().register(accel.as_str()) {
+                    Ok(()) => {
+                        println!("[hotkey] {accel} registered after retry");
+                        false
+                    }
+                    Err(_) => true,
+                },
+            );
             if pending.is_empty() {
                 return;
             }
@@ -524,7 +569,10 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         // MacosLauncher::LaunchAgent is ignored on Windows (this app's only
         // real target) but required at compile time by the plugin's API.
-        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .manage(InteractiveRects(Mutex::new(Vec::new())))
@@ -551,7 +599,8 @@ pub fn run() {
             // surface paints at all, isolated from every transparency/compositing
             // variable. Every other axis stays independently toggleable via env
             // var for the render-paint investigation.
-            let debug_opaque = has_cli_flag("--debug-opaque-overlay") || env_flag("OVERLAY_DEBUG_OPAQUE", false);
+            let debug_opaque =
+                has_cli_flag("--debug-opaque-overlay") || env_flag("OVERLAY_DEBUG_OPAQUE", false);
             // Independently overridable even in debug mode (bisect: is `transparent`
             // itself the hover-blackening culprit?) — defaults false in debug mode
             // (matching the original "prove paint works" intent) unless set explicitly.
@@ -564,7 +613,11 @@ pub fn run() {
             // set_ignore_cursor_events() toggling itself the hover-blackening culprit?).
             let click_through = env_flag("OVERLAY_CLICK_THROUGH", !debug_opaque);
 
-            let title = if debug_opaque { "Waystone-Analyzer [DEBUG OPAQUE]" } else { "Waystone-Analyzer" };
+            let title = if debug_opaque {
+                "Waystone-Analyzer [DEBUG OPAQUE]"
+            } else {
+                "Waystone-Analyzer"
+            };
 
             let mut builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
                 .title(title)
@@ -609,11 +662,16 @@ pub fn run() {
                     let mut interactive = false;
                     let mut first_check = true;
                     loop {
-                        let rects = app_handle.state::<InteractiveRects>().0.lock().unwrap().clone();
+                        let rects = app_handle
+                            .state::<InteractiveRects>()
+                            .0
+                            .lock()
+                            .unwrap()
+                            .clone();
                         let inside = match handle.cursor_position() {
-                            Ok(c) if !rects.is_empty() => rects
-                                .iter()
-                                .any(|&(x, y, w, h)| c.x >= x && c.y >= y && c.x < x + w && c.y < y + h),
+                            Ok(c) if !rects.is_empty() => rects.iter().any(|&(x, y, w, h)| {
+                                c.x >= x && c.y >= y && c.x < x + w && c.y < y + h
+                            }),
                             // No regions reported yet (early startup): fall back to
                             // whole-window bounds so nothing is un-clickable before
                             // the frontend's first report lands.
@@ -666,7 +724,8 @@ pub fn run() {
             // this a stray Settings-panel click was the sole exit — now that
             // button just hides the window (see `hide_window`), and this menu
             // is what actually ends the process.
-            let show_item = MenuItem::with_id(app, "show", "Afficher / Masquer", true, None::<&str>)?;
+            let show_item =
+                MenuItem::with_id(app, "show", "Afficher / Masquer", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Quitter", true, None::<&str>)?;
             let tray_menu = Menu::with_items(app, &[&show_item, &quit_item])?;
 
