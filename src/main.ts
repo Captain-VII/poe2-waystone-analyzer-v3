@@ -271,10 +271,17 @@ async function revealOverlay(): Promise<void> {
 
 /** Settings' "Réinitialiser" position button — drops the saved custom
  *  position and snaps back to the default top-right anchor. No-op in
- *  plain-browser dev (both calls already guard on Tauri presence). */
-function resetPosition(): void {
+ *  plain-browser dev (both calls already guard on Tauri presence).
+ *  Re-reports interactive regions after, same as toggleMode()'s morph —
+ *  without it, `placeTopRight()`'s own onMoved fires with `repositioning`
+ *  set (placement.ts's watchWindowMoves ignores it, by design, so it
+ *  never persists a programmatic move as a "user drag") and nothing else
+ *  updates the click-through rects, so every control stays stuck at the
+ *  pre-reset screen position (found 2026-07-12, real in-game report). */
+async function resetPosition(): Promise<void> {
   clearCustomPosition();
-  void placeTopRight();
+  await placeTopRight();
+  await reportRegions();
 }
 
 function toggleMode(): void {
@@ -347,7 +354,12 @@ async function init(): Promise<void> {
   overlay.setSessionStats(summarizeSessionStats(sessionStats)); // persisted stats from previous launches
   await prepareWindowDrag(); // caches the window ref so the header's mousedown can start a drag synchronously
   await watchDisplayChanges(() => void handleDisplayChange());
-  await watchWindowMoves(); // persists a user drag once it settles (KNOWN_ISSUES-adjacent QoL, see placement.ts)
+  // Persists a user drag once it settles, then re-reports interactive
+  // regions at the header's new position — without this, a second drag
+  // from anywhere but the original spawn position was ignored (ROADMAP.md,
+  // root-caused 2026-07-12: the Rust side's click-through check compared
+  // the cursor to stale pre-drag rects).
+  await watchWindowMoves(reportRegions);
   await sendReport("display-watch-attached");
   // Startup paint only — must NOT simulate Ctrl+C: whatever window has OS
   // focus at this moment (often a dev terminal, not the game) would receive

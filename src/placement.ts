@@ -136,8 +136,16 @@ export async function restoreCustomPosition(pos: { x: number; y: number }): Prom
  *  `restoreCustomPosition` itself triggers (`repositioning` gate, shared with
  *  `watchDisplayChanges`). Debounced: a drag fires many onMoved events, only
  *  the settled position is worth writing. No-op in plain-browser dev.
- *  Returns a stop function, same shape as `watchDisplayChanges`. */
-export async function watchWindowMoves(): Promise<() => void> {
+ *  Returns a stop function, same shape as `watchDisplayChanges`.
+ *
+ *  `onSettled` (optional) fires on the same debounced tick, after the
+ *  position is saved — used to re-run `reportInteractiveRegions()`, whose
+ *  screen-absolute click-through rects go stale once the header moves
+ *  (KNOWN_ISSUES-adjacent: a second drag from the new position was
+ *  otherwise ignored, since the Rust side kept comparing the cursor to the
+ *  pre-drag rects). Sharing this debounce instead of adding a second timer
+ *  keeps the two effects landing on the same tick. */
+export async function watchWindowMoves(onSettled?: () => void | Promise<void>): Promise<() => void> {
   if (!("__TAURI_INTERNALS__" in window)) return () => {};
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
   const win = getCurrentWindow();
@@ -149,6 +157,7 @@ export async function watchWindowMoves(): Promise<() => void> {
     debounce = setTimeout(async () => {
       const scale = await win.scaleFactor();
       saveCustomPosition({ x: payload.x / scale, y: payload.y / scale });
+      await onSettled?.();
     }, 300);
   });
 
