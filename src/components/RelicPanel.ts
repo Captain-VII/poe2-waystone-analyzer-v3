@@ -439,6 +439,7 @@ export function mountOverlay(
   const footBtn = q("[data-foot]");
   const colTablets = q("[data-col-tablets]");
   const colInsights = q("[data-col-insights]");
+  const tabletsEl = q("[data-tablets]");
   const tabletsFullEl = q("[data-tablets-full]");
   const compareGrid = q("[data-compare]");
   const settingsBtn = q("[data-settings]");
@@ -564,7 +565,7 @@ export function mountOverlay(
     // rankTablets now returns (2026-07-12, user request) — both Compact
     // and Full show the full list; Compact's column scrolls on overflow
     // instead of truncating (compact.css).
-    q("[data-tablets]").innerHTML = result.tablets.map(tabletRow).join("");
+    tabletsEl.innerHTML = result.tablets.map(tabletRow).join("");
     tabletsFullEl.innerHTML = result.tablets.map(tabletRow).join("");
 
     // The column-1 label width (~104px) fits every breakdown label except
@@ -1311,7 +1312,12 @@ export function mountOverlay(
     // overflow past its small box (makeDropdown's clamping), so the whole
     // panel is reported rather than trying to track that overflow.
     if (openTabletMechanicPopup) return [...els, panel];
-    if (effective === "compact") els.push(footBtn);
+    // tabletsEl: the Compact tablet list now scrolls internally (all 8
+    // tablets, fixed-height card, 2026-07-12) — without reporting it here,
+    // a mouse-wheel over it falls through to the game like everywhere
+    // else outside the click-through whitelist, so the scroll never fires
+    // in practice (reported: "le scroll ne marche pas" in-game).
+    if (effective === "compact") els.push(footBtn, tabletsEl);
     // Either full-mode column can overflow-scroll on some DPI/font combos —
     // its scrollbar is unusable unless the column is inside the
     // click-through whitelist.
