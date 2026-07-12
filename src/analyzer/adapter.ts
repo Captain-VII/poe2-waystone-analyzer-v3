@@ -26,7 +26,7 @@ import { getScoreLabel, formatPercent } from "./displayAdapter";
 import { getActiveMechanics, scoreMechanicFitRaw, priorityStatTier, type MechanicDef, type StatTier } from "./mechanics";
 import { getActiveTablets, type TabletDef } from "./tablets";
 import { describeReward } from "./rewards";
-import { MECHANIC_MASTERS } from "./atlas-masters";
+import { MECHANIC_MASTERS, MECHANIC_MASTER_NOTABLES } from "./atlas-masters";
 import type { AnalysisResult, DangerHitView, MechanicScore, Modifier, Rating, TabletVerdict, TierClass, Verdict } from "../types";
 import type { ModStats } from "./mod-parser";
 
@@ -44,7 +44,7 @@ const TIER_LABELS: Record<TierClass, string> = {
   low: "Average",
   good: "Good",
   splus: "Excellent",
-  god: "Legendary",
+  god: "Juicy",
 };
 
 // dangerLevel → user-facing label. Purely a display mapping over a signal
@@ -510,6 +510,7 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
     // explicit user call). Icon resolution is a UI-layer concern
     // (atlas-master-icons.ts), not part of this contract.
     atlasMaster: finalRecommendedMechanic ? (MECHANIC_MASTERS[finalRecommendedMechanic] ?? null) : null,
+    atlasMasterNotables: finalRecommendedMechanic ? (MECHANIC_MASTER_NOTABLES[finalRecommendedMechanic] ?? []) : [],
     keyFactors: buildKeyFactors(evaluation.breakdown, finalRecommendedMechanic, bestTabletLinked?.score ?? 0, ranked[0]),
   };
 }

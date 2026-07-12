@@ -12,7 +12,7 @@ export async function notifyLegendaryWaystone(name: string, score: number): Prom
     if (!granted) granted = (await requestPermission()) === "granted";
     if (!granted) return;
     sendNotification({
-      title: "Legendary ✦",
+      title: "Juicy ✦",
       body: `${name} — Juice Score ${score}/100`,
     });
   } catch {

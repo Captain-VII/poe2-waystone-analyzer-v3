@@ -19,6 +19,7 @@ import {
 import { DEFAULT_HOTKEY_BASE, hotkeyLabel, keyEventToBase } from "../hotkeys";
 import { parseChangelog } from "../changelog";
 import { ATLAS_MASTER_ICONS } from "../atlas-master-icons";
+import { ATLAS_NOTABLE_ICONS } from "../atlas-notable-icons";
 
 export interface OverlayOptions {
   mode: Mode;
@@ -141,7 +142,7 @@ const BADGE_LABEL: Record<TierClass, string> = {
   low: "AVERAGE",
   good: "GOOD",
   splus: "EXCELLENT",
-  god: "LEGENDARY ✦",
+  god: "JUICY ✦",
 };
 
 /** Row icon per tablet, keyed by the display short name (name minus the
@@ -266,9 +267,14 @@ export function mountOverlay(
                 <div class="sec-h">Recommended Tablets</div>
                 <div data-tablets-full></div>
                 <div class="atlas-master" data-atlas-master hidden>
-                  <img class="atlas-master-icon" data-atlas-master-icon alt="" />
-                  <span class="atlas-master-lab">Atlas Master:</span>
-                  <span class="atlas-master-name" data-atlas-master-name></span>
+                  <img class="atlas-master-icon" data-atlas-master-icon alt="" title="" />
+                  <div class="atlas-master-body">
+                    <div class="atlas-master-lab-row">
+                      <span class="atlas-master-lab">Atlas Master:</span>
+                      <span class="atlas-master-name" data-atlas-master-name></span>
+                    </div>
+                    <div class="atlas-notables" data-atlas-notables></div>
+                  </div>
                 </div>
               </div>
               <div class="col" data-col-heat>
@@ -450,6 +456,7 @@ export function mountOverlay(
   const atlasMasterEl = q("[data-atlas-master]");
   const atlasMasterIcon = q("[data-atlas-master-icon]") as HTMLImageElement;
   const atlasMasterName = q("[data-atlas-master-name]");
+  const atlasNotablesEl = q("[data-atlas-notables]");
   const compareGrid = q("[data-compare]");
   const settingsBtn = q("[data-settings]");
   const minimizeBtn = q("[data-minimize]");
@@ -579,11 +586,22 @@ export function mountOverlay(
 
     // Full mode only (§ROADMAP placement) — hidden entirely when the
     // recommended mechanic has no sourced Atlas Master pick yet
-    // (atlas-masters.ts), rather than guessing.
+    // (atlas-masters.ts), rather than guessing. Master's own circular
+    // portrait first, then one small icon per notable/keystone to
+    // allocate (2026-07-12, user request — mirrors how the real Atlas
+    // Tree UI shows a master's active keystones as a row of icons next to
+    // their portrait, not just a name).
     const masterIcon = result.atlasMaster ? ATLAS_MASTER_ICONS[result.atlasMaster] : undefined;
     if (result.atlasMaster && masterIcon) {
       atlasMasterIcon.src = masterIcon;
+      atlasMasterIcon.title = result.atlasMaster;
       atlasMasterName.textContent = result.atlasMaster;
+      atlasNotablesEl.innerHTML = result.atlasMasterNotables
+        .map((name) => {
+          const icon = ATLAS_NOTABLE_ICONS[name];
+          return icon ? `<img class="atlas-notable-icon" src="${esc(icon)}" alt="" title="${esc(name)}" />` : "";
+        })
+        .join("");
       atlasMasterEl.hidden = false;
     } else {
       atlasMasterEl.hidden = true;

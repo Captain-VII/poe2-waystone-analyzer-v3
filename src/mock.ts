@@ -1,7 +1,7 @@
 import { CAPS, computeDangerLevel, dangerHitsToWarnings, type DangerHit } from "./analyzer/scoring";
 import { DANGER_LABELS, describeDangerHits } from "./analyzer/adapter";
 import { formatPercent, getScoreLabel } from "./analyzer/displayAdapter";
-import { MECHANIC_MASTERS } from "./analyzer/atlas-masters";
+import { MECHANIC_MASTERS, MECHANIC_MASTER_NOTABLES } from "./analyzer/atlas-masters";
 import type { AnalysisResult, TierClass, Verdict } from "./types";
 
 export const TIER_ORDER: TierClass[] = ["trash", "low", "good", "splus", "god"];
@@ -118,6 +118,7 @@ function fixture(
     mechanicScores: MECHANIC_SCORES,
     recommendedMechanic: "Expedition",
     atlasMaster: MECHANIC_MASTERS.Expedition ?? null,
+    atlasMasterNotables: MECHANIC_MASTER_NOTABLES.Expedition ?? [],
     keyFactors,
   };
 }
@@ -161,7 +162,7 @@ export const MOCK_RESULTS: Record<TierClass, AnalysisResult> = {
   // even with multiple simultaneous danger mods — danger only ever shows up
   // via warnings, never by pulling the score down.
   god: fixture(
-    { score: 94.2, tierClass: "god", tierLabel: "Legendary", verdict: VERDICT.god, rating: "S" },
+    { score: 94.2, tierClass: "god", tierLabel: "Juicy", verdict: VERDICT.god, rating: "S" },
     [20.0, 19.0, 21.0, 25.0, 95.0],
     [
       { id: "reflect-damage", severity: "reflect" },

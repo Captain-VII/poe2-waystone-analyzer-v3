@@ -201,6 +201,11 @@ export interface AnalysisResult {
    *  pick yet (atlas-masters.ts) — deliberately not guessed. Icon
    *  resolution is a UI-layer concern (atlas-master-icons.ts). */
   atlasMaster: string | null;
+  /** The Atlas Tree notables/keystones to allocate for `atlasMaster` —
+   *  empty when `atlasMaster` is null. 3-4 entries, never guessed padding
+   *  (atlas-masters.ts's `MECHANIC_MASTER_NOTABLES`). Icon resolution is a
+   *  UI-layer concern (atlas-notable-icons.ts). */
+  atlasMasterNotables: string[];
   /** 0-4 short "why this waystone" lines (strongest stats, mechanic match,
    *  reward presence) — a quick-scan summary, not new information beyond
    *  what `breakdown`/`mechanicScores`/`tablets` already contain. Empty

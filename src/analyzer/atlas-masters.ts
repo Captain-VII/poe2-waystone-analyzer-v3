@@ -41,3 +41,20 @@ export const MECHANIC_MASTERS: Partial<Record<string, string>> = {
   // Translations) allocated.
   Delirium: "Jado",
 };
+
+/** The specific Atlas Tree notables/keystones to allocate for that
+ *  mechanic's master pick above — same sourcing (2026-07-12), verified
+ *  directly against Fubgun's live Mobalytics tree (Atlas Tree tab, not
+ *  just the write-up text) via each notable's own icon/name pair, since
+ *  the write-up alone doesn't disambiguate which exact keystones "Partial
+ *  translation and unforeseen threats" refers to. Expedition/Delirium
+ *  have all 4 of Jado's loot-relevant notables named; Ritual/Abyss/Breach
+ *  only ever name 3 — shown as 3, not padded with an unsourced 4th
+ *  (2026-07-12, explicit user call: honest with what's actually sourced). */
+export const MECHANIC_MASTER_NOTABLES: Partial<Record<string, string[]>> = {
+  Expedition: ["Unexpected Missions", "Eastern Knowledge", "Partial Translations", "Keen Appraisal"],
+  Ritual: ["Partial Translations", "Unforeseen Threats", "Unexpected Missions"],
+  Abyss: ["Partial Translations", "Unforeseen Threats", "Unexpected Missions"],
+  Breach: ["Partial Translations", "Unforeseen Threats", "Unexpected Missions"],
+  Delirium: ["Unexpected Missions", "Unforeseen Threats", "Eastern Knowledge", "Partial Translations"],
+};

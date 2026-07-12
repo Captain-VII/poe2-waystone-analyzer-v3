@@ -5,6 +5,11 @@ utilisateur (pas de détails internes). La section la plus récente en premier.
 Ce fichier est embarqué dans l'app (panneau "Quoi de neuf" + Réglages) et
 sert de description à la release GitHub — écrire pour les joueurs.
 
+## 0.3.7
+
+- **Atlas Master recommendation redesigned**: now shows the master's own portrait icon next to their name, followed by icons for the specific notables/keystones to allocate for that mechanic — instead of a name-only text line.
+- **Renamed "Legendary" to "Juicy"** across the app (top-tier waystone label, notifications).
+
 ## 0.3.6
 
 - **New: the Juice Score now reflects your best tablet, not just raw map stats.** A waystone whose real strength is a single mechanic (like a huge Waystone Drop Chance roll) is now scored and recommended correctly — before, it could be undervalued because no tablet checked that stat.

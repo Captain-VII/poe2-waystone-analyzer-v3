@@ -140,12 +140,16 @@
 
 /* Atlas Master pick for the recommended mechanic — bottom of the
    Recommended Tablets column (ROADMAP placement), only shown when
-   atlas-masters.ts has a sourced pick for that mechanic. */
+   atlas-masters.ts has a sourced pick for that mechanic. Master's own
+   circular portrait, then name + a row of small icons for the specific
+   notables/keystones to allocate (2026-07-12, user request — mirrors the
+   real Atlas Tree UI's own master-portrait-plus-keystone-icons layout,
+   replacing a name-only text line). */
 .atlas-master {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   margin-top: auto;
   padding-top: 8px;
   border-top: 1px solid rgba(184, 135, 53, 0.35);
@@ -153,10 +157,21 @@
 .atlas-master[hidden] { display: none; }
 .atlas-master-icon {
   flex: none;
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   border: 1px solid var(--gold-dim);
+}
+.atlas-master-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.atlas-master-lab-row {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
 }
 .atlas-master-lab {
   flex: none;
@@ -170,6 +185,17 @@
   font-weight: 700;
   font-size: 12px;
   color: var(--gold-hi);
+}
+.atlas-notables {
+  display: flex;
+  gap: 4px;
+}
+.atlas-notable-icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  border: 1px solid rgba(184, 135, 53, 0.4);
 }
 
 /* Rows are only clickable here (Full — see the click delegation on
