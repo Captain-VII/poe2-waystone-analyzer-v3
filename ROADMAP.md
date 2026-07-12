@@ -9,22 +9,6 @@ ligne devient alors une puce du CHANGELOG, réécrite pour les joueurs. Une
 ligne = un item, avec référence vers [KNOWN_ISSUES.md](KNOWN_ISSUES.md)
 quand elle existe.
 
-## Prochaine version
-
-- [ ] Après un premier drag de l'overlay, impossible de le re-drag
-      (surtout loin de sa position de départ) — root-cause confirmée :
-      `reportInteractiveRegions()` (`src/interactive-rect.ts`) calcule les
-      rects cliquables en coordonnées écran absolues mais n'est appelée
-      qu'une fois au démarrage (`main.ts:179`). Le thread Rust
-      (`lib.rs:608-658`) compare le curseur à ces rects STALES pour
-      activer/désactiver `set_ignore_cursor_events` — après un drag, le
-      header à sa nouvelle position n'est plus reconnu comme cliquable.
-      `watchWindowMoves()` (`placement.ts:140-159`) détecte déjà la fin du
-      drag mais ne sauvegarde que la position, sans relancer
-      `reportInteractiveRegions`. Fix : rebrancher `watchWindowMoves` pour
-      aussi ré-appeler `reportInteractiveRegions(overlay.interactiveEls())`
-      une fois le drag stabilisé (même debounce 300ms).
-
 ## Ensuite
 
 Validé, mais pas urgent :
@@ -51,4 +35,3 @@ Vrac à trier :
 - [ ] Stats de session enrichies (historique par jour, export).
 - [ ] Vérifier que `scripts/verify-adapter.mjs` n'a plus de dépendance à un
       checkout sibling v2 (fragilité CI potentielle relevée le 2026-07-11).
-- [ ] Lint JS/TS (eslint) — aucun configuré aujourd'hui.
