@@ -5,7 +5,18 @@ import type { AnalysisResult, TierClass, Verdict } from "./types";
 
 export const TIER_ORDER: TierClass[] = ["trash", "low", "good", "splus", "god"];
 
+// All 8 real tablets, alphabetical (2026-07-12: matches the real adapter's
+// fixed order — rankTablets no longer sorts by fit, see adapter.ts).
 const TABLETS: AnalysisResult["tablets"] = [
+  {
+    name: "Abyss Tablet",
+    delta: 1.5,
+    reason: "Matches Abyss (48/100)",
+    rating: "B",
+    fit: 48,
+    verdict: "why-not",
+    mechanic: "Abyss",
+  },
   {
     name: "Breach Tablet",
     delta: 2.0,
@@ -19,10 +30,12 @@ const TABLETS: AnalysisResult["tablets"] = [
       { label: "Breach Splinter", value: 9 },
     ],
   },
-  { name: "Ritual Tablet", delta: 1.5, reason: "Matches Breach (74/100)", rating: "A", fit: 74, verdict: "run", mechanic: "Breach" },
-  { name: "Delirium Tablet", delta: 2.0, reason: "Matches Breach (61/100)", rating: "A", fit: 61, verdict: "run", mechanic: "Breach" },
-  { name: "Abyss Tablet", delta: 1.5, reason: "Matches Breach (48/100)", rating: "B", fit: 48, verdict: "why-not", mechanic: "Breach" },
-  { name: "Overseer Precursor Tablet", delta: 2.8, reason: "Matches Breach (30/100)", rating: "C", fit: 30, verdict: "why-not", mechanic: "Breach" },
+  { name: "Delirium Tablet", delta: 2.0, reason: "Matches Delirium (61/100)", rating: "A", fit: 61, verdict: "run", mechanic: "Delirium" },
+  { name: "Expedition Tablet", delta: 1.2, reason: "Matches Expedition (49/100)", rating: "B", fit: 49, verdict: "why-not", mechanic: "Expedition" },
+  { name: "Irradiated Tablet", delta: 1.8, reason: "Matches Irradiated (74/100)", rating: "A", fit: 74, verdict: "run", mechanic: "Irradiated" },
+  { name: "Overseer Precursor Tablet", delta: 2.8, reason: "Matches General (30/100)", rating: "C", fit: 30, verdict: "why-not", mechanic: "General" },
+  { name: "Ritual Tablet", delta: 1.5, reason: "Matches Ritual (79/100)", rating: "A", fit: 79, verdict: "run", mechanic: "Ritual" },
+  { name: "Temple Tablet", delta: 1.6, reason: "Matches Temple (73/100)", rating: "A", fit: 73, verdict: "run", mechanic: "Temple" },
 ];
 
 const MODIFIERS: AnalysisResult["modifiers"] = [

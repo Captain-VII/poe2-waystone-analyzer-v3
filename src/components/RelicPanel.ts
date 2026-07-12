@@ -158,15 +158,23 @@ const TABLET_ICONS: Record<string, string> = {
   overseer: "👑",
 };
 
-// 2026-07-10 (user request): the row shows this label instead of the raw
-// fit number/bar — mirrors the SKIP/RUN/KEEP wording already used for
-// the waystone-level verdict. Keyed by `Tablet.verdict` (adapter.ts's
-// `tabletVerdict`); the exact number/breakdown is still one hover away.
-const TABLET_VERDICT_LABEL: Record<AnalysisResult["tablets"][number]["verdict"], string> = {
-  run: "RUN",
-  "why-not": "WHY NOT",
-  "dont-run": "DON'T RUN",
-};
+// 2026-07-12 (user request): replaces the earlier RUN/WHY NOT/DON'T RUN
+// verdict label — a plain percentage, colored on a continuous red→gold
+// ramp (0% = --danger, 100% = --god, same hex values the rest of the app
+// already uses for its worst/best states), gives both the exact number
+// and an at-a-glance visual cue in one compact element.
+const FIT_COLOR_LOW: [number, number, number] = [181, 74, 58]; // --danger #b54a3a
+const FIT_COLOR_HIGH: [number, number, number] = [255, 211, 106]; // --god #ffd36a
+
+function fitColor(percent: number): string {
+  const t = Math.max(0, Math.min(100, percent)) / 100;
+  const [r1, g1, b1] = FIT_COLOR_LOW;
+  const [r2, g2, b2] = FIT_COLOR_HIGH;
+  const r = Math.round(r1 + (r2 - r1) * t);
+  const g = Math.round(g1 + (g2 - g1) * t);
+  const b = Math.round(b1 + (b2 - b1) * t);
+  return `rgb(${r}, ${g}, ${b})`;
+}
 
 const CORNER_PATHS = `
   <path d="M2 23 V8 Q2 2 8 2 H23" fill="none" stroke="currentColor" stroke-width="2.2"/>
@@ -549,13 +557,14 @@ export function mountOverlay(
         <div class="trow" data-mechanic="${esc(t.mechanic)}" title="${esc(title)}">
           <span class="t-ic">${icon}</span>
           <span class="t-name" title="${esc(t.name)}">${esc(shortName)}</span>
-          <span class="t-verdict t-verdict-${t.verdict}">${TABLET_VERDICT_LABEL[t.verdict]}</span>
+          <span class="t-fit" style="color: ${fitColor(t.fit)}">${t.fit}%</span>
         </div>`;
     };
-    // Compact keeps a top-5 cutoff (fixed-height card, no scroll budget) —
-    // Full shows every active tablet (2026-07-10, user request), its
-    // column already scrolls on overflow (`.col`, full.css).
-    q("[data-tablets]").innerHTML = result.tablets.slice(0, 5).map(tabletRow).join("");
+    // Every active tablet, always, in the fixed alphabetical order
+    // rankTablets now returns (2026-07-12, user request) — both Compact
+    // and Full show the full list; Compact's column scrolls on overflow
+    // instead of truncating (compact.css).
+    q("[data-tablets]").innerHTML = result.tablets.map(tabletRow).join("");
     tabletsFullEl.innerHTML = result.tablets.map(tabletRow).join("");
 
     // The column-1 label width (~104px) fits every breakdown label except

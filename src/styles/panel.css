@@ -305,21 +305,21 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Run/Why not/Don't run — replaces the raw fit number/bar (2026-07-10):
-   a 3-tier label reads at a glance without cross-referencing a bar length. */
-.trow .t-verdict {
+/* Fit percentage, colored on a continuous red→gold ramp — replaces the
+   earlier RUN/WHY NOT/DON'T RUN label (2026-07-12, user request): the
+   list is now a fixed alphabetical order (not sorted by fit), so a
+   per-row color cue reads faster than cross-referencing a static label.
+   Color itself is inline (RelicPanel.ts's fitColor()), continuous rather
+   than a fixed class per tier. */
+.trow .t-fit {
   flex: none;
   text-align: right;
   font-weight: 700;
   letter-spacing: 0.4px;
   font-size: 9.5px;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
-.trow .t-verdict-run { color: var(--gold-hi); }
-.trow .t-verdict-why-not { color: var(--grey); }
-.trow .t-verdict-dont-run { color: var(--danger); }
-/* Top pick stands out by name color only — rows stay uniform height. */
-.trow:first-child .t-name { color: var(--gold-hi); }
 
 /* cross-fading mode layouts inside the morphing panel (§7 mode morph) */
 .bodies {

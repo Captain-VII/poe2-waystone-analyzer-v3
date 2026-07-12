@@ -319,10 +319,12 @@ function buildTabletBreakdown(statFit: number, rewardScore: number): { label: st
  *  A mechanic's optional `recommendedTablets` pin (meta.json-editable,
  *  meta-schema.ts) still adds a flat +10 bonus for the curated tablet.
  *  `rewardScore` (rewards.ts, real mechanic-specific currency) is added on
- *  top, clamped to 0-100. Sorted by the unrounded fit (`fitRaw`), not the
- *  rounded `fit` each tablet displays — same rounding-tie problem
- *  `computeMechanicScores` has, just one level down. `fitRaw` is stripped
- *  before returning. */
+ *  top, clamped to 0-100. List order is alphabetical by tablet name, fixed
+ *  regardless of fit (2026-07-12, user request — a constant, predictable
+ *  order beats re-sorting by score every analysis); each row still shows
+ *  its own `fit` for the player to compare. `fitRaw` (unrounded fit) is
+ *  computed for potential tie-breaking elsewhere but no longer drives
+ *  ordering here, and is stripped before returning. */
 function rankTablets(
   stats: ModStats,
   modCount: number,
@@ -347,7 +349,7 @@ function rankTablets(
       const breakdown = buildTabletBreakdown(statFit, tablet.rewardScore);
       return { tablet, fit, fitRaw, mechanic: mech.name, verdict, breakdown };
     })
-    .sort((a, b) => b.fitRaw - a.fitRaw)
+    .sort((a, b) => a.tablet.name.localeCompare(b.tablet.name))
     .map(({ tablet, fit, mechanic, verdict, breakdown }) => ({ tablet, fit, mechanic, verdict, breakdown }));
 }
 

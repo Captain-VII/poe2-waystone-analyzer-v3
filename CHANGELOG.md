@@ -5,6 +5,11 @@ utilisateur (pas de détails internes). La section la plus récente en premier.
 Ce fichier est embarqué dans l'app (panneau "Quoi de neuf" + Réglages) et
 sert de description à la release GitHub — écrire pour les joueurs.
 
+## 0.3.1
+
+- **"Recommended Tablets" reworked**: all 8 tablets now always show, in a fixed alphabetical order — no more list that reshuffles or drops tablets depending on the waystone.
+- **New fit display**: each tablet now shows its match as a percentage, colored from red (poor fit) to gold (great fit), replacing the old "RUN / WHY NOT / DON'T RUN" labels.
+
 ## 0.3.0
 
 - **Fixed: the Compact header looked off-center**, with the icons bunched up on the right and empty space on the left — the whole row now sits together on the left like it should.

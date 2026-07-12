@@ -74,12 +74,24 @@
   flex: none;
   padding: 6px 16px 0;
 }
-/* The 5-row tablet list is ~20px taller than the old 3-row layout; this
-   Compact-only trim (rows 21→20px, plus the hero/warn trims below)
-   reclaims it so the Ins footer stays inside the card's fixed 392px
-   height. Full keeps panel.css's roomier default — its column has its
-   own scroll budget. */
+/* Trim, same reasoning as before: reclaims a little height so the Ins
+   footer stays inside the card's fixed 392px height. Full keeps
+   panel.css's roomier default — its column has its own scroll budget. */
 .tabs-v .trow { height: 20px; }
+/* All 8 real tablets are now always shown, fixed order (2026-07-12, user
+   request) — more than the card's fixed height has room for at once, so
+   the list scrolls internally instead of growing the card or truncating
+   the set. ~5 rows visible before scrolling, same footprint the 5-row
+   cutoff used to have. Thin scrollbar matches full.css's `.col`. */
+.tabs-v [data-tablets] {
+  max-height: 102px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(184, 135, 53, 0.35) transparent;
+}
+.tabs-v [data-tablets]::-webkit-scrollbar { width: 3px; }
+.tabs-v [data-tablets]::-webkit-scrollbar-thumb { background: rgba(184, 135, 53, 0.35); }
 
 .warn-strip {
   display: flex;
