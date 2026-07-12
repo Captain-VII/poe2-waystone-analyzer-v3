@@ -196,6 +196,11 @@ export interface AnalysisResult {
   mechanicScores: MechanicScore[];
   /** Best mechanic to target, or null if none scored above zero. */
   recommendedMechanic: string | null;
+  /** Atlas Master (Atlas Tree Ascendancy) name recommended for
+   *  `recommendedMechanic`, or null when that mechanic has no sourced
+   *  pick yet (atlas-masters.ts) — deliberately not guessed. Icon
+   *  resolution is a UI-layer concern (atlas-master-icons.ts). */
+  atlasMaster: string | null;
   /** 0-4 short "why this waystone" lines (strongest stats, mechanic match,
    *  reward presence) — a quick-scan summary, not new information beyond
    *  what `breakdown`/`mechanicScores`/`tablets` already contain. Empty

@@ -1,6 +1,7 @@
 import { CAPS, computeDangerLevel, dangerHitsToWarnings, type DangerHit } from "./analyzer/scoring";
 import { DANGER_LABELS, describeDangerHits } from "./analyzer/adapter";
 import { formatPercent, getScoreLabel } from "./analyzer/displayAdapter";
+import { MECHANIC_MASTERS } from "./analyzer/atlas-masters";
 import type { AnalysisResult, TierClass, Verdict } from "./types";
 
 export const TIER_ORDER: TierClass[] = ["trash", "low", "good", "splus", "god"];
@@ -104,6 +105,7 @@ function fixture(
     insights: [insight, "Safe to corrupt — modifier ceiling reached"],
     mechanicScores: MECHANIC_SCORES,
     recommendedMechanic: "Expedition",
+    atlasMaster: MECHANIC_MASTERS.Expedition ?? null,
     keyFactors,
   };
 }

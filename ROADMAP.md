@@ -37,21 +37,14 @@ Validé, mais pas urgent :
 
 Vrac à trier :
 
-- [ ] Afficher quel « maître de l'Atlas » (spécialisation d'arbre Atlas)
-      convient le mieux à la mécanique dominante de la waystone analysée.
-      Source pressentie : les strats Fubgun sur Mobalytics
-      (<https://mobalytics.gg/poe-2/atlas-trees/fubgun-atlas-tree-strats>) —
-      attention, la page bloque le scraping (403) et ses onglets sont en JS
-      côté client : le contenu devra être collé à la main depuis le
-      navigateur, comme pour la recalibration Breach/Abyss du 2026-07-10.
-      Placement décidé (2026-07-11, capture utilisateur ; reconfirmé
-      2026-07-12, croquis utilisateur) : en bas de la colonne
-      « Recommended Tablets » du mode Full, sous la liste de tablettes
-      (`data-tablets-full`), une rangée d'icônes du maître directement
-      visible. Prévoir la question des assets d'icônes (glyphes texte
-      comme TABLET_ICONS, ou images à fournir). Pas de placeholder vide
-      ajouté dans l'UI en attendant — un cercle vide sans fonction
-      lirait comme un bug, pas une réservation d'espace.
+- [ ] Compléter le maître de l'Atlas recommandé (livré 2026-07-12, voir
+      CHANGELOG) pour Irradiated/Temple/General — aucune source Fubgun
+      trouvée pour ces 3 cas, l'app n'affiche donc rien plutôt que de
+      deviner (choix explicite de l'utilisateur). À revoir si une source
+      apparaît. `Abyss` a aussi une 2e stratégie sourcée (Hilda,
+      orientée rare-monster) non utilisée — Jado reste la recommandation
+      affichée (stratégie principale/listée en premier chez Fubgun), voir
+      `src/analyzer/atlas-masters.ts`.
 - [ ] Bug écran noir (KNOWN_ISSUES #1) : ne rouvrir que si l'hypothèse
       WebView2 process-reuse se confirme chez les testeurs — dernière
       tentative (rafale de nudges différés) le 2026-07-11, sans succès.

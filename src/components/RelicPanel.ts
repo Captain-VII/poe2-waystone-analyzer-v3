@@ -18,6 +18,7 @@ import {
 } from "../overlaySettings";
 import { DEFAULT_HOTKEY_BASE, hotkeyLabel, keyEventToBase } from "../hotkeys";
 import { parseChangelog } from "../changelog";
+import { ATLAS_MASTER_ICONS } from "../atlas-master-icons";
 
 export interface OverlayOptions {
   mode: Mode;
@@ -264,6 +265,11 @@ export function mountOverlay(
               <div class="col" data-col-tablets>
                 <div class="sec-h">Recommended Tablets</div>
                 <div data-tablets-full></div>
+                <div class="atlas-master" data-atlas-master hidden>
+                  <img class="atlas-master-icon" data-atlas-master-icon alt="" />
+                  <span class="atlas-master-lab">Atlas Master:</span>
+                  <span class="atlas-master-name" data-atlas-master-name></span>
+                </div>
               </div>
               <div class="col" data-col-heat>
                 <div class="sec-h">Heat Breakdown</div>
@@ -441,6 +447,9 @@ export function mountOverlay(
   const colInsights = q("[data-col-insights]");
   const tabletsEl = q("[data-tablets]");
   const tabletsFullEl = q("[data-tablets-full]");
+  const atlasMasterEl = q("[data-atlas-master]");
+  const atlasMasterIcon = q("[data-atlas-master-icon]") as HTMLImageElement;
+  const atlasMasterName = q("[data-atlas-master-name]");
   const compareGrid = q("[data-compare]");
   const settingsBtn = q("[data-settings]");
   const minimizeBtn = q("[data-minimize]");
@@ -567,6 +576,18 @@ export function mountOverlay(
     // instead of truncating (compact.css).
     tabletsEl.innerHTML = result.tablets.map(tabletRow).join("");
     tabletsFullEl.innerHTML = result.tablets.map(tabletRow).join("");
+
+    // Full mode only (§ROADMAP placement) — hidden entirely when the
+    // recommended mechanic has no sourced Atlas Master pick yet
+    // (atlas-masters.ts), rather than guessing.
+    const masterIcon = result.atlasMaster ? ATLAS_MASTER_ICONS[result.atlasMaster] : undefined;
+    if (result.atlasMaster && masterIcon) {
+      atlasMasterIcon.src = masterIcon;
+      atlasMasterName.textContent = result.atlasMaster;
+      atlasMasterEl.hidden = false;
+    } else {
+      atlasMasterEl.hidden = true;
+    }
 
     // The column-1 label width (~104px) fits every breakdown label except
     // these two — shortened display-only (full name still on hover), same

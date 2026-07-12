@@ -127,6 +127,40 @@
   font-weight: 700;
 }
 
+/* Atlas Master pick for the recommended mechanic — bottom of the
+   Recommended Tablets column (ROADMAP placement), only shown when
+   atlas-masters.ts has a sourced pick for that mechanic. */
+.atlas-master {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid rgba(184, 135, 53, 0.35);
+}
+.atlas-master[hidden] { display: none; }
+.atlas-master-icon {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--gold-dim);
+}
+.atlas-master-lab {
+  flex: none;
+  font-size: 10.5px;
+  letter-spacing: 0.4px;
+  color: var(--grey);
+}
+.atlas-master-name {
+  flex: none;
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--gold-hi);
+}
+
 /* Rows are only clickable here (Full — see the click delegation on
    tabletsFullEl in RelicPanel.ts) — Compact's identical-looking list is
    hover-only, so this indicator is deliberately scoped to Full alone. */

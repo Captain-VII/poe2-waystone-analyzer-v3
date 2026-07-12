@@ -5,6 +5,10 @@ utilisateur (pas de détails internes). La section la plus récente en premier.
 Ce fichier est embarqué dans l'app (panneau "Quoi de neuf" + Réglages) et
 sert de description à la release GitHub — écrire pour les joueurs.
 
+## 0.3.3
+
+- **New: recommended Atlas Master.** For Breach, Ritual, Delirium, Expedition, and Abyss waystones, the "Recommended Tablets" column (Full mode) now shows which Atlas Master to run — Jado, across all five right now. Not shown for mechanics without a clear best pick yet.
+
 ## 0.3.2
 
 - **Fixed: scrolling the "Recommended Tablets" list in Compact mode didn't work in-game** — mouse wheel input over that area was falling through to the game underneath instead of scrolling the list.
