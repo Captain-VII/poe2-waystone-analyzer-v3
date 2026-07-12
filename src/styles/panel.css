@@ -260,6 +260,20 @@
 .badge.dev-clickable { cursor: pointer; } /* dev-only: cycles mock fixtures, see main.ts */
 
 .badge-sm { font-size: 11px; cursor: default; }
+/* `.score-row` (full.css) went `flex-wrap: nowrap` (2026-07-12, so the
+ * badge stays beside the score instead of dropping to its own line) —
+ * but `.badge`'s `flex: none` (flex-shrink: 0) then refused to shrink at
+ * all, so once the 3 equal-width Full columns (also 2026-07-12) made
+ * this column narrower, the badge's own max-width/ellipsis never got a
+ * chance to engage: the row just overflowed past the column's
+ * `overflow-x: hidden` edge and got hard-clipped mid-word instead of
+ * ellipsizing gracefully. Let it shrink and cap it tighter than the
+ * header badge's 124px, since this column has less room to give. */
+.score-row .badge-sm {
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 80px;
+}
 
 /* ---- letter rating (supplementary to tierClass/badge, §3 "Rating: S (94.2)") ---- */
 .rating-pill {

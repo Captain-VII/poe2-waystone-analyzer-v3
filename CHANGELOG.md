@@ -5,6 +5,11 @@ utilisateur (pas de détails internes). La section la plus récente en premier.
 Ce fichier est embarqué dans l'app (panneau "Quoi de neuf" + Réglages) et
 sert de description à la release GitHub — écrire pour les joueurs.
 
+## 0.3.4
+
+- **Fixed: the tier badge text next to the score in Full mode could get hard-cropped mid-word** instead of showing "..." cleanly.
+- **Fixed: the header buttons in Compact mode were glued right after the tier badge text** instead of staying anchored to the top-right corner.
+
 ## 0.3.3
 
 - **New: recommended Atlas Master.** For Breach, Ritual, Delirium, Expedition, and Abyss waystones, the "Recommended Tablets" column (Full mode) now shows which Atlas Master to run — Jado, across all five right now. Not shown for mechanics without a clear best pick yet.

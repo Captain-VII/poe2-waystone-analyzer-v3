@@ -21,6 +21,14 @@
  * `.mode-mini .p-sub` already gets, panel.css) lets the group pack
  * naturally against the left edge instead. */
 .mode-compact .p-sub { display: none; }
+/* Follow-up (2026-07-12, real in-game screenshot): once the group above
+ * packed left, toggle/settings/minimize ended up glued directly to the
+ * end of the badge text instead of pinned to the panel's top-right
+ * corner — their position shifted with the badge label's length. Push
+ * just the button trio to the right with its own auto margin, so glyph+
+ * badge stay left while toggle/settings/minimize stay anchored right,
+ * with the flexible gap between them instead of after them. */
+.mode-compact .toggle-btn { margin-left: auto; }
 
 .hero-v {
   flex: none;
