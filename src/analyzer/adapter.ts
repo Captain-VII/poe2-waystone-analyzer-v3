@@ -7,6 +7,7 @@ import { NotAWaystoneError, parseWaystone } from "./parser";
 import { parseUnified } from "./unified-parser";
 import {
   classifyModifierKind,
+  computeCompositeScore,
   computeDangerLevel,
   dangerHitsToWarnings,
   detectDangerHits,
@@ -21,7 +22,7 @@ import {
   type FieldContribution,
   type Weights,
 } from "./scoring";
-import { buildDisplayData, formatPercent } from "./displayAdapter";
+import { getScoreLabel, formatPercent } from "./displayAdapter";
 import { getActiveMechanics, scoreMechanicFitRaw, priorityStatTier, type MechanicDef, type StatTier } from "./mechanics";
 import { getActiveTablets, type TabletDef } from "./tablets";
 import { describeReward } from "./rewards";
@@ -270,10 +271,37 @@ export function modCountBonus(modCount: number): number {
 function computeMechanicScores(stats: ModStats, modCount: number): MechanicScore[] {
   const bonus = modCountBonus(modCount);
   const scores = getActiveMechanics().map((mech) => {
-    const raw = scoreMechanicFitRaw(stats, mech, bonus);
+    const raw = mechanicFitRaw(stats, mech, bonus);
     return { mechanic: mech.name, score: Math.round(raw), raw };
   });
   return scores.sort((a, b) => b.raw - a.raw).map(({ mechanic, score }) => ({ mechanic, score }));
+}
+
+/** `scoreMechanicFitRaw`, except for "General" — every other mechanic reads
+ *  a fixed priority stat, but no real tablet reads Waystone Drop Chance
+ *  (2026-07-12 finding: Item Rarity/Monster Rarity/Pack Size/Monster
+ *  Effectiveness each have at least one, Drop Chance has none, yet it was
+ *  the dominant stat on all 6 real waystones sampled 2026-07-11). Without
+ *  this, a Drop-Chance-dominant waystone would never fit any tablet well
+ *  even when it's genuinely the best stat on the map. General/Overseer
+ *  instead reads whichever of the 5 core stats is strongest
+ *  (`computeCompositeScore`, scoring.ts) — the same dominant-stat read the
+ *  main Juice Score used before this rework, now repurposed as General's
+ *  own fit rather than a separate parallel score. */
+function mechanicFitRaw(stats: ModStats, mech: MechanicDef, extraBonus: number): number {
+  if (mech.name === "General") {
+    return Math.max(0, Math.min(100, computeCompositeScore(stats).score + extraBonus));
+  }
+  return scoreMechanicFitRaw(stats, mech, extraBonus);
+}
+
+/** `priorityStatTier`, with the same General exception as `mechanicFitRaw`
+ *  above — keeps the tablet row's Run/Why not/Don't run verdict consistent
+ *  with the fit % it's shown next to, instead of the verdict still reading
+ *  a fixed itemRarity tier while the fit score reads the dominant stat. */
+function mechanicTier(stats: ModStats, mech: MechanicDef): StatTier {
+  if (mech.name === "General") return computeCompositeScore(stats).dominant.tier;
+  return priorityStatTier(stats, mech);
 }
 
 const round1 = (n: number): number => Math.round(n * 10) / 10;
@@ -342,12 +370,25 @@ function rankTablets(
     .map((tablet) => {
       const tag = tablet.tags?.find((t) => tagToMechanic.has(t));
       const mech = (tag && tagToMechanic.get(tag)) || generalDef;
-      const pinBonus = mech.recommendedTablets?.includes(tablet.name) ? 10 : 0;
-      const statFit = scoreMechanicFitRaw(stats, mech, bonus + pinBonus);
-      const fitRaw = Math.max(0, Math.min(100, statFit + tablet.rewardScore));
+      const tier = mechanicTier(stats, mech);
+      // Reward score (rewards.ts, real mechanic-specific currency) AND the
+      // curated-pick pin bonus (meta.json's `recommendedTablets` — every
+      // mechanic lists its own tablet *and* Overseer by default) only
+      // count once the waystone actually suits this mechanic at least
+      // "ok". Every mechanic pins Overseer as a secondary default pick, so
+      // unconditionally all 8 tablets carried the same +10 regardless of
+      // fit — same class of bug as the reward-score one above: invisible
+      // while `heat.score` never read tablet fits, surfaced the moment it
+      // started reading the best one directly (2026-07-12, caught by
+      // verify-adapter.mjs's "safe-but-dull" regression).
+      const eligible = tier !== "weak";
+      const pinBonus = eligible && mech.recommendedTablets?.includes(tablet.name) ? 10 : 0;
+      const statFit = mechanicFitRaw(stats, mech, bonus + pinBonus);
+      const effectiveReward = eligible ? tablet.rewardScore : 0;
+      const fitRaw = Math.max(0, Math.min(100, statFit + effectiveReward));
       const fit = Math.round(fitRaw);
-      const verdict = tabletVerdict(priorityStatTier(stats, mech));
-      const breakdown = buildTabletBreakdown(statFit, tablet.rewardScore);
+      const verdict = tabletVerdict(tier);
+      const breakdown = buildTabletBreakdown(statFit, effectiveReward);
       return { tablet, fit, fitRaw, mechanic: mech.name, verdict, breakdown };
     })
     .sort((a, b) => b.fitRaw - a.fitRaw || a.tablet.name.localeCompare(b.tablet.name))
@@ -373,20 +414,26 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
   // `text` — so the item's own NAME can never inflate the mechanic-density
   // term (KNOWN_ISSUES #4's score-side follow-up, 2026-07-08: a waystone
   // named "Ritual Reliquary" must not count as having Ritual present).
+  // Still the source for `breakdown`/`bonusDetails`/`dangerHits` — only the
+  // headline SCORE below stopped reading its `effectiveScore`.
   const evaluation = evaluateMap(stats, parsed.contentText);
-  // Tier/verdict/rating/heat.score read `effectiveScore` (reward synergy,
-  // normalized 0-100, clamped — danger never reduces it; danger surfaces
-  // display-only via warnings/Insights). `evaluation.breakdown` (below, in
-  // `heat`) is intentionally left reading the old model — its line-items no
-  // longer sum to `heat.score` as a result, which is expected given the
-  // synergy/stretch math sitting on top of it.
-  const tierClass = classifyTier(evaluation.effectiveScore);
-  const verdict = classifyVerdict(evaluation.effectiveScore, parsed.tier);
   const warnings = dangerHitsToWarnings(evaluation.dangerHits);
   const dangerLevel = computeDangerLevel(evaluation.dangerHits);
-  const display = buildDisplayData(stats, evaluation);
 
   const mechanicScores = computeMechanicScores(stats, parsed.modifiers.length);
+  const ranked = rankTablets(stats, parsed.modifiers.length);
+  // Main Juice Score = the best tablet's fit, not a separate stats-only
+  // number (2026-07-12, user request). A waystone with good stats always
+  // fits SOME tablet well — General/Overseer reads the dominant stat
+  // itself when no mechanic-specific tablet applies (`mechanicFitRaw`) —
+  // so this can't silently disagree with what the tablet list already
+  // says is the best pick, the way the old parallel stat-only score could.
+  // `ranked` is never empty (`getActiveTablets()` always has at least
+  // Overseer), but `Math.max(0, ...)` covers a fully-disabled tablet list.
+  const bestFit = Math.max(0, ...ranked.map((r) => r.fit));
+  const tierClass = classifyTier(bestFit);
+  const verdict = classifyVerdict(bestFit, parsed.tier);
+
   // Trust fix: only a mechanic with a real PoE2 tablet (see tablets.ts's
   // 2026-07-04 research pass, extended 2026-07-06 — Standard/Overseer are
   // the generic fallback, Breach/Ritual/Delirium/Expedition/Abyss/
@@ -407,11 +454,9 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
   const bestTabletLinked = mechanicScores.find((m) => {
     if (!TABLET_LINKED_MECHANICS.has(m.mechanic) || m.score <= 0) return false;
     const def = activeMechanics.find((d) => d.name === m.mechanic);
-    return def !== undefined && evaluation.effectiveScore >= def.skipIfBelow;
+    return def !== undefined && bestFit >= def.skipIfBelow;
   });
   const recommendedMechanic = bestTabletLinked ? bestTabletLinked.mechanic : null;
-
-  const ranked = rankTablets(stats, parsed.modifiers.length);
   // Every active tablet, not just a top-N slice (2026-07-10, user request:
   // "je veux que toutes les tablettes soient présentées, de façon
   // permanente") — the overlay decides per-mode how many rows it has room
@@ -441,12 +486,12 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
       modCount: parsed.modifiers.length,
     },
     heat: {
-      score: evaluation.effectiveScore,
+      score: bestFit,
       tierClass,
       tierLabel: TIER_LABELS[tierClass],
       verdict,
-      rating: scoreToRating(evaluation.effectiveScore),
-      scoreLabel: display.score.label,
+      rating: scoreToRating(bestFit),
+      scoreLabel: getScoreLabel(bestFit),
       breakdown: buildBreakdown(evaluation.breakdown, evaluation.bonusDetails.reduce((sum, b) => sum + b.bonus, 0)),
     },
     modifiers: buildModifiers(parsed.modifiers),
@@ -470,6 +515,13 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
 }
 
 export { DEFAULT_THRESHOLD, STAT_REFERENCES };
+// Re-exported for verify-adapter.mjs's dominant-stat unit tests only — the
+// main Juice Score (heat.score) reads the best tablet fit now, not this
+// directly, so those tests parse a sample's stats and call
+// `computeCompositeScore` straight to keep exercising the underlying
+// tier/dominant-stat/secondary-bonus math (2026-07-12).
+export { computeCompositeScore };
+export { parseUnified };
 // Re-exported for verify-adapter.mjs's unit-level danger-logic tests only —
 // not used by the overlay UI (which only ever sees the AnalysisResult
 // contract fields: warning/warnings/dangerLevel/dangerLabel).

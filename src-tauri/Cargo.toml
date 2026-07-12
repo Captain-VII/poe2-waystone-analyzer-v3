@@ -1,6 +1,6 @@
 [package]
 name = "waystone-overlay"
-version = "0.3.5"
+version = "0.3.6"
 description = "PoE2 Waystone analyzer in-game overlay"
 edition = "2021"
 

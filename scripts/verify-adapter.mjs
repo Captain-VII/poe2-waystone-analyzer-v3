@@ -19,6 +19,8 @@ import {
   TIER_SCORE,
   priorityStatTier,
   STAT_REFERENCES,
+  computeCompositeScore,
+  parseUnified,
 } from "./.adapter-bundle.mjs";
 
 const SAMPLE = `Item Class: Waystones
@@ -472,15 +474,18 @@ check("white waystone: no mechanic recommendation, but tablets still show their 
   white.tablets.length > 0 &&
   white.tablets.some((t) => t.reason.includes("matches Delirium")));
 
-// (7) §10 skipIfBelow gate: a map whose Juice Score sits below every
-// eligible mechanic's skipIfBelow must not recommend one, even when a
-// mechanic fits well. Quantity is the cleanest fixture for this post-
-// 2026-07-1x (dominant-stat rework): it's explicitly NOT one of the Juice
-// Score's 5 scored signals (scoring.ts's file-level comment) but IS
-// Expedition's priority stat, so a quantity-only waystone's Juice Score
-// stays at the weak-tier floor (~10, well under Expedition's skipIfBelow
-// of 35) while Expedition's own Match Score reads legendary. The tablet
-// list is unaffected by this gate (2026-07-10) — same reasoning as check (6).
+// (7) §10 skipIfBelow gate: historically, a map whose Juice Score sat below
+// every eligible mechanic's skipIfBelow wouldn't recommend one, even when a
+// mechanic fit well — because the Juice Score used to be a SEPARATE
+// stats-only number (Quantity isn't one of its 5 signals) that could
+// legitimately disagree with a mechanic's own Match Score.
+//
+// 2026-07-12 (user request): heat.score is now the BEST TABLET FIT itself,
+// so it can no longer fall below the winning mechanic's own score by
+// construction — skipIfBelow is effectively unreachable for whichever
+// mechanic is winning. Confirmed as the intended, accepted consequence of
+// the redesign (not a regression): a waystone whose only strength is one
+// mechanic's priority stat SHOULD recommend that mechanic, full stop.
 const SAMPLE_EXPEDITION_QUANTITY_ONLY = `Item Class: Waystones
 Rarity: Rare
 Buried Cache
@@ -492,8 +497,8 @@ Item Level: 82
 +90% increased Quantity of Items found in this Area
 --------`;
 const expeditionQuantityOnly = analyzeWaystoneText(SAMPLE_EXPEDITION_QUANTITY_ONLY);
-check("skipIfBelow gates the waystone-level recommendation, not the tablet list",
-  expeditionQuantityOnly.recommendedMechanic === null &&
+check("a waystone whose only strength is Expedition's priority stat recommends Expedition (heat.score = best tablet fit now, 2026-07-12)",
+  expeditionQuantityOnly.recommendedMechanic === "Expedition" &&
   expeditionQuantityOnly.tablets.some((t) => t.reason.includes("matches Expedition")));
 
 // (7b) Per-tablet independence, direct regression pin (2026-07-10): a
@@ -772,17 +777,30 @@ check("Abyss: quantity-only waystone does NOT feed Abyss beyond the weak-tier ba
 // ---------------------------------------------------------------------------
 // Composite Juice Score: dominant-stat model (2026-07-1x, user's own call —
 // "basé sur sa plus grosse stat, et des petits bonus si y'a d'autres stats
-// intéressantes"). Replaces the 2026-07-06 weighted-sum + multiplicative-
-// synergy model entirely. References read from the real STAT_REFERENCES
-// export (sourced 2026-07-11 from the user's observed market min/max per
-// stat) rather than being re-hardcoded here, so this file can't silently
-// drift from scoring.ts's actual constants.
+// intéressantes"). References read from the real STAT_REFERENCES export
+// (sourced 2026-07-11 from the user's observed market min/max per stat)
+// rather than being re-hardcoded here, so this file can't silently drift
+// from scoring.ts's actual constants.
+//
+// 2026-07-12: `heat.score` (the end-to-end waystone score) stopped reading
+// this composite directly — it now reads the best tablet fit instead (user
+// request), with `computeCompositeScore` repurposed as the General/Overseer
+// tablet's own fit. These checks pin the composite's underlying tier/
+// dominant-stat/secondary-bonus math itself (still exactly the same
+// function, unexported→exported only), calling it directly via
+// `compositeScoreOf` instead of going through `analyzeWaystoneText(...).
+// heat.score` — that path now adds mod-count/pin/reward bonuses on top of
+// this, which isn't what these checks are about.
+// Rounded to 2 decimals, matching the rounding `evaluateMap` used to apply
+// on top of this same composite before `heat.score` stopped reading it —
+// `computeCompositeScore` itself has never rounded internally.
+const compositeScoreOf = (modLines) => Math.round(computeCompositeScore(parseUnified(mkStatWaystone(modLines))).score * 100) / 100;
 {
   check("a single stat alone scores exactly its own tier (Drop Chance at its own ceiling -> normalized 100% -> legendary -> 80, no bonus)",
-    analyzeWaystoneText(mkStatWaystone([`+${STAT_REFERENCES.waystoneDropChance}% chance to find an additional Waystone`])).heat.score === TIER_SCORE.legendary);
+    compositeScoreOf([`+${STAT_REFERENCES.waystoneDropChance}% chance to find an additional Waystone`]) === TIER_SCORE.legendary);
 
   check("a lone weak stat floors at TIER_SCORE.weak with zero bonus (nothing else can be 'ok' if the max stat isn't)",
-    analyzeWaystoneText(mkStatWaystone(["+3% increased Pack Size"])).heat.score === TIER_SCORE.weak);
+    compositeScoreOf(["+3% increased Pack Size"]) === TIER_SCORE.weak);
 
   // Regression pin (2026-07-11 bug report: "le rating est tout le temps en
   // légendaire") — Pack Size's reference used to be 30, so an ordinary 15%
@@ -792,47 +810,47 @@ check("Abyss: quantity-only waystone does NOT feed Abyss beyond the weak-tier ba
   // bar is unchanged: a bare 15% roll must still land at "ok", not
   // legendary, and needs a real ~50%-of-ceiling roll to reach legendary.
   check("an ordinary 15% Pack Size roll alone is 'ok', NOT legendary (2026-07-11 fix)",
-    analyzeWaystoneText(mkStatWaystone(["+15% increased Pack Size"])).heat.score === TIER_SCORE.ok);
+    compositeScoreOf(["+15% increased Pack Size"]) === TIER_SCORE.ok);
   check("a Pack Size roll at its own ceiling IS legendary — the bar didn't move, only the reference did",
-    analyzeWaystoneText(mkStatWaystone([`+${STAT_REFERENCES.packSize}% increased Pack Size`])).heat.score === TIER_SCORE.legendary);
+    compositeScoreOf([`+${STAT_REFERENCES.packSize}% increased Pack Size`]) === TIER_SCORE.legendary);
 
   // Waystone Drop Chance at 55% normalizes to under its own (higher)
   // ceiling and must lose to Item Rarity at the SAME raw 55%, which
   // normalizes to 55% of ITS ceiling (legendary) — proves stats are still
   // compared against their OWN ceiling, not raw %, using the one pair of
   // stats with genuinely different references.
-  const dropVsRarity = analyzeWaystoneText(
-    mkStatWaystone(["+55% chance to find an additional Waystone", "+55% increased Rarity of Items found in this Area"]),
+  const dropVsRarity = compositeScoreOf(
+    ["+55% chance to find an additional Waystone", "+55% increased Rarity of Items found in this Area"],
   );
   const dropNormalized = (55 / STAT_REFERENCES.waystoneDropChance) * 100;
   const dropVsRarityExpected = Math.round((TIER_SCORE.legendary + Math.min(dropNormalized / 100, 1) * 5) * 100) / 100;
   check("Item Rarity 55% (ceiling 100) outranks the SAME raw 55% on Drop Chance (higher ceiling) as the dominant stat",
-    dropVsRarity.heat.score === dropVsRarityExpected);
+    dropVsRarity === dropVsRarityExpected);
 
   // Same dominant stat (Drop Chance, at its own ceiling) with two different
   // secondary Monster Rarity values -> the bonus must scale with the
   // secondary's own magnitude relative to ITS ceiling, not just its
   // presence (2026-07-10's Q3 answer: "bonus proportionnel à la valeur de
   // chaque stat").
-  const smallSecondary = analyzeWaystoneText(
-    mkStatWaystone([`+${STAT_REFERENCES.waystoneDropChance}% chance to find an additional Waystone`, "+20% increased Rarity of Monsters"]),
+  const smallSecondary = compositeScoreOf(
+    [`+${STAT_REFERENCES.waystoneDropChance}% chance to find an additional Waystone`, "+20% increased Rarity of Monsters"],
   );
-  const bigSecondary = analyzeWaystoneText(
-    mkStatWaystone([`+${STAT_REFERENCES.waystoneDropChance}% chance to find an additional Waystone`, "+90% increased Rarity of Monsters"]),
+  const bigSecondary = compositeScoreOf(
+    [`+${STAT_REFERENCES.waystoneDropChance}% chance to find an additional Waystone`, "+90% increased Rarity of Monsters"],
   );
   const secondaryBonus = (raw) => Math.round(Math.min(raw / STAT_REFERENCES.monsterRarity, 1) * 5 * 100) / 100;
   check("the secondary-stat bonus is proportional to that stat's own value, not flat",
-    bigSecondary.heat.score > smallSecondary.heat.score &&
-    smallSecondary.heat.score === Math.round((TIER_SCORE.legendary + secondaryBonus(20)) * 100) / 100 &&
-    bigSecondary.heat.score === Math.round((TIER_SCORE.legendary + secondaryBonus(90)) * 100) / 100);
+    bigSecondary > smallSecondary &&
+    smallSecondary === Math.round((TIER_SCORE.legendary + secondaryBonus(20)) * 100) / 100 &&
+    bigSecondary === Math.round((TIER_SCORE.legendary + secondaryBonus(90)) * 100) / 100);
 
   // A secondary stat below "ok" (< 15%) contributes nothing — matches the
   // tablet-fit tiering, "nul" doesn't count as "intéressant".
-  const weakSecondary = analyzeWaystoneText(
-    mkStatWaystone([`+${STAT_REFERENCES.waystoneDropChance}% chance to find an additional Waystone`, "+10% increased Rarity of Monsters"]),
+  const weakSecondary = compositeScoreOf(
+    [`+${STAT_REFERENCES.waystoneDropChance}% chance to find an additional Waystone`, "+10% increased Rarity of Monsters"],
   );
   check("a secondary stat under the 'ok' threshold contributes zero bonus",
-    weakSecondary.heat.score === TIER_SCORE.legendary);
+    weakSecondary === TIER_SCORE.legendary);
 
   // Drop Chance's legendary boundary override (2026-07-11, sourced from 6
   // real T15 waystones the user pasted — see scoring.ts's
@@ -841,31 +859,31 @@ check("Abyss: quantity-only waystone does NOT feed Abyss beyond the weak-tier ba
   // shared 50% bar. 108% raw -> 69.68% normalized -> still "top", not
   // legendary; 109% raw -> 70.32% -> legendary.
   check("Drop Chance just under its raised 70% boundary is 'top', NOT legendary",
-    analyzeWaystoneText(mkStatWaystone(["+108% chance to find an additional Waystone"])).heat.score === TIER_SCORE.top);
+    compositeScoreOf(["+108% chance to find an additional Waystone"]) === TIER_SCORE.top);
   check("Drop Chance just over its raised 70% boundary IS legendary",
-    analyzeWaystoneText(mkStatWaystone(["+109% chance to find an additional Waystone"])).heat.score === TIER_SCORE.legendary);
+    compositeScoreOf(["+109% chance to find an additional Waystone"]) === TIER_SCORE.legendary);
   check("Item Rarity at exactly its own (unmoved) 50% boundary is still legendary — the override is Drop-Chance-only",
-    analyzeWaystoneText(mkStatWaystone(["+50% increased Rarity of Items found in this Area"])).heat.score === TIER_SCORE.legendary);
+    compositeScoreOf(["+50% increased Rarity of Items found in this Area"]) === TIER_SCORE.legendary);
 
   // Real-waystone regression pins (2026-07-11, user-pasted T15 text) — the
   // exact reports that motivated the override above.
-  const cabalGambit = analyzeWaystoneText(mkStatWaystone([
+  const cabalGambit = compositeScoreOf([
     "+36% increased Rarity of Items found in this Area",
     "+16% increased Pack Size",
     "+13% Monster Effectiveness",
     "+110% chance to find an additional Waystone",
-  ]));
+  ]);
   check("'Cabal Gambit' (110% Drop Chance) stays legendary — 83.96",
-    cabalGambit.heat.score === 83.96);
+    cabalGambit === 83.96);
 
-  const rottingCharge = analyzeWaystoneText(mkStatWaystone([
+  const rottingCharge = compositeScoreOf([
     "+28% increased Rarity of Items found in this Area",
     "+15% increased Pack Size",
     "+41% increased Rarity of Monsters",
     "+90% chance to find an additional Waystone",
-  ]));
+  ]);
   check("'Rotting Charge' (90% Drop Chance) is no longer legendary — 59.51, was 84.5 before the fix",
-    rottingCharge.heat.score === 59.51);
+    rottingCharge === 59.51);
 }
 
 // ---------------------------------------------------------------------------

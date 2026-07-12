@@ -5,6 +5,11 @@ utilisateur (pas de détails internes). La section la plus récente en premier.
 Ce fichier est embarqué dans l'app (panneau "Quoi de neuf" + Réglages) et
 sert de description à la release GitHub — écrire pour les joueurs.
 
+## 0.3.6
+
+- **New: the Juice Score now reflects your best tablet, not just raw map stats.** A waystone whose real strength is a single mechanic (like a huge Waystone Drop Chance roll) is now scored and recommended correctly — before, it could be undervalued because no tablet checked that stat.
+- **Fixed: a weak waystone could show an inflated score** purely from a tablet's own currency value (e.g. Delirium Splinters) even when that mechanic wasn't present on the map at all.
+
 ## 0.3.5
 
 - **New: Recommended Tablets are now sorted by fit % (best first)** instead of a fixed alphabetical order.

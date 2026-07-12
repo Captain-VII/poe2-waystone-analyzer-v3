@@ -310,8 +310,15 @@ interface DominantStat {
  *  every other stat that also clears "ok" — see the file-level comment for
  *  why. `normalizedPercent` is "how close to this stat's own ceiling", not
  *  the raw %, so it's only meaningful for comparing stats against each
- *  other, never shown to the player directly. */
-function computeCompositeScore(stats: ModStats): { score: number; dominant: DominantStat; bonus: number } {
+ *  other, never shown to the player directly.
+ *
+ *  Exported (2026-07-12) so adapter.ts's `rankTablets`/`computeMechanicScores`
+ *  can reuse it as the General/Overseer tablet's fit — no mechanic reads
+ *  Waystone Drop Chance as its priority stat (the other four each have at
+ *  least one), so without this a Drop-Chance-dominant waystone (the most
+ *  common real case per the 2026-07-11 6-waystone sample) would never fit
+ *  ANY tablet well, even though the map itself is genuinely juicy. */
+export function computeCompositeScore(stats: ModStats): { score: number; dominant: DominantStat; bonus: number } {
   const candidates = STAT_SIGNALS.map((key) => ({
     key,
     normalizedPercent: ((stats[key] ?? 0) / STAT_REFERENCES[key]) * 100,

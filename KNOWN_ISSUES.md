@@ -833,6 +833,50 @@ Légendaire into Excellent/Bon. Net: 3 of 6 Légendaire before this fix, 1 of
 108%/109% raw Drop Chance and a control check proving Item Rarity's own
 bar is untouched).
 
+**Update (2026-07-12) — the main Juice Score now reads the best tablet fit,
+not a separate stats-only number:** user tried sourcing real per-stat roll
+ranges from a data-mined source (`repoe-fork`, the same one that resolved
+issue #2) but found it stale/contradicted their own real-market
+observation, and gave up on re-sourcing `STAT_REFERENCES`/tier boundaries
+(those stay as-is, from the 2026-07-11 6-waystone sample above). Instead,
+the user's own next idea: *"a la place calculer le score en fonction de sa
+meilleur tablette et pas juste par les stats elle memes"* — `heat.score` is
+now `Math.max(...tablets[].fit)` (`adapter.ts`), not
+`computeCompositeScore`'s dominant-stat read directly.
+
+- **The gap that made this safe**: no mechanic/tablet read Waystone Drop
+  Chance as its priority stat (Item Rarity/Monster Rarity/Pack Size/Monster
+  Effectiveness each had at least one) — yet Drop Chance was dominant on
+  all 6 real waystones sampled above. Fixed by making General/Overseer's
+  fit read the waystone's OWN dominant stat (`computeCompositeScore`,
+  still exactly the same function/math, just repurposed and exported) —
+  every waystone now fits SOME tablet by construction.
+- **Two real bugs found via `verify-adapter.mjs` during this change, both
+  fixed**: a tablet's `rewardScore` (its own mechanic-specific currency
+  value, rewards.ts) and the default curated pin bonus
+  (`recommendedTablets`, +10 — every mechanic pins Overseer as a secondary
+  default) were both being added to a tablet's fit *unconditionally*,
+  regardless of whether the waystone's stats actually suited that
+  mechanic at all. Invisible while `heat.score` never read tablet fits;
+  surfaced immediately once it started reading the best one directly (a
+  T2 waystone with one weak +5% Item Rarity mod scored 40/RUN, purely off
+  Delirium Tablet's own splinter value with zero Delirium present). Fix:
+  both only count once the tablet's mechanic-fit tier clears "ok" (25%) —
+  see `rankTablets`'s `eligible` gate.
+- **Known, accepted side effect**: `skipIfBelow` (a mechanic's own "don't
+  recommend me below this waystone-level Juice Score" gate) is now
+  effectively unreachable for whichever mechanic is winning, since
+  `heat.score` can no longer fall below the winning tablet's own fit by
+  construction. Confirmed with the user as intended, not a regression — a
+  waystone whose only real strength is one mechanic's priority stat should
+  recommend that mechanic. `verify-adapter.mjs`'s check (7) updated to
+  assert the new behavior instead of the old gate.
+- `computeCompositeScore`'s own math (tier boundaries, secondary-stat
+  bonus, the Drop Chance legendary override above) is completely
+  unchanged — only exported, and `verify-adapter.mjs`'s composite-score
+  checks now call it directly instead of through `heat.score`, since that
+  field no longer reads it exclusively.
+
 ## 4. ~~Mechanic-presence detection is a simple keyword match~~ (resolved 2026-07-08)
 
 "Mecanique naturelle presente sur la map" (§2/§8/§9) is detected by a regex
