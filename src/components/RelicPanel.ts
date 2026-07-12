@@ -610,14 +610,16 @@ export function mountOverlay(
       .join("");
 
     // Key factors + insights share one row, folded together rather than a
-    // new titled section (see docs/implementation-plan.md) — but the
-    // original contract only ever budgeted ≤3 insight rows for this
-    // column's fixed height (docs/overlay-ui-spec.md), and keyFactors is a
-    // net-new source of rows on top of that, plus the new tab-rewards line
-    // under the top tablet. The danger list (severity-grouped, DangerList.ts)
-    // comes first and always shows in full; factors/insights fill whatever's
-    // left, capped at 1. The column overflow-scrolls if a mod-heavy map
-    // still exceeds the fixed 580×332 panel's height budget.
+    // new titled section (see docs/implementation-plan.md). The danger
+    // list (severity-grouped, DangerList.ts) comes first and always shows
+    // in full; factors/insights used to be capped at 1 combined row —
+    // real content (keyFactors: ≤4, insights: ≤3) was silently discarded
+    // to fit the column's old fixed-height budget. Since the Full columns
+    // now overflow-scroll individually (2026-07-12's equal-width layout),
+    // that cap was just leaving real, already-computed rows on the floor
+    // and an empty column underneath — show them all instead (found
+    // 2026-07-12, real overlay screenshot: a big dead gap below "Insights"
+    // on waystones with only 1-3 danger hits).
     const factorRows = result.keyFactors.map(
       (line) => `<div class="ins-row factor"><span class="i-ic">+</span><span>${esc(line)}</span></div>`,
     );
@@ -625,9 +627,16 @@ export function mountOverlay(
       const { icon, cls } = categorizeInsight(line);
       return `<div class="ins-row${cls ? ` ${cls}` : ""}"><span class="i-ic">${icon}</span><span>${esc(line)}</span></div>`;
     });
+    // Bonus rows get their own group header (matching DangerList.ts's
+    // Medium/Low headers) so the column reads as two distinct types —
+    // malus (the danger list above) and bonus — instead of one
+    // undifferentiated stream (2026-07-12, user request).
+    const bonusHeader = factorRows.length || insightRows.length ? `<div class="dl-group-h dl-bonus">Bonus</div>` : "";
     q("[data-insights]").innerHTML = [
       renderDangerList(result.dangerHits),
-      ...[...factorRows, ...insightRows].slice(0, 1),
+      bonusHeader,
+      ...factorRows,
+      ...insightRows,
     ].join("");
 
     // Danger badge: purely a display label over `dangerLevel` (itself

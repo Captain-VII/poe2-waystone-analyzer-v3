@@ -58,7 +58,7 @@ const MECHANIC_SCORES: AnalysisResult["mechanicScores"] = [
 
 function fixture(
   overrides: Pick<AnalysisResult["heat"], "score" | "tierClass" | "tierLabel" | "verdict" | "rating">,
-  br: [number, number, number, number],
+  br: [number, number, number, number, number],
   dangerHits: DangerHit[],
   insight: string,
   keyFactors: string[] = [],
@@ -75,7 +75,12 @@ function fixture(
       // the same real-percentage rendering production data does).
       // Row order matches the real in-game stat order (2026-07-12) — Pack
       // Size before Monster Rarity, same as the real adapter's
-      // DEFAULT_WEIGHTS key order now drives in production.
+      // DEFAULT_WEIGHTS key order now drives in production. Waystone Drop
+      // Chance (br[4]) was missing here entirely until 2026-07-12 — the
+      // real adapter always computes all 5 Weights fields
+      // (scoring.ts's DEFAULT_WEIGHTS), this fixture just never rendered
+      // the 5th, leaving a dead gap above Total Heat that a real waystone
+      // with a Drop Chance mod doesn't have.
       breakdown: [
         { key: "itemRarity", label: "Item Rarity", value: br[0], display: formatPercent(br[0]), max: CAPS.itemRarity },
         { key: "packSize", label: "Pack Size", value: br[2], display: formatPercent(br[2]), max: CAPS.packSize },
@@ -92,6 +97,13 @@ function fixture(
           value: br[3],
           display: formatPercent(br[3]),
           max: CAPS.monsterEffectiveness,
+        },
+        {
+          key: "waystoneDropChance",
+          label: "Waystone Drop Chance",
+          value: br[4],
+          display: formatPercent(br[4]),
+          max: CAPS.waystoneDropChance,
         },
       ],
     },
@@ -121,26 +133,26 @@ const VERDICT: Record<TierClass, Verdict> = {
 export const MOCK_RESULTS: Record<TierClass, AnalysisResult> = {
   trash: fixture(
     { score: 12.6, tierClass: "trash", tierLabel: "Weak", verdict: VERDICT.trash, rating: "D" },
-    [3.0, 2.0, 4.0, 3.6],
+    [3.0, 2.0, 4.0, 3.6, 4.0],
     [],
     "Re-roll or vendor this Waystone",
   ),
   low: fixture(
     { score: 32.2, tierClass: "low", tierLabel: "Average", verdict: VERDICT.low, rating: "C" },
-    [8.0, 6.0, 9.0, 9.2],
+    [8.0, 6.0, 9.0, 9.2, 18.0],
     [],
     "Run only to sustain Waystones",
   ),
   good: fixture(
     { score: 52.5, tierClass: "good", tierLabel: "Good", verdict: VERDICT.good, rating: "B" },
-    [12.0, 10.0, 14.0, 16.5],
+    [12.0, 10.0, 14.0, 16.5, 42.0],
     [],
     "Worth a mid-tier tablet slot",
     ["High Monster Effectiveness"],
   ),
   splus: fixture(
     { score: 76.7, tierClass: "splus", tierLabel: "Excellent", verdict: VERDICT.splus, rating: "A" },
-    [16.0, 15.0, 19.0, 22.7],
+    [16.0, 15.0, 19.0, 22.7, 68.0],
     [{ id: "reflect-damage", severity: "reflect" }],
     "Pairs well with Expedition tablets",
     ["High Monster Effectiveness", "High Pack Size", "Strong Expedition match"],
@@ -150,7 +162,7 @@ export const MOCK_RESULTS: Record<TierClass, AnalysisResult> = {
   // via warnings, never by pulling the score down.
   god: fixture(
     { score: 94.2, tierClass: "god", tierLabel: "Legendary", verdict: VERDICT.god, rating: "S" },
-    [20.0, 19.0, 21.0, 25.0],
+    [20.0, 19.0, 21.0, 25.0, 95.0],
     [
       { id: "reflect-damage", severity: "reflect" },
       { id: "fast-monsters", severity: "strong" },

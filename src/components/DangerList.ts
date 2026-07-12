@@ -11,9 +11,13 @@ import type { DangerHitView } from "../types";
 type VisualTier = DangerHitView["severity"];
 
 // Text glyphs, not color emoji — colored per tier in CSS like the rest of
-// the panel's iconography (⚠/◆/+ in RelicPanel).
+// the panel's iconography (⚠/◆/+ in RelicPanel). "high" has no heading:
+// the Insights column's danger-badge already spells out "Very Dangerous"
+// right above this list, so a "High" group header directly under it was
+// pure duplication (2026-07-12, user request) — medium/low still get
+// theirs since nothing else on the card names their severity.
 const TIER_META: Record<VisualTier, { heading: string; icon: string }> = {
-  high: { heading: "High", icon: "⚠" },
+  high: { heading: "", icon: "⚠" },
   medium: { heading: "Medium", icon: "⚡" },
   low: { heading: "Low", icon: "•" },
 };
@@ -54,7 +58,7 @@ export function renderDangerList(hits: DangerHitView[]): string {
     const group = groups[tier];
     if (group.length === 0) continue;
 
-    parts.push(`<div class="dl-group-h dl-${tier}">${TIER_META[tier].heading}</div>`);
+    if (TIER_META[tier].heading) parts.push(`<div class="dl-group-h dl-${tier}">${TIER_META[tier].heading}</div>`);
 
     const collapsible = tier === "low" && group.length > LOW_VISIBLE_MAX;
     group.forEach((hit, i) => parts.push(row(hit, tier, collapsible && i >= LOW_VISIBLE_MAX)));

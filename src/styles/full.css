@@ -37,14 +37,22 @@
 }
 
 /* Inline in the "Insights" heading (no extra row) — purely a display label
-   over dangerLevel, independent of tier/score styling. */
+   over dangerLevel, independent of tier/score styling. Sized down and
+   kept as one unbreakable unit: at the base .sec-h size, "Insights VERY
+   DANGEROUS" (the longest label, DANGER_LABELS.high) didn't fit this
+   column's width (equal 3-column layout, narrower than the old
+   single-wide panel) and wrapped "DANGEROUS" onto its own line, breaking
+   the header row's alignment with the other two columns (found
+   2026-07-12, real overlay screenshot). */
 .danger-badge {
-  margin-left: 6px;
-  font-size: 10px;
+  display: inline-block;
+  margin-left: 5px;
+  font-size: 9px;
   font-weight: 700;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.2px;
   color: var(--danger);
   opacity: 0.75;
+  white-space: nowrap;
 }
 .danger-badge.lvl-medium { opacity: 0.9; }
 /* Toned down from full opacity — it was pulling more attention than the
@@ -272,6 +280,10 @@
 .dl-row.dl-high { font-weight: 600; }
 .dl-group-h.dl-medium, .dl-row.dl-medium { color: var(--gold-hi); }
 .dl-group-h.dl-low, .dl-row.dl-low { color: var(--grey); }
+/* "Bonus" header (RelicPanel.ts) — separates the factor/insight rows from
+   the danger list above them, same visual weight as the Medium/Low
+   headers so the column reads as two distinct types (malus/bonus). */
+.dl-group-h.dl-bonus { color: var(--gold-hi); margin-top: 6px; }
 .dl-row.dl-hidden { display: none; }
 .danger-list.dl-expanded .dl-row.dl-hidden { display: flex; }
 .dl-more {
