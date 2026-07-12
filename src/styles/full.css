@@ -47,7 +47,10 @@
   opacity: 0.75;
 }
 .danger-badge.lvl-medium { opacity: 0.9; }
-.danger-badge.lvl-high { opacity: 1; }
+/* Toned down from full opacity — it was pulling more attention than the
+   score itself; still the strongest badge, just not louder than the hero
+   number (2026-07-12 visual pass). */
+.danger-badge.lvl-high { opacity: 0.88; }
 .danger-badge[hidden] { display: none; }
 
 .body-full .score-num { font-size: 29px; }
@@ -67,7 +70,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 22px;
+  height: 21px; /* match .trow/.ins-row (21px) so the three columns keep the same row rhythm */
   font-size: 12px;
 }
 .brow .b-lab {
