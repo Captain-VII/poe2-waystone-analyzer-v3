@@ -5,6 +5,16 @@ utilisateur (pas de détails internes). La section la plus récente en premier.
 Ce fichier est embarqué dans l'app (panneau "Quoi de neuf" + Réglages) et
 sert de description à la release GitHub — écrire pour les joueurs.
 
+## 0.3.5
+
+- **New: Recommended Tablets are now sorted by fit % (best first)** instead of a fixed alphabetical order.
+- **New: Full mode's Insights column now shows all of your waystone's warnings and strengths**, clearly split into a danger list and a "Bonus" section — it used to hide most of them to fit the old layout.
+- **New: Full mode's Heat Breakdown now always shows the Waystone Drop Chance stat** alongside Item Rarity, Pack Size, Monster Rarity, and Monster Effectiveness.
+- **Fixed: the overlay could stop responding to clicks entirely** after dragging it or after Settings → Position → Reset — the click-through zones now stay in sync with the window's real position.
+- **Fixed: the "Very Dangerous" badge in Full mode could wrap onto its own line**, misaligning the Insights column's header with the other two columns.
+- **Fixed: the Settings panel's scrollbar** now matches the thin gold style used everywhere else instead of the default system scrollbar.
+- Minor visual polish: the minimize button is now tinted red for easier recognition.
+
 ## 0.3.4
 
 - **Fixed: the tier badge text next to the score in Full mode could get hard-cropped mid-word** instead of showing "..." cleanly.
