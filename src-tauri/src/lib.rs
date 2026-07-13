@@ -168,10 +168,33 @@ fn simulate_copy() -> Result<(), String> {
     let modifier = Key::Meta;
     #[cfg(not(target_os = "macos"))]
     let modifier = Key::Control;
+    // Ctrl+E (EXTRA_HOTKEYS) fires this command while the user is still
+    // physically holding Ctrl down. If we then send our own synthetic
+    // Ctrl-release, Windows' global keyboard-state table (the same one
+    // RegisterHotKey/GetAsyncKeyState read) marks Ctrl as up — even though
+    // the physical key never moved — because SendInput-injected events and
+    // real ones update the same state. The user's very next E press then
+    // reads as a bare "E", not "Ctrl+E", so the hotkey silently stops
+    // firing until they actually release and re-press the real Ctrl key
+    // (found 2026-07-13: "works the first time, not the second"). Fix:
+    // skip synthesizing the Ctrl press/release entirely when Ctrl is
+    // already really down — just click C, which still sends a real
+    // Ctrl+C since the physical modifier is genuinely held.
+    #[cfg(target_os = "windows")]
+    let ctrl_already_down = unsafe {
+        use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_CONTROL};
+        (GetAsyncKeyState(VK_CONTROL as i32) as u16 & 0x8000) != 0
+    };
+    #[cfg(not(target_os = "windows"))]
+    let ctrl_already_down = false;
     let result = (|| -> Result<(), enigo::InputError> {
-        enigo.key(modifier, enigo::Direction::Press)?;
+        if !ctrl_already_down {
+            enigo.key(modifier, enigo::Direction::Press)?;
+        }
         enigo.key(c_key, Click)?;
-        enigo.key(modifier, enigo::Direction::Release)?;
+        if !ctrl_already_down {
+            enigo.key(modifier, enigo::Direction::Release)?;
+        }
         Ok(())
     })();
     match &result {
@@ -297,23 +320,38 @@ fn left_click_since_last_poll() -> bool {
 }
 
 /// Modifier layer per action, applied to one user-remappable base key
-/// (KNOWN_ISSUES #7): base = analyze, Shift+base = toggle, Control+base =
-/// compare. The accelerators are registered and handled entirely Rust-side:
-/// the JS-side `register()` API of tauri-plugin-global-shortcut proved
-/// unreliable on Windows — registration would succeed but the event channel
-/// to the webview sometimes never delivered a single keypress until the app
-/// was restarted (diagnosed 2026-07-06 from session logs: healthy launches
-/// showed hundreds of `state=Pressed` deliveries, broken launches showed
-/// zero, with identical successful registrations). Rust-side registration +
-/// a standard `app.emit()` rides the same event system every invoke/report
-/// in this app already uses, which has never misfired.
+/// (KNOWN_ISSUES #7): base = analyze, Shift+base = toggle. The accelerators
+/// are registered and handled entirely Rust-side: the JS-side `register()`
+/// API of tauri-plugin-global-shortcut proved unreliable on Windows —
+/// registration would succeed but the event channel to the webview
+/// sometimes never delivered a single keypress until the app was restarted
+/// (diagnosed 2026-07-06 from session logs: healthy launches showed
+/// hundreds of `state=Pressed` deliveries, broken launches showed zero,
+/// with identical successful registrations). Rust-side registration + a
+/// standard `app.emit()` rides the same event system every invoke/report in
+/// this app already uses, which has never misfired.
 /// Escape is deliberately absent — it's a local keydown listener in
 /// hotkeys.ts (a global Escape grab swallowed the key OS-wide).
-const HOTKEY_ACTIONS: &[(&str, &str)] = &[
-    ("", "analyze"),
-    ("Shift+", "toggle"),
-    ("Control+", "compare"),
-];
+const HOTKEY_ACTIONS: &[(&str, &str)] = &[("", "analyze"), ("Shift+", "toggle")];
+
+/// Fixed, non-remappable extra accelerator, always registered alongside
+/// whatever the user's base key derives (2026-07-13, user request) —
+/// Ctrl+E specifically, so it never varies with `set_hotkey_base`. Safe as
+/// a printable-key accelerator (unlike a `HOTKEY_ACTIONS`/base combination,
+/// which `is_printable_key` blocks) because it's registered with the
+/// Control modifier *required*: the OS never delivers it for a bare "e"
+/// keystroke, so normal typing (including the game's own chat) is
+/// untouched.
+const EXTRA_HOTKEYS: &[(&str, &str)] = &[("Control+KeyE", "analyze")];
+
+/// `HOTKEY_ACTIONS` derived from `base`, plus the fixed `EXTRA_HOTKEYS` —
+/// the full set of accelerators that should be registered/matched at any
+/// given time.
+fn all_accels(base: &str) -> Vec<(String, &'static str)> {
+    let mut accels = hotkey_accels(base);
+    accels.extend(EXTRA_HOTKEYS.iter().map(|(a, action)| (a.to_string(), *action)));
+    accels
+}
 
 const DEFAULT_HOTKEY_BASE: &str = "Insert";
 
@@ -443,11 +481,12 @@ fn get_hotkey_base(state: tauri::State<'_, HotkeyBase>) -> String {
     state.0.lock().unwrap().clone()
 }
 
-/// Remaps the base key: unregisters the old trio, registers the new one,
-/// and rolls back to the old trio if any new registration fails (typically
+/// Remaps the base key: unregisters the old pair, registers the new one,
+/// and rolls back to the old pair if any new registration fails (typically
 /// a conflict with another app's global shortcut) so the overlay never ends
 /// up with no working hotkeys. Persists on success. Errors are
-/// user-displayable French (shown in the Settings panel).
+/// user-displayable (shown in the Settings panel). `EXTRA_HOTKEYS` is
+/// untouched — it's independent of the remappable base.
 #[tauri::command]
 fn set_hotkey_base(
     app: tauri::AppHandle,
@@ -486,14 +525,14 @@ fn set_hotkey_base(
     Ok(base)
 }
 
-/// Registers the three accelerators for `base`, retrying failures on a
-/// backoff (2s→32s) in a background thread — the common conflict is
-/// transient (a previous overlay instance still shutting down during a
-/// relaunch).
+/// Registers `base`'s accelerators plus the fixed `EXTRA_HOTKEYS`, retrying
+/// failures on a backoff (2s→32s) in a background thread — the common
+/// conflict is transient (a previous overlay instance still shutting down
+/// during a relaunch).
 fn register_hotkeys(app: &tauri::AppHandle, base: &str) {
     const RETRY_DELAYS: [u64; 5] = [2, 4, 8, 16, 32];
     let mut pending: Vec<String> = Vec::new();
-    for (accel, _) in hotkey_accels(base) {
+    for (accel, _) in all_accels(base) {
         match app.global_shortcut().register(accel.as_str()) {
             Ok(()) => println!("[hotkey] {accel} registered"),
             Err(e) => {
@@ -511,8 +550,9 @@ fn register_hotkeys(app: &tauri::AppHandle, base: &str) {
             thread::sleep(Duration::from_secs(delay));
             // A remap (set_hotkey_base) may have landed while waiting —
             // don't resurrect accelerators for a base the user replaced.
+            // EXTRA_HOTKEYS is always live regardless of base.
             let current = handle.state::<HotkeyBase>().0.lock().unwrap().clone();
-            let live: Vec<String> = hotkey_accels(&current)
+            let live: Vec<String> = all_accels(&current)
                 .into_iter()
                 .map(|(a, _)| a)
                 .collect();
@@ -548,7 +588,7 @@ pub fn run() {
                     // plugin's to_string() normalization isn't a stable
                     // format to match against.
                     let base = app.state::<HotkeyBase>().0.lock().unwrap().clone();
-                    let action = hotkey_accels(&base)
+                    let action = all_accels(&base)
                         .into_iter()
                         .find(|(accel, _)| accel.parse::<Shortcut>().is_ok_and(|s| s == *shortcut))
                         .map(|(_, action)| action);
@@ -798,16 +838,30 @@ mod tests {
     }
 
     #[test]
-    fn hotkey_accels_derives_the_three_action_layers() {
+    fn hotkey_accels_derives_the_two_action_layers() {
         let accels = hotkey_accels("Insert");
         assert_eq!(
             accels,
             vec![
                 ("Insert".to_string(), "analyze"),
                 ("Shift+Insert".to_string(), "toggle"),
-                ("Control+Insert".to_string(), "compare"),
             ]
         );
+    }
+
+    #[test]
+    fn all_accels_appends_the_fixed_extra_hotkeys() {
+        let accels = all_accels("Insert");
+        assert_eq!(
+            accels,
+            vec![
+                ("Insert".to_string(), "analyze"),
+                ("Shift+Insert".to_string(), "toggle"),
+                ("Control+KeyE".to_string(), "analyze"),
+            ]
+        );
+        // Independent of base — a remap doesn't change or drop it.
+        assert!(all_accels("F9").contains(&("Control+KeyE".to_string(), "analyze")));
     }
 
     #[test]

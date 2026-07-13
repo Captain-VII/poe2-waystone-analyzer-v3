@@ -16,7 +16,7 @@ after that is automatic.
 
 Everything in the [README](README.md) works as described: hover a Waystone,
 press **Ins**, get a Juice Score + verdict + tablet recommendation. Settings,
-hotkey remapping, Compare mode, and autostart are all functional.
+hotkey remapping, and autostart are all functional.
 
 ## Known limitations — read before reporting a bug
 

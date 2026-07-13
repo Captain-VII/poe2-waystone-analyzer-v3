@@ -13,11 +13,8 @@ which tablet/mechanic to pair it with — without alt-tabbing out of the game.
    best mechanic + tablet to match it with.
 2. Press **Shift+Ins** any time to switch between the compact vertical card
    and the full three-column breakdown.
-3. Press **Ctrl+Ins** to compare your last 2-3 analyzed Waystones side by
-   side, with the best Juice Score starred and highlighted. Each card has a
-   **×** to drop it and a **📌** to pin it (pinned cards survive new
-   analyses; max 2, so one slot always shows your latest). The list is
-   remembered across restarts.
+3. **Ctrl+E** always analyzes too, regardless of what your base key is
+   remapped to — a fixed, non-remappable second way to trigger an analysis.
 
 The overlay is click-through everywhere except its own buttons and the
 Full-mode modifier list, so it never blocks a click into the game underneath.
@@ -47,15 +44,16 @@ other app.
 |---|---|
 | **Ins** | Analyze the Waystone you're hovering (auto-copies it first) |
 | **Shift+Ins** | Toggle between Compact and Full layout |
-| **Ctrl+Ins** | Toggle Compare mode (needs 2+ waystones analyzed already) |
+| **Ctrl+E** | Also analyzes — fixed, works no matter what the base key is remapped to |
 
 These are **global shortcuts** — they work even while the game has focus.
 Whatever was on your clipboard before pressing Ins is restored afterward.
 
 The base key (Ins) is remappable: open Settings (gear button), click the
-**Hotkey** binding, then press the new key — the Shift/Ctrl variants follow
-it automatically. Escape cancels the capture. The choice persists across
-restarts (`hotkey.txt` in the app config dir, next to `meta.json`).
+**Hotkey** binding, then press the new key — the Shift variant follows it
+automatically. Escape cancels the capture. The choice persists across
+restarts (`hotkey.txt` in the app config dir, next to `meta.json`). Ctrl+E
+is separate and always stays on analyze, whatever the base is.
 
 Settings also has a **Launch with Windows** toggle — enables/disables the
 overlay starting automatically at login (Windows registry Run key, no

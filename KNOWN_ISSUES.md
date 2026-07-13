@@ -963,20 +963,28 @@ apply immediately and persist in `localStorage` as before.
 
 **Update (2026-07-08):** custom hotkey remapping is now implemented. The
 Settings row's `Ins` chip is a button: click it, press the new key (Escape
-cancels), and all three shortcuts move to that base key (key = analyze,
-Shift+key = toggle, Ctrl+key = compare). The base is validated Rust-side
-(modifiers, Escape, Enter/Space/Tab/Backspace, and every *printable* key —
-letters, digits, punctuation, numpad — are rejected, because a global grab
-swallows the key OS-wide and would break typing everywhere, game chat
-included; a key already grabbed by another app rolls back to the previous
-binding with an error message). What's left: F-keys, Insert/Delete/Home/
-End/PageUp/PageDown, arrows, and lock keys. The base persists in
-`hotkey.txt` in the app
-config dir — Rust-side, not `localStorage`, because registration happens at
-startup before the webview exists. One quirk: the *currently bound* key
-can't be captured in the remap flow, because the OS-level global grab means
-the webview never receives its keydown — re-selecting the same key would be
-a no-op anyway.
+cancels), and both shortcuts move to that base key (key = analyze,
+Shift+key = toggle). The base is validated Rust-side (modifiers, Escape,
+Enter/Space/Tab/Backspace, and every *printable* key — letters, digits,
+punctuation, numpad — are rejected, because a global grab swallows the key
+OS-wide and would break typing everywhere, game chat included; a key
+already grabbed by another app rolls back to the previous binding with an
+error message). What's left: F-keys, Insert/Delete/Home/End/PageUp/
+PageDown, arrows, and lock keys. The base persists in `hotkey.txt` in the
+app config dir — Rust-side, not `localStorage`, because registration
+happens at startup before the webview exists. One quirk: the *currently
+bound* key can't be captured in the remap flow, because the OS-level global
+grab means the webview never receives its keydown — re-selecting the same
+key would be a no-op anyway.
+
+**Update (2026-07-13):** a third, fixed accelerator — **Ctrl+E** — was
+added alongside the remappable base, always analyzing regardless of what
+the base is remapped to (user request: they wanted Ctrl+E specifically and
+no physical numpad to fall back on). It bypasses the printable-key
+rejection above by construction: it's registered with the Control modifier
+*required*, so the OS only delivers it on the Ctrl+E combo, never on a bare
+"e" keystroke — typing is never affected. This freed the Ctrl+base slot,
+previously "compare" (KNOWN_ISSUES #8, now removed).
 
 ## 8. ~~Compare mode is basic~~ (resolved 2026-07-08)
 
@@ -995,6 +1003,15 @@ duplicates of one map, which the old code allowed despite its "distinct"
 comment. The list persists across restarts (`localStorage`, validated on
 load — a corrupted payload falls back to an empty list). Removing the last
 card closes Compare mode and restores the underlying view.
+
+**Update (2026-07-13):** Compare mode has been removed entirely (user
+request — "pas pertinent"). The freed **Ctrl+base** modifier slot isn't
+reused for anything; instead a fixed, non-remappable **Ctrl+E** accelerator
+was added as a second trigger for analyze, always registered alongside
+whatever the base key derives (see lib.rs's `EXTRA_HOTKEYS`). All
+compareList/showCompare/closeCompare code, the `.body-compare` UI, and its
+CSS have been deleted (`main.ts`, `settings.ts`, `RelicPanel.ts`,
+`panel.css`).
 
 ## 9. ~~Parser assumed a clipboard format real PoE2 text doesn't use~~ (resolved 2026-07-09)
 

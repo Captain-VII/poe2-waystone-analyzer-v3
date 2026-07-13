@@ -33,8 +33,8 @@ export function hotkeyLabel(base: string): string {
 
 /** Maps a captured keydown to a candidate base key, or null for a bare
  *  modifier press (capture should keep listening). Modifier *state* is
- *  deliberately ignored: the Shift/Ctrl layers are reserved for
- *  toggle/compare, so only the unmodified base is remappable. */
+ *  deliberately ignored: the Shift layer is reserved for toggle, so only
+ *  the unmodified base is remappable. */
 export function keyEventToBase(e: KeyboardEvent): string | null {
   if (!e.code || /^(Shift|Control|Alt|Meta)/.test(e.code)) return null;
   return e.code;
@@ -60,7 +60,6 @@ export async function setHotkeyBase(base: string): Promise<string> {
 export async function registerHotkeys(
   onAnalyze: () => void,
   onToggle: () => void,
-  onToggleCompare: () => void,
   onHide: () => void,
 ): Promise<void> {
   // Escape is a local listener in BOTH paths, never a global shortcut: a
@@ -76,11 +75,17 @@ export async function registerHotkeys(
   if (!("__TAURI_INTERNALS__" in window)) {
     // plain-browser vite dev: local key handling stands in for global shortcuts
     window.addEventListener("keydown", (e) => {
+      // Mirrors the Rust side's EXTRA_HOTKEYS (lib.rs) — Ctrl+E always
+      // analyzes, independent of the remappable base below.
+      if (e.ctrlKey && e.code === "KeyE") {
+        e.preventDefault();
+        onAnalyze();
+        return;
+      }
       const isAnalyze = e.key === "Insert" || (isMac && e.key === "F9");
       if (!isAnalyze) return;
       e.preventDefault();
-      if (e.ctrlKey) onToggleCompare();
-      else if (e.shiftKey) onToggle();
+      if (e.shiftKey) onToggle();
       else onAnalyze();
     });
     return;
@@ -106,9 +111,6 @@ export async function registerHotkeys(
         break;
       case "toggle":
         onToggle();
-        break;
-      case "compare":
-        onToggleCompare();
         break;
       default:
         // Unknown action string — Rust and this switch drifted; log, don't throw.

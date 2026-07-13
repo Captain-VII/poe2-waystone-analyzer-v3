@@ -1,6 +1,6 @@
 [package]
 name = "waystone-overlay"
-version = "0.3.7"
+version = "0.3.8"
 description = "PoE2 Waystone analyzer in-game overlay"
 edition = "2021"
 
@@ -23,3 +23,6 @@ tauri-plugin-notification = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_Input_KeyboardAndMouse"] }

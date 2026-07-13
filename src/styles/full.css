@@ -215,8 +215,8 @@
 
 /* Tablet-row click → scoped one-mechanic meta editor (RelicPanel.ts's
    openTabletPopup). Appended directly to .panel (not .bodies), so it isn't
-   subject to the mode/Settings/Compare cross-fade — closed explicitly
-   instead, see RelicPanel.ts's cross-close hooks. Positioned/clamped in JS,
+   subject to the mode/Settings cross-fade — closed explicitly instead, see
+   RelicPanel.ts's cross-close hooks. Positioned/clamped in JS,
    same technique as panel.css's .set-dropdown-list; visual style matches
    it too, just its own small header on top. Everything below .tmp-head
    reuses panel.css's generic .set-row/.set-lab/.set-select/.set-slider —

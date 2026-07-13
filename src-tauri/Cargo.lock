@@ -5009,7 +5009,7 @@ dependencies = [
 
 [[package]]
 name = "waystone-overlay"
-version = "0.3.7"
+version = "0.3.8"
 dependencies = [
  "enigo",
  "serde",
@@ -5023,6 +5023,7 @@ dependencies = [
  "tauri-plugin-notification",
  "tauri-plugin-process",
  "tauri-plugin-updater",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

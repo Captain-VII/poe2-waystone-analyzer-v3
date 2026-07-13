@@ -1,5 +1,5 @@
 import type { AnalysisResult, TierClass } from "../types";
-import type { Mode, EffectiveMode, CompareEntry, SessionStatsView } from "../settings";
+import type { Mode, EffectiveMode, SessionStatsView } from "../settings";
 import type { MechanicEdit, MetaEditorModel } from "../analyzer/meta-schema";
 import {
   loadReduceEffects,
@@ -44,11 +44,6 @@ export interface OverlayOptions {
    *  user-displayable message. Omitted = remapping unavailable (the
    *  Settings row stays display-only). */
   onSetHotkey?(base: string): Promise<string>;
-  /** KNOWN_ISSUES #8: per-card Compare controls. The list itself lives in
-   *  main.ts (same owner as before) — these just report which card was
-   *  clicked; main.ts mutates, persists, and calls showCompare again. */
-  onComparePin?(index: number): void;
-  onCompareRemove?(index: number): void;
   /** Launch-with-Windows toggle (autostart.ts). Rejects on failure — the
    *  checkbox reverts to its previous state rather than showing a stale
    *  "on" it didn't actually achieve. Omitted = unavailable (plain-browser
@@ -99,12 +94,6 @@ export interface OverlayHandle {
    *  the failure counterpart of analyze()'s success pulse (which must NOT
    *  play alongside it, so the two outcomes stay unambiguous). */
   showAnalyzeError(kind: AnalyzeFailure): void;
-  /** §12 Compare mode: renders up to 3 waystones side by side, highlighting
-   *  the best Juice Score, with per-card pin/remove controls (#8). Overlays
-   *  on top of whichever Compact/Full/Mini body was active; `closeCompare()`
-   *  restores it. */
-  showCompare(entries: CompareEntry[]): void;
-  closeCompare(): void;
   /** Updates every rendered hotkey label (Settings row, Compact footer,
    *  toggle tooltip) — called once at startup when the persisted base is
    *  fetched from Rust, and after a successful remap. */
@@ -294,10 +283,6 @@ export function mountOverlay(
               </div>
             </div>
           </div>
-          <div class="body body-compare">
-            <div class="sec-h">Compare Waystones</div>
-            <div class="compare-cols" data-compare></div>
-          </div>
           <div class="body body-settings" data-settings-panel>
             <div class="settings-scroll">
               <div class="sec-h">Display</div>
@@ -342,7 +327,7 @@ export function mountOverlay(
               </div>
               <div class="set-sep"></div>
               <div class="sec-h">Controls</div>
-              <div class="set-row" title="Click, then press the new key (Escape cancels). Shift+key toggles Compact/Full, Ctrl+key opens Compare.">
+              <div class="set-row" title="Click, then press the new key (Escape cancels). Shift+key toggles Compact/Full. Ctrl+E always analyzes, on any base.">
                 <span class="set-lab">Hotkey</span>
                 <span class="set-val set-hotkey-msg" data-hotkey-msg hidden></span>
                 <button class="set-hotkey" data-set-hotkey type="button" aria-label="Remap the analyze hotkey"><kbd data-hotkey-kbd>Ins</kbd></button>
@@ -457,7 +442,6 @@ export function mountOverlay(
   const atlasMasterIcon = q("[data-atlas-master-icon]") as HTMLImageElement;
   const atlasMasterName = q("[data-atlas-master-name]");
   const atlasNotablesEl = q("[data-atlas-notables]");
-  const compareGrid = q("[data-compare]");
   const settingsBtn = q("[data-settings]");
   const minimizeBtn = q("[data-minimize]");
   const settingsPanel = q("[data-settings-panel]");
@@ -499,7 +483,6 @@ export function mountOverlay(
 
   let current = initial;
   let effective: EffectiveMode = opts.mode;
-  let compareActive = false;
   let settingsOpen = false;
 
   function setResult(result: AnalysisResult): void {
@@ -796,7 +779,6 @@ export function mountOverlay(
     settingsOpen = !settingsOpen;
     if (!settingsOpen) stopHotkeyCapture(); // a half-finished capture must not outlive its UI
     if (!settingsOpen) openDropdownClose?.(); // an open dropdown must not outlive its panel
-    if (settingsOpen && compareActive) closeCompare();
     if (settingsOpen && changelogOpen) toggleChangelog();
     if (settingsOpen) closeTabletPopup(); // the popup lives outside .bodies, CSS cross-fade alone won't hide it
     if (settingsOpen) void loadMetaEditor(); // fresh model on every open — a hand-edit of the file mid-session shows up
@@ -813,7 +795,6 @@ export function mountOverlay(
   function toggleChangelog(): void {
     changelogOpen = !changelogOpen;
     if (changelogOpen && settingsOpen) toggleSettings();
-    if (changelogOpen && compareActive) closeCompare();
     if (changelogOpen) closeTabletPopup(); // same reason as toggleSettings
     overlayEl.classList.toggle("changelog-open", changelogOpen);
     opts.onInteractiveChange?.();
@@ -1064,8 +1045,8 @@ export function mountOverlay(
    *  saving through the exact same metaAction()/saveMechanic pipeline as
    *  Settings — meta.json persistence is identical, no new IO. Lives
    *  appended directly to `panel` (not `.bodies`) since it must survive a
-   *  mode/Settings/Compare cross-fade only via the explicit close hooks
-   *  below, not by being hidden along with a `.body` layer. */
+   *  mode/Settings cross-fade only via the explicit close hooks below, not
+   *  by being hidden along with a `.body` layer. */
   let openTabletMechanicPopup: string | null = null;
   let tabletPopupEl: HTMLElement | null = null;
   let tabletPopupCleanup: (() => void) | null = null;
@@ -1308,42 +1289,6 @@ export function mountOverlay(
       });
   }
 
-  /** §12: side-by-side Juice Scores, best one starred + highlighted border,
-   *  plus per-card pin/remove (#8). Renders over whichever body was active;
-   *  `closeCompare()` reveals it again unchanged (compare doesn't touch
-   *  `mode`/`effective`). */
-  function showCompare(entries: CompareEntry[]): void {
-    closeTabletPopup(); // like Settings, Compare can be invoked externally (hotkey) — don't leave the popup orphaned
-    compareActive = true;
-    overlayEl.classList.add("compare-active");
-    const best = entries.reduce((a, b) => (b.result.heat.score > a.result.heat.score ? b : a), entries[0]!);
-    q("[data-compare]").innerHTML = entries
-      .map((e, i) => {
-        const r = e.result;
-        const isBest = e === best;
-        return `
-        <div class="cmp-card${isBest ? " best" : ""}${e.pinned ? " pinned" : ""}">
-          <div class="cmp-ctl">
-            <button class="cmp-btn cmp-pin" data-cmp-pin="${i}" type="button"
-              title="${e.pinned ? "Unpin" : "Pin (survives new analyses, max 2)"}"
-              aria-label="${e.pinned ? "Unpin this waystone" : "Pin this waystone"}">📌</button>
-            <button class="cmp-btn cmp-remove" data-cmp-remove="${i}" type="button"
-              title="Remove from comparison" aria-label="Remove this waystone from compare">×</button>
-          </div>
-          <div class="cmp-name" title="${esc(r.waystone.name)}">${esc(r.waystone.name)}${isBest ? " ★" : ""}</div>
-          <div class="cmp-sub">T${r.waystone.tier} · ${esc(BADGE_LABEL[r.heat.tierClass])}</div>
-          <div class="cmp-score">${r.heat.score.toFixed(1)}</div>
-          <div class="cmp-verdict">${esc(r.heat.verdict)}</div>
-        </div>`;
-      })
-      .join("");
-  }
-
-  function closeCompare(): void {
-    compareActive = false;
-    overlayEl.classList.remove("compare-active");
-  }
-
   /** §2: click-through narrows to exactly these regions for the active layout. */
   function interactiveEls(): HTMLElement[] {
     // §2: header (toggle/settings/badge live inside it, plus its own
@@ -1355,7 +1300,6 @@ export function mountOverlay(
     if (!opts.onDragStart && opts.onCycleTier) els.push(badge);
     if (settingsOpen) return [...els, settingsPanel]; // whole panel as one rect
     if (changelogOpen) return [...els, changelogPanel]; // scroll + Fermer button
-    if (compareActive) return [...els, compareGrid]; // per-card pin/remove buttons (#8)
     // Same reasoning as settingsOpen above: the popup's own dropdowns can
     // overflow past its small box (makeDropdown's clamping), so the whole
     // panel is reported rather than trying to track that overflow.
@@ -1374,13 +1318,6 @@ export function mountOverlay(
   }
 
   footBtn.addEventListener("click", opts.onAnalyze);
-  // Delegated: the cards are re-rendered on every showCompare, the grid isn't.
-  compareGrid.addEventListener("click", (ev) => {
-    const btn = (ev.target as HTMLElement).closest<HTMLElement>("[data-cmp-pin],[data-cmp-remove]");
-    if (!btn) return;
-    if (btn.dataset.cmpPin !== undefined) opts.onComparePin?.(Number(btn.dataset.cmpPin));
-    else opts.onCompareRemove?.(Number(btn.dataset.cmpRemove));
-  });
   bindDangerListToggle(q("[data-insights]"));
   if (opts.onCycleTier) {
     const onCycleTier = opts.onCycleTier;
@@ -1543,8 +1480,6 @@ export function mountOverlay(
     setMode,
     analyze,
     showAnalyzeError,
-    showCompare,
-    closeCompare,
     setHotkeyLabel,
     setAutostartChecked,
     setAppVersion,

@@ -5,6 +5,13 @@ utilisateur (pas de détails internes). La section la plus récente en premier.
 Ce fichier est embarqué dans l'app (panneau "Quoi de neuf" + Réglages) et
 sert de description à la release GitHub — écrire pour les joueurs.
 
+## 0.3.8
+
+- **New: Ctrl+E always analyzes**, no matter what your hotkey base is remapped to — a fixed second way to trigger an analysis, always on.
+- **Removed: Compare mode.** The Ctrl+key shortcut and the side-by-side comparison screen are gone.
+- **Fixed: Ctrl+E could stop working after the first press** until you fully released and re-pressed Ctrl. Analyzing no longer sends a phantom Ctrl release while you're still holding it down.
+- Analyzing back-to-back is now snappier (shorter delay between allowed analyses).
+
 ## 0.3.7
 
 - **Atlas Master recommendation redesigned**: now shows the master's own portrait icon next to their name, followed by icons for the specific notables/keystones to allocate for that mechanic — instead of a name-only text line.

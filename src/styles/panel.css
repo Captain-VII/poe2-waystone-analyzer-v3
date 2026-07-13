@@ -372,26 +372,10 @@
   pointer-events: auto;
 }
 
-/* §12 Compare mode: overlays whichever body was active, doesn't touch
- * mode-compact/mode-full/effective — closing it reveals that body again. */
-.compare-active .body-compact,
-.compare-active .body-full {
-  opacity: 0;
-  pointer-events: none;
-}
-.compare-active .body-compare {
-  opacity: 1;
-  transform: scale(1);
-  pointer-events: auto;
-}
-
-/* Settings panel: a fourth `.body` sharing `.bodies`' region, so opening it
- * never changes panel width/height (the window itself never resizes). Rule
- * order after `.compare-active` lets `.settings-open` win if both are ever
- * toggled in the same tick (toggleSettings() also closes Compare first). */
+/* Settings panel: a third `.body` sharing `.bodies`' region, so opening it
+ * never changes panel width/height (the window itself never resizes). */
 .settings-open .body-compact,
-.settings-open .body-full,
-.settings-open .body-compare {
+.settings-open .body-full {
   opacity: 0;
   pointer-events: none;
 }
@@ -410,8 +394,7 @@
 /* "Quoi de neuf" panel: a fifth `.body`, same pattern as .body-settings
  * (shares .bodies' region, fades on opacity alone, no window resize). */
 .changelog-open .body-compact,
-.changelog-open .body-full,
-.changelog-open .body-compare {
+.changelog-open .body-full {
   opacity: 0;
   pointer-events: none;
 }
@@ -424,8 +407,7 @@
   pointer-events: auto;
 }
 /* Settings wins if both classes are ever set in the same tick (the toggle
- * functions close each other first — this mirrors the .compare-active
- * ordering note above). */
+ * functions close each other first). */
 .settings-open .body-changelog {
   opacity: 0;
   pointer-events: none;
@@ -741,65 +723,6 @@
 /* §: Insights visibility toggle hides both the section title and its rows
  * as one unit — no orphaned "Insights" header with nothing under it. */
 .hide-insights .insights-block { display: none; }
-
-.compare-cols {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  margin-top: 8px;
-}
-.cmp-card {
-  border: 1px solid rgba(184, 135, 53, 0.35);
-  border-radius: 4px;
-  padding: 10px 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  text-align: center;
-  min-width: 0;
-}
-.cmp-card.best {
-  border-color: var(--tier, #ffd36a);
-  box-shadow: 0 0 12px rgba(255, 211, 106, 0.35);
-  background: rgba(255, 211, 106, 0.06);
-}
-
-/* Per-card pin/remove (#8) — a slim control strip above the name, so the
-   card's centered score column stays untouched. */
-.cmp-ctl {
-  display: flex;
-  justify-content: space-between;
-  margin: -4px -2px 0;
-}
-.cmp-btn {
-  background: none;
-  border: none;
-  padding: 0 2px;
-  font-size: 11px;
-  line-height: 1;
-  color: var(--grey);
-  cursor: pointer;
-  transition: color 120ms ease-out;
-}
-.cmp-btn:hover { color: var(--ivory); }
-.cmp-remove { font-size: 14px; }
-.cmp-remove:hover { color: var(--danger); }
-/* Unpinned: the pin only invites on hover; pinned: always lit gold. */
-.cmp-pin { opacity: 0.35; filter: grayscale(1); }
-.cmp-pin:hover { opacity: 0.8; }
-.cmp-card.pinned .cmp-pin { opacity: 1; filter: none; }
-.cmp-name {
-  font-size: 12px;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.cmp-sub { font-size: 10px; opacity: 0.7; }
-.cmp-score { font-size: 22px; font-weight: 700; margin: 4px 0; }
-.cmp-verdict { font-size: 11px; letter-spacing: 0.05em; opacity: 0.85; }
 
 .toggle-btn,
 .settings-btn,
