@@ -1,8 +1,24 @@
 # Waystone Overlay
 
-A small always-on-top overlay for Path of Exile 2 that reads a Waystone you're
-hovering and tells you, at a glance, whether it's juicy enough to run and
-which tablet/mechanic to pair it with — without alt-tabbing out of the game.
+[![Version](https://img.shields.io/badge/version-0.3.8-b8860b)](CHANGELOG.md)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078d4)](#requirements)
+[![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri-24c8db)](https://tauri.app)
+
+A small always-on-top overlay for **Path of Exile 2** that reads a Waystone
+you're hovering and tells you, at a glance, whether it's juicy enough to run
+and which tablet/mechanic to pair it with — without alt-tabbing out of the
+game.
+
+## Contents
+
+- [What it does](#what-it-does)
+- [Requirements](#requirements)
+- [Install](#install)
+- [Usage](#usage)
+  - [Reading the overlay](#reading-the-overlay)
+  - [Tuning via meta.json](#tuning-via-metajson)
+- [Known issues](#known-issues)
+- [For developers](#for-developers)
 
 ## What it does
 
@@ -99,17 +115,10 @@ lists every detected modifier.
 
 ### Tuning via meta.json
 
-NOTE:
-Scoring weights, thresholds, and mod patterns are currently hardcoded in
-`src/analyzer/scoring.ts`.
-
-`meta.json` only controls:
-- mechanics
-- tablets
-- rewards
-- enable/disable flags
-
-It does NOT affect scoring weights.
+> Scoring weights, thresholds, and mod patterns are currently hardcoded in
+> `src/analyzer/scoring.ts`. `meta.json` only controls mechanics, tablets,
+> rewards, and enable/disable flags — it does **not** affect scoring
+> weights.
 
 An editable `meta.json` lives in the app's config directory (seeded on
 first run from `src-tauri/default-meta.json`). Edit it and restart the
@@ -212,6 +221,11 @@ implementation log all live in [docs/](docs/):
 - [`ROADMAP.md`](ROADMAP.md) — what's planned for upcoming versions (the
   forward-looking counterpart of [`CHANGELOG.md`](CHANGELOG.md)).
 
+### Tech stack
+
+Tauri 2 (Rust backend + native window/tray/notifications) wrapping a Vite +
+TypeScript frontend, with Vitest for tests and ESLint for linting.
+
 ### Requirements (build from source)
 
 - [Node.js](https://nodejs.org/) 20+ and npm
@@ -223,7 +237,7 @@ implementation log all live in [docs/](docs/):
 ### Setup
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/Captain-VII/poe2-waystone-analyzer-v3.git
 cd poe2-waystone-analyzer-v3
 npm install
 cp .env.example .env   # only if you need to override a VITE_ var — optional
@@ -248,7 +262,7 @@ npm run verify-adapter  # contract-tests the scoring/parsing pipeline
 
 ```bash
 # first time on a new machine
-git clone <repo-url>
+git clone https://github.com/Captain-VII/poe2-waystone-analyzer-v3.git
 cd poe2-waystone-analyzer-v3
 npm install
 
