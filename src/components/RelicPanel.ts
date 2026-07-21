@@ -1,12 +1,7 @@
 import type { AnalysisResult, TierClass } from "../types";
-import type { Mode, EffectiveMode, SessionStatsView } from "../settings";
+import type { EffectiveMode, SessionStatsView, SessionHistoryEntry } from "../settings";
 import type { MechanicEdit, MetaEditorModel } from "../analyzer/meta-schema";
-import {
-  loadReduceEffects,
-  saveReduceEffects,
-  loadCompactCompressed,
-  saveCompactCompressed,
-} from "../settings";
+import { loadReduceEffects, saveReduceEffects } from "../settings";
 import { renderDangerList, bindDangerListToggle } from "./DangerList";
 import {
   loadShowInsights,
@@ -18,17 +13,14 @@ import {
 } from "../overlaySettings";
 import { DEFAULT_HOTKEY_BASE, hotkeyLabel, keyEventToBase } from "../hotkeys";
 import { parseChangelog } from "../changelog";
+import { GUIDE_SECTIONS } from "../guide";
 import { ATLAS_MASTER_ICONS } from "../atlas-master-icons";
 import { ATLAS_NOTABLE_ICONS } from "../atlas-notable-icons";
 
 export interface OverlayOptions {
-  mode: Mode;
   /** OS reduced-motion OR the user's reduceEffects setting (§10). */
   isReduced(): boolean;
-  /** §2 height contingency: 392px → ~359px Compact, trimming air only. */
-  compactCompressed(): boolean;
   onAnalyze(): void;
-  onToggleMode(): void;
   /** Settings panel's "Hide" button — sends the overlay to the system tray
    *  (quitting for good is tray-icon-only, see main.ts). */
   onHide(): void;
@@ -67,6 +59,11 @@ export interface OverlayOptions {
    *  stats to start a fresh farming session (main.ts owns the storage and
    *  calls setSessionStats back with the emptied view). */
   onResetStats?(): void;
+  /** Settings' history "Export CSV" button — main.ts copies the archived
+   *  history to the clipboard and reports success/failure so the button can
+   *  show brief feedback. Undefined in plain-browser dev (no clipboard
+   *  plugin), same convention as onSetHotkey/onSetAutostart above. */
+  onExportHistory?(): Promise<boolean>;
   /** Settings' Meta editor (meta.json). main.ts owns all IO: every action
    *  re-reads the file, writes a diff-only rebuild, hot-reloads the
    *  analyzer tables, and returns a fresh model to render. A rejected
@@ -94,9 +91,9 @@ export interface OverlayHandle {
    *  the failure counterpart of analyze()'s success pulse (which must NOT
    *  play alongside it, so the two outcomes stay unambiguous). */
   showAnalyzeError(kind: AnalyzeFailure): void;
-  /** Updates every rendered hotkey label (Settings row, Compact footer,
-   *  toggle tooltip) — called once at startup when the persisted base is
-   *  fetched from Rust, and after a successful remap. */
+  /** Updates every rendered hotkey label (Settings row, footer button) —
+   *  called once at startup when the persisted base is fetched from Rust,
+   *  and after a successful remap. */
   setHotkeyLabel(base: string): void;
   /** Reflects the real autostart registration state onto the checkbox —
    *  called once at startup after the async `isEnabled()` check resolves
@@ -117,6 +114,10 @@ export interface OverlayHandle {
    *  Called at startup with the persisted stats, after every applied
    *  analysis, and after a reset. */
   setSessionStats(view: SessionStatsView): void;
+  /** Renders the archived-session history list + enables/disables the
+   *  Export button in Settings. Called at startup with persisted history
+   *  and after every Reset. */
+  setSessionHistory(history: SessionHistoryEntry[]): void;
   /** Panel element, for click-through rect reporting. */
   panelEl: HTMLElement;
   /** Currently-visible interactive controls (§2: toggle / footer / mod-scroll
@@ -230,26 +231,11 @@ export function mountOverlay(
           <span class="mini-score" data-mini-score></span>
           <span class="mini-warn" data-mini-warn title="" hidden>⚠</span>
           <button class="badge" data-badge></button>
-          <button class="toggle-btn" data-toggle title="Toggle Compact / Full (Shift+Ins)" aria-label="Toggle compact or full view">⤢</button>
+          <button class="guide-btn" data-guide-show type="button" title="Guide" aria-label="Open guide">?</button>
           <button class="settings-btn" data-settings title="Settings" aria-label="Toggle settings panel">⚙</button>
           <button class="minimize-btn" data-minimize title="Minimize to tray (Esc)" aria-label="Minimize overlay to tray">–</button>
         </div>
         <div class="bodies">
-          <div class="body body-compact">
-            <div class="hero-v">
-              <div class="heat-label">Heat</div>
-              <div class="score-wrap" data-hero-compact><span class="halo"></span><span class="score-num" data-score></span></div>
-              <div class="tier-name"><span data-tiername></span> <span class="rating-pill" data-rating></span></div>
-              <div class="action-chip" data-action></div>
-            </div>
-            <div class="sep"></div>
-            <div class="tabs-v">
-              <div class="sec-h">Recommended Tablets</div>
-              <div data-tablets></div>
-            </div>
-            <div class="warn-strip" data-warn hidden><span class="w-ic">⚠</span><span data-warntext></span><span class="w-level" data-warnlevel></span></div>
-            <button class="p-foot" data-foot><kbd data-foot-kbd>Ins</kbd> Analyze Waystone</button>
-          </div>
           <div class="body body-full">
             <div class="cols">
               <div class="col" data-col-tablets>
@@ -272,6 +258,7 @@ export function mountOverlay(
                   <span class="score-wrap" data-hero-full><span class="halo"></span><span class="score-num" data-score-full></span></span>
                   <span class="badge badge-sm" data-minibadge></span>
                 </div>
+                <div class="action-chip" data-action></div>
                 <div data-breakdown></div>
                 <div class="total-row"><span class="t-lab">Total Heat</span><span class="t-right"><span class="t-val" data-total></span><span class="rating-pill" data-rating-full></span></span></div>
               </div>
@@ -282,14 +269,11 @@ export function mountOverlay(
                 </div>
               </div>
             </div>
+            <button class="p-foot" data-foot><kbd data-foot-kbd>Ins</kbd> Analyze Waystone</button>
           </div>
           <div class="body body-settings" data-settings-panel>
             <div class="settings-scroll">
               <div class="sec-h">Display</div>
-              <div class="set-row">
-                <span class="set-lab">Overlay Mode</span>
-                <button class="set-btn" data-set-mode type="button"></button>
-              </div>
               <div class="set-row">
                 <span class="set-lab">Insights</span>
                 <label class="set-switch">
@@ -301,13 +285,6 @@ export function mountOverlay(
                 <span class="set-lab">Reduce Effects</span>
                 <label class="set-switch">
                   <input type="checkbox" data-set-reduce />
-                  <span class="set-switch-track"></span>
-                </label>
-              </div>
-              <div class="set-row" title="Trims Compact mode to ~359px if the overlay overlaps your in-game HUD (§2)">
-                <span class="set-lab">Compact Compressed</span>
-                <label class="set-switch">
-                  <input type="checkbox" data-set-compressed />
                   <span class="set-switch-track"></span>
                 </label>
               </div>
@@ -327,7 +304,7 @@ export function mountOverlay(
               </div>
               <div class="set-sep"></div>
               <div class="sec-h">Controls</div>
-              <div class="set-row" title="Click, then press the new key (Escape cancels). Shift+key toggles Compact/Full. Ctrl+E always analyzes, on any base.">
+              <div class="set-row" title="Click, then press the new key (Escape cancels). Ctrl+E always analyzes, on any base.">
                 <span class="set-lab">Hotkey</span>
                 <span class="set-val set-hotkey-msg" data-hotkey-msg hidden></span>
                 <button class="set-hotkey" data-set-hotkey type="button" aria-label="Remap the analyze hotkey"><kbd data-hotkey-kbd>Ins</kbd></button>
@@ -357,9 +334,14 @@ export function mountOverlay(
                 <span class="set-lab">Best find</span>
                 <span class="set-val set-stat-best" data-stat-best>—</span>
               </div>
-              <div class="set-row" title="Resets session stats to zero to start a fresh farming session">
+              <div class="set-row" title="Resets session stats to zero to start a fresh farming session (archives it into History first)">
                 <span class="set-lab">Stats</span>
                 <button class="set-btn" data-stat-reset type="button">Reset</button>
+              </div>
+              <div class="set-history" data-stat-history></div>
+              <div class="set-row" title="Copies your full session history as CSV to the clipboard — paste into Excel/Sheets">
+                <span class="set-lab">History</span>
+                <button class="set-btn" data-stat-export type="button" disabled>Export CSV</button>
               </div>
               <div class="set-group" data-meta-section>
                 <div class="set-sep"></div>
@@ -416,6 +398,15 @@ export function mountOverlay(
               <div data-changelog-list></div>
             </div>
           </div>
+          <div class="body body-guide" data-guide-panel>
+            <div class="settings-scroll">
+              <div class="cl-head">
+                <div class="sec-h">Guide</div>
+                <button class="set-btn" data-guide-close type="button">Close</button>
+              </div>
+              <div data-guide-list></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>`;
@@ -427,16 +418,12 @@ export function mountOverlay(
   const miniBadge = q("[data-minibadge]");
   const miniScore = q("[data-mini-score]");
   const miniWarn = q("[data-mini-warn]");
-  const scoreCompact = q("[data-score]");
   const scoreFull = q("[data-score-full]");
   const chip = q("[data-action]");
   const statusChip = q("[data-status]");
-  const warn = q("[data-warn]");
-  const toggleBtn = q("[data-toggle]");
   const footBtn = q("[data-foot]");
   const colTablets = q("[data-col-tablets]");
   const colInsights = q("[data-col-insights]");
-  const tabletsEl = q("[data-tablets]");
   const tabletsFullEl = q("[data-tablets-full]");
   const atlasMasterEl = q("[data-atlas-master]");
   const atlasMasterIcon = q("[data-atlas-master-icon]") as HTMLImageElement;
@@ -445,10 +432,8 @@ export function mountOverlay(
   const settingsBtn = q("[data-settings]");
   const minimizeBtn = q("[data-minimize]");
   const settingsPanel = q("[data-settings-panel]");
-  const setModeBtn = q("[data-set-mode]") as HTMLButtonElement;
   const setInsightsInput = q("[data-set-insights]") as HTMLInputElement;
   const setReduceInput = q("[data-set-reduce]") as HTMLInputElement;
-  const setCompressedInput = q("[data-set-compressed]") as HTMLInputElement;
   const setAutostartInput = q("[data-set-autostart]") as HTMLInputElement;
   const setOpacityInput = q("[data-set-opacity]") as HTMLInputElement;
   const setOpacityVal = q("[data-set-opacity-val]");
@@ -463,10 +448,16 @@ export function mountOverlay(
   const changelogList = q("[data-changelog-list]");
   const changelogShowBtn = q("[data-changelog-show]");
   const changelogCloseBtn = q("[data-changelog-close]");
+  const guidePanel = q("[data-guide-panel]");
+  const guideList = q("[data-guide-list]");
+  const guideShowBtn = q("[data-guide-show]");
+  const guideCloseBtn = q("[data-guide-close]");
   const statCountEl = q("[data-stat-count]");
   const statAvgEl = q("[data-stat-avg]");
   const statBestEl = q("[data-stat-best]");
   const statResetBtn = q("[data-stat-reset]");
+  const statHistoryEl = q("[data-stat-history]");
+  const statExportBtn = q("[data-stat-export]") as HTMLButtonElement;
   const metaSection = q("[data-meta-section]");
   const metaMechSel = q("[data-meta-mech]") as HTMLButtonElement;
   const metaPrioritySel = q("[data-meta-priority]") as HTMLButtonElement;
@@ -482,7 +473,7 @@ export function mountOverlay(
   const footKbd = q("[data-foot-kbd]");
 
   let current = initial;
-  let effective: EffectiveMode = opts.mode;
+  let effective: EffectiveMode = "full";
   let settingsOpen = false;
 
   function setResult(result: AnalysisResult): void {
@@ -501,14 +492,8 @@ export function mountOverlay(
       miniWarn.hidden = true;
       miniWarn.title = "";
     }
-    scoreCompact.textContent = heat.score.toFixed(1);
     q("[data-sub]").textContent = `T${waystone.tier} · ${waystone.name}`;
-    q("[data-tiername]").textContent = heat.tierLabel;
-    chip.textContent = heat.verdict;
-    const ratingEl = q("[data-rating]");
-    ratingEl.textContent = heat.rating;
-    ratingEl.className = `rating-pill rec-rating-${heat.rating}`;
-    ratingEl.title = `Rating: ${heat.rating} (${heat.score.toFixed(1)})`;
+    chip.textContent = heat.tierLabel;
 
     // Heat Breakdown's composite score/rating (Full mode). Re-enabled
     // 2026-07-1x once the underlying formula was rebuilt around the
@@ -550,9 +535,7 @@ export function mountOverlay(
       // Multi-line native tooltip: the opaque "matches X (Y/100)" reason,
       // then one line per breakdown row — every row gets this on hover.
       const title = [t.reason, ...(t.breakdown ?? []).map(formatBreakdownRow)].join("\n");
-      // data-mechanic drives the Full-mode click-to-edit popup
-      // (openTabletPopup) — rendered on every row (Compact too) since
-      // tabletRow is shared, but only tabletsFullEl gets a click listener.
+      // data-mechanic drives the click-to-edit popup (openTabletPopup).
       return `
         <div class="trow" data-mechanic="${esc(t.mechanic)}" title="${esc(title)}">
           <span class="t-ic">${icon}</span>
@@ -561,10 +544,8 @@ export function mountOverlay(
         </div>`;
     };
     // Every active tablet, always, in the fixed alphabetical order
-    // rankTablets now returns (2026-07-12, user request) — both Compact
-    // and Full show the full list; Compact's column scrolls on overflow
-    // instead of truncating (compact.css).
-    tabletsEl.innerHTML = result.tablets.map(tabletRow).join("");
+    // rankTablets now returns (2026-07-12, user request) — the column
+    // scrolls on overflow instead of truncating.
     tabletsFullEl.innerHTML = result.tablets.map(tabletRow).join("");
 
     // Full mode only (§ROADMAP placement) — hidden entirely when the
@@ -651,22 +632,10 @@ export function mountOverlay(
       dangerBadge.textContent = result.dangerLabel;
       dangerBadge.className = `danger-badge lvl-${result.dangerLevel}`;
     }
-
-    if (result.warning) {
-      warn.hidden = false;
-      q("[data-warntext]").textContent = result.warning;
-      // Compact strip has room for the single most-severe warning only —
-      // append a short level tag (e.g. "· High") rather than the full
-      // dangerLabel (too long for this width).
-      const level = result.dangerLevel;
-      q("[data-warnlevel]").textContent = level === "none" ? "" : ` · ${level[0].toUpperCase()}${level.slice(1)}`;
-    } else {
-      warn.hidden = true;
-    }
   }
 
   function spawnSparks(): void {
-    const host = effective === "full" ? q("[data-hero-full]") : q("[data-hero-compact]");
+    const host = q("[data-hero-full]");
     for (let n = 0; n < 5; n++) {
       const s = document.createElement("span");
       s.className = "spark";
@@ -683,15 +652,14 @@ export function mountOverlay(
   function analyze(): void {
     if (settingsOpen) toggleSettings(); // a fresh analysis should be seen, not hidden behind Settings
     if (changelogOpen) toggleChangelog(); // same — the result must not stay hidden behind the notes
+    if (guideOpen) toggleGuide(); // same reasoning
     syncReducedClass();
     if (opts.isReduced()) return; // §10: color states stay, motion doesn't
-    retrigger(scoreCompact, "pulse");
     retrigger(scoreFull, "pulse");
     retrigger(badge, "flare");
     retrigger(miniBadge, "flare");
     retrigger(chip, "flare");
-    if (!warn.hidden) retrigger(warn, "reveal"); // §7 warning reveal
-    if (!miniWarn.hidden) retrigger(miniWarn, "reveal");
+    if (!miniWarn.hidden) retrigger(miniWarn, "reveal"); // §7 warning reveal
     if (current.heat.tierClass === "god") spawnSparks();
   }
 
@@ -740,24 +708,21 @@ export function mountOverlay(
     const modeChanged = m !== effective;
     effective = m;
     overlayEl.classList.toggle("mode-full", m === "full");
-    overlayEl.classList.toggle("mode-compact", m === "compact");
     overlayEl.classList.toggle("mode-mini", m === "mini");
-    toggleBtn.textContent = m === "full" ? "⤡" : "⤢";
-    setModeBtn.textContent = m === "full" ? "Switch to Compact" : "Switch to Full";
-    // A real Compact/Full/Mini change closes Settings — it's called for
-    // every fallback-cascade re-evaluation (display changes, etc.), so this
-    // only fires on an actual layout switch, not every re-application of
-    // the same mode. Avoids a stale Settings panel over the new layout.
+    // A real Full/Mini change closes Settings — it's called for every
+    // fallback-cascade re-evaluation (display changes, etc.), so this only
+    // fires on an actual layout switch, not every re-application of the
+    // same mode. Avoids a stale Settings panel over the new layout.
     if (settingsOpen && modeChanged) toggleSettings();
     if (changelogOpen && modeChanged) toggleChangelog(); // same staleness reasoning as Settings
+    if (guideOpen && modeChanged) toggleGuide(); // same staleness reasoning as Settings
     // The tablet-mechanic popup is Full-only UI anchored to Full-mode DOM —
     // a real mode switch invalidates it even if Settings wasn't open.
     if (modeChanged) closeTabletPopup();
   }
 
   /** Settings-panel-only display prefs (insights visibility, opacity,
-   *  scale) — Overlay Mode in the panel just calls opts.onToggleMode(),
-   *  it doesn't own mode state (see settings.ts). */
+   *  scale). */
   function applyShowInsights(show: boolean): void {
     panel.classList.toggle("hide-insights", !show);
     setInsightsInput.checked = show;
@@ -780,6 +745,7 @@ export function mountOverlay(
     if (!settingsOpen) stopHotkeyCapture(); // a half-finished capture must not outlive its UI
     if (!settingsOpen) openDropdownClose?.(); // an open dropdown must not outlive its panel
     if (settingsOpen && changelogOpen) toggleChangelog();
+    if (settingsOpen && guideOpen) toggleGuide();
     if (settingsOpen) closeTabletPopup(); // the popup lives outside .bodies, CSS cross-fade alone won't hide it
     if (settingsOpen) void loadMetaEditor(); // fresh model on every open — a hand-edit of the file mid-session shows up
     overlayEl.classList.toggle("settings-open", settingsOpen);
@@ -791,10 +757,12 @@ export function mountOverlay(
    *  pattern (same region, no window resize). Content is static
    *  (CHANGELOG.md bundled at build time), rendered once at mount. */
   let changelogOpen = false;
+  let guideOpen = false;
 
   function toggleChangelog(): void {
     changelogOpen = !changelogOpen;
     if (changelogOpen && settingsOpen) toggleSettings();
+    if (changelogOpen && guideOpen) toggleGuide();
     if (changelogOpen) closeTabletPopup(); // same reason as toggleSettings
     overlayEl.classList.toggle("changelog-open", changelogOpen);
     opts.onInteractiveChange?.();
@@ -818,6 +786,28 @@ export function mountOverlay(
         </div>`,
       )
       .join("");
+  }
+
+  /** Guide panel — a sixth `.body`, same "Settings-region, no window
+   *  resize" pattern as changelog above. Content is static (src/guide.ts),
+   *  rendered once at mount; opened purely on request, no auto-show. */
+  function toggleGuide(): void {
+    guideOpen = !guideOpen;
+    if (guideOpen && settingsOpen) toggleSettings();
+    if (guideOpen && changelogOpen) toggleChangelog();
+    if (guideOpen) closeTabletPopup(); // same reason as toggleSettings
+    overlayEl.classList.toggle("guide-open", guideOpen);
+    opts.onInteractiveChange?.();
+  }
+
+  function renderGuide(): void {
+    guideList.innerHTML = GUIDE_SECTIONS.map(
+      (s) => `
+        <div class="cl-section">
+          <div class="cl-ver">${esc(s.title)}</div>
+          ${s.bullets.map((b) => `<div class="cl-li">${clText(b)}</div>`).join("")}
+        </div>`,
+    ).join("");
   }
 
   /** Méta editor (meta.json). One set of controls navigated by a mechanic
@@ -1208,7 +1198,6 @@ export function mountOverlay(
     const label = hotkeyLabel(hotkeyBase);
     hotkeyKbd.textContent = label;
     footKbd.textContent = label;
-    toggleBtn.title = `Toggle Compact / Full (Shift+${label})`;
   }
 
   function setHotkeyLabel(base: string): void {
@@ -1251,6 +1240,29 @@ export function mountOverlay(
     statBestEl.title = view.best?.name ?? "";
   }
 
+  // Newest-first, capped display — the full list still goes into the CSV
+  // export regardless of how many rows are shown here.
+  const HISTORY_ROWS_SHOWN = 5;
+
+  function setSessionHistory(history: SessionHistoryEntry[]): void {
+    statExportBtn.disabled = history.length === 0;
+    statHistoryEl.innerHTML = "";
+    const recent = history.slice(-HISTORY_ROWS_SHOWN).reverse();
+    for (const e of recent) {
+      const row = document.createElement("div");
+      row.className = "set-history-row";
+      const date = document.createElement("span");
+      date.className = "set-history-date";
+      date.textContent = new Date(e.endedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      const summary = document.createElement("span");
+      summary.className = "set-history-summary";
+      summary.textContent = `${e.count} · avg ${e.avg.toFixed(1)} · ${e.best.name} (${Math.round(e.best.score)})`;
+      summary.title = summary.textContent;
+      row.append(date, summary);
+      statHistoryEl.appendChild(row);
+    }
+  }
+
   function showHotkeyMsg(text: string, isError: boolean): void {
     hotkeyMsg.textContent = text;
     hotkeyMsg.classList.toggle("err", isError);
@@ -1291,29 +1303,27 @@ export function mountOverlay(
 
   /** §2: click-through narrows to exactly these regions for the active layout. */
   function interactiveEls(): HTMLElement[] {
-    // §2: header (toggle/settings/badge live inside it, plus its own
+    // §2: header (settings/guide/badge live inside it, plus its own
     // background is the drag handle) / footer / mod-scroll only. Without
     // drag support (plain-browser dev), fall back to the narrower
-    // toggle/settings-only zone the header used to report — the badge is
-    // only interactive there in dev builds anyway (mock-tier cycling).
-    const els = opts.onDragStart ? [headEl] : [toggleBtn, settingsBtn, minimizeBtn];
+    // settings/guide-only zone the header used to report — the badge
+    // is only interactive there in dev builds anyway (mock-tier cycling).
+    const els = opts.onDragStart ? [headEl] : [settingsBtn, minimizeBtn, guideShowBtn];
     if (!opts.onDragStart && opts.onCycleTier) els.push(badge);
     if (settingsOpen) return [...els, settingsPanel]; // whole panel as one rect
     if (changelogOpen) return [...els, changelogPanel]; // scroll + Fermer button
+    if (guideOpen) return [...els, guidePanel]; // scroll + Close button
     // Same reasoning as settingsOpen above: the popup's own dropdowns can
     // overflow past its small box (makeDropdown's clamping), so the whole
     // panel is reported rather than trying to track that overflow.
     if (openTabletMechanicPopup) return [...els, panel];
-    // tabletsEl: the Compact tablet list now scrolls internally (all 8
-    // tablets, fixed-height card, 2026-07-12) — without reporting it here,
-    // a mouse-wheel over it falls through to the game like everywhere
-    // else outside the click-through whitelist, so the scroll never fires
-    // in practice (reported: "le scroll ne marche pas" in-game).
-    if (effective === "compact") els.push(footBtn, tabletsEl);
-    // Either full-mode column can overflow-scroll on some DPI/font combos —
-    // its scrollbar is unusable unless the column is inside the
-    // click-through whitelist.
-    if (effective === "full") els.push(colTablets, colInsights);
+    // footBtn: the click-to-analyze footer button. colTablets/colInsights:
+    // either column can overflow-scroll on some DPI/font combos — without
+    // reporting them here, a mouse-wheel over them falls through to the
+    // game like everywhere else outside the click-through whitelist, so
+    // the scroll never fires in practice (reported: "le scroll ne marche
+    // pas" in-game).
+    if (effective === "full") els.push(footBtn, colTablets, colInsights);
     return els;
   }
 
@@ -1325,10 +1335,8 @@ export function mountOverlay(
     badge.title = "Cycle mock tier (dev)";
     badge.addEventListener("click", onCycleTier);
   }
-  toggleBtn.addEventListener("click", opts.onToggleMode);
   settingsBtn.addEventListener("click", toggleSettings);
   minimizeBtn.addEventListener("click", opts.onHide);
-  setModeBtn.addEventListener("click", opts.onToggleMode);
   setInsightsInput.addEventListener("change", () => {
     const show = setInsightsInput.checked;
     saveShowInsights(show);
@@ -1339,11 +1347,6 @@ export function mountOverlay(
     // opts.isReduced() reads the setting live (and ORs the OS media query),
     // so re-syncing the class is all it takes to apply immediately.
     syncReducedClass();
-  });
-  setCompressedInput.addEventListener("change", () => {
-    const enabled = setCompressedInput.checked;
-    saveCompactCompressed(enabled);
-    overlayEl.classList.toggle("compact-compressed", enabled);
   });
   if (opts.onSetAutostart) {
     const onSetAutostart = opts.onSetAutostart;
@@ -1378,6 +1381,8 @@ export function mountOverlay(
   setResetPositionBtn.addEventListener("click", () => opts.onResetPosition?.());
   changelogShowBtn.addEventListener("click", toggleChangelog); // toggleChangelog closes Settings itself
   changelogCloseBtn.addEventListener("click", toggleChangelog);
+  guideShowBtn.addEventListener("click", toggleGuide); // toggleGuide closes Settings/Changelog itself
+  guideCloseBtn.addEventListener("click", toggleGuide);
   if (opts.onCheckUpdate && opts.onInstallUpdate) {
     const { onCheckUpdate, onInstallUpdate } = opts;
     updateBtn.addEventListener("click", () => {
@@ -1414,6 +1419,15 @@ export function mountOverlay(
     updateBtn.disabled = true; // plain-browser dev: display-only
   }
   statResetBtn.addEventListener("click", () => opts.onResetStats?.());
+  let exportFeedbackTimer: ReturnType<typeof setTimeout> | undefined;
+  statExportBtn.addEventListener("click", () => {
+    void (async () => {
+      const ok = await opts.onExportHistory?.();
+      clearTimeout(exportFeedbackTimer);
+      statExportBtn.textContent = ok ? "Copied!" : "Failed";
+      exportFeedbackTimer = setTimeout(() => (statExportBtn.textContent = "Export CSV"), 1500);
+    })();
+  });
   if (opts.metaEditor) {
     // The four dropdown buttons wire themselves in makeDropdown — only the
     // slider and reset button need listeners here.
@@ -1461,19 +1475,18 @@ export function mountOverlay(
     hotkeyBtn.disabled = true; // plain-browser dev: display-only, like before
   }
 
-  setMode(opts.mode); // applied before first paint — no mode flash (§9)
+  setMode("full"); // applied before first paint — no mode flash (§9)
   syncReducedClass();
-  overlayEl.classList.toggle("compact-compressed", opts.compactCompressed());
   applyShowInsights(loadShowInsights());
   // Switch states reflect the persisted user settings — for Reduce Effects
   // that's deliberately the setting alone, not opts.isReduced(), which also
   // ORs the OS prefers-reduced-motion query the user can't toggle here.
   setReduceInput.checked = loadReduceEffects();
-  setCompressedInput.checked = loadCompactCompressed();
   applyOpacity(loadOpacity());
   applyScale(loadScale());
   applyHotkeyLabel();
   renderChangelog(); // static content (bundled CHANGELOG.md) — once is enough
+  renderGuide(); // static content (src/guide.ts) — once is enough
   setResult(initial);
   return {
     setResult,
@@ -1486,6 +1499,7 @@ export function mountOverlay(
     setUpdateAvailable,
     showChangelog,
     setSessionStats,
+    setSessionHistory,
     panelEl: panel,
     interactiveEls,
   };

@@ -15,8 +15,11 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  width: 292px;
-  height: 392px;
+  /* Full's own size — the only intended layout since Compact mode was
+   * removed; the pre-mode-class fallback (briefly true right after mount,
+   * before setMode() applies, always before the window is ever shown). */
+  width: 580px;
+  height: 332px;
   /* opacity/transform: 120ms so the Settings opacity/scale sliders feel
    * immediate, not floaty — width/height stay on the slower mode-morph
    * timing, unrelated to user-driven opacity/scale. */
@@ -40,11 +43,7 @@
   transform: scale(var(--user-scale, 1));
   transform-origin: top right;
 }
-.mode-full .panel {
-  width: 580px;
-  height: 332px;
-}
-/* §2 Mini Compact fallback: single merged header row, no body */
+/* §2 Mini fallback: single merged header row, no body */
 .mode-mini .panel {
   width: 240px;
   height: 84px;
@@ -229,6 +228,12 @@
 
 .mode-mini .bodies { display: none; }
 
+/* Full already shows the same tier label in Heat Breakdown's total row
+ * (miniBadge) — the header badge would just duplicate it there, so it's
+ * Mini-only now (Mini has no body/breakdown to fall back on, so it stays
+ * the one place the tier label is shown). */
+.mode-full .badge { display: none; }
+
 .badge {
   flex: none;
   font-family: var(--serif);
@@ -244,15 +249,14 @@
   cursor: default;
   background: none;
   /* Longest label ("LEGENDAIRE ✦") could otherwise overflow `.p-head`'s
-   * flex row far enough to push `.toggle-btn` past the panel's right edge
-   * — invisible off-screen, not just visually hidden (real bug found
+   * flex row far enough to push the header buttons past the panel's right
+   * edge — invisible off-screen, not just visually hidden (real bug found
    * 2026-07-04: verified via headless-browser bounding-box check, not
-   * caught by CSS review alone since `.toggle-btn` itself was never
-   * hidden by any rule, just shoved outside the viewport). Caps the
-   * worst-case label instead of trusting every current/future label to
-   * fit — `.p-sub` already yields all its space first (flex:1,
-   * min-width:0), so this is the last line of defense, not the everyday
-   * behavior for the four shorter labels. */
+   * caught by CSS review alone). Caps the worst-case label instead of
+   * trusting every current/future label to fit — `.p-sub` already yields
+   * all its space first (flex:1, min-width:0), so this is the last line of
+   * defense, not the everyday behavior for the four shorter labels. Only
+   * matters in Mini now (the only mode that still shows the badge). */
   max-width: 124px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -305,7 +309,7 @@
 .rec-rating-D { color: #8a5a4a; }
 
 /* ---- recommended-tablets list: one uniform scan-row per tablet
-   (icon · NAME · fit score · fit bar), shared by Compact and Full ---- */
+   (icon · NAME · fit score · fit bar) ---- */
 .trow {
   display: flex;
   align-items: center;
@@ -365,7 +369,6 @@
   transition: opacity 0.18s ease, transform 0.2s ease;
   pointer-events: none;
 }
-.mode-compact .body-compact,
 .mode-full .body-full {
   opacity: 1;
   transform: scale(1);
@@ -374,7 +377,6 @@
 
 /* Settings panel: a third `.body` sharing `.bodies`' region, so opening it
  * never changes panel width/height (the window itself never resizes). */
-.settings-open .body-compact,
 .settings-open .body-full {
   opacity: 0;
   pointer-events: none;
@@ -393,7 +395,6 @@
 
 /* "Quoi de neuf" panel: a fifth `.body`, same pattern as .body-settings
  * (shares .bodies' region, fades on opacity alone, no window resize). */
-.changelog-open .body-compact,
 .changelog-open .body-full {
   opacity: 0;
   pointer-events: none;
@@ -409,6 +410,27 @@
 /* Settings wins if both classes are ever set in the same tick (the toggle
  * functions close each other first). */
 .settings-open .body-changelog {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Guide panel: a sixth `.body`, same pattern as .body-changelog above. */
+.guide-open .body-full {
+  opacity: 0;
+  pointer-events: none;
+}
+.body-guide {
+  transform: none;
+  transition: opacity 120ms ease-out;
+}
+.guide-open .body-guide {
+  opacity: 1;
+  pointer-events: auto;
+}
+/* Settings/Changelog win if either is set in the same tick (the toggle
+ * functions close each other first, same convention as changelog above). */
+.settings-open .body-guide,
+.changelog-open .body-guide {
   opacity: 0;
   pointer-events: none;
 }
@@ -450,9 +472,9 @@
   flex-direction: column;
   gap: 10px;
 }
-/* Thin gold scrollbar, matching full.css's `.col` and compact.css's
-   `[data-tablets]` — without this it fell back to the default fat
-   WebView2 scrollbar, visually clashing with the rest of the panel. */
+/* Thin gold scrollbar, matching full.css's `.col` — without this it fell
+   back to the default fat WebView2 scrollbar, visually clashing with the
+   rest of the panel. */
 .settings-scroll {
   scrollbar-width: thin;
   scrollbar-color: rgba(184, 135, 53, 0.35) transparent;
@@ -490,6 +512,35 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 170px;
+}
+
+/* Archived-session history rows (Settings → Session) — empty when no
+   session has been archived yet, so it takes no space by default. */
+.set-history {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.set-history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.set-history-date {
+  font-size: 11px;
+  color: var(--ivory);
+  white-space: nowrap;
+}
+.set-history-summary {
+  font-size: 11px;
+  color: var(--grey);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  text-align: right;
 }
 
 .set-btn {
@@ -724,9 +775,9 @@
  * as one unit — no orphaned "Insights" header with nothing under it. */
 .hide-insights .insights-block { display: none; }
 
-.toggle-btn,
 .settings-btn,
-.minimize-btn {
+.minimize-btn,
+.guide-btn {
   flex: none;
   width: 26px;
   height: 26px;
@@ -743,14 +794,14 @@
   transition: background-color 120ms ease-out, color 120ms ease-out,
     border-color 120ms ease-out, transform 120ms ease-out;
 }
-.toggle-btn:hover,
 .settings-btn:hover,
-.minimize-btn:hover {
+.minimize-btn:hover,
+.guide-btn:hover {
   color: var(--gold-hi);
   border-color: var(--gold-hi);
   background: rgba(240, 184, 74, 0.08);
 }
-/* Faint red fill so minimize reads as distinct from toggle/settings at a
+/* Faint red fill so minimize reads as distinct from its siblings at a
    glance (2026-07-12, user request) — same box (26x26, 3px radius) as its
    siblings via the shared rule above, just the fill/border tinted. */
 .minimize-btn {
@@ -762,20 +813,21 @@
   border-color: var(--danger);
   color: var(--danger);
 }
-.toggle-btn:active,
 .settings-btn:active,
-.minimize-btn:active { transform: scale(0.97); }
-.toggle-btn:focus-visible,
+.minimize-btn:active,
+.guide-btn:active { transform: scale(0.97); }
 .settings-btn:focus-visible,
-.minimize-btn:focus-visible { outline: 2px solid var(--gold-hi); outline-offset: 2px; }
+.minimize-btn:focus-visible,
+.guide-btn:focus-visible { outline: 2px solid var(--gold-hi); outline-offset: 2px; }
 .settings-btn.active {
   color: var(--gold-hi);
   border-color: var(--gold-hi);
   background: rgba(240, 184, 74, 0.12);
 }
-/* Mini fallback (240×84, §2) has no room for a settings/minimize affordance. */
+/* Mini fallback (240×84, §2) has no room for a settings/minimize/guide affordance. */
 .mode-mini .settings-btn,
-.mode-mini .minimize-btn { display: none; }
+.mode-mini .minimize-btn,
+.mode-mini .guide-btn { display: none; }
 
 /* ---- tier states (§6) ---- */
 .tier-trash { --tier: #8a5a4a; --tier-glow: transparent; }

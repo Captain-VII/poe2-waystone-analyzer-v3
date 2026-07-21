@@ -1,33 +1,17 @@
 /** Persistence — docs/overlay-ui-spec.md §9. Read before first render. */
 
-export type Mode = "compact" | "full";
-/** Rendered layout, distinct from the persisted `Mode`. "mini" is a forced
- *  fallback display (§2) — never user-selectable, never persisted. */
-export type EffectiveMode = Mode | "mini";
+/** Rendered layout. "mini" is a forced fallback display (§2) for screens
+ *  too small for Full — never user-selectable, never persisted. Compact
+ *  mode (the old vertical quick-decision card) was removed; Full is now
+ *  the only intended layout. */
+export type EffectiveMode = "full" | "mini";
 
 const KEYS = {
-  mode: "overlay.mode",
-  intendedMode: "overlay.intendedMode",
   reduceEffects: "overlay.reduceEffects",
-  compactCompressed: "overlay.compactCompressed",
   customPosition: "overlay.customPosition",
   sessionStats: "overlay.sessionStats",
+  sessionHistory: "overlay.sessionHistory",
 } as const;
-
-export function loadMode(): Mode {
-  return localStorage.getItem(KEYS.mode) === "full" ? "full" : "compact";
-}
-
-/** `userInitiated` distinguishes a real toggle from a forced fallback:
- *  only user toggles update intendedMode (§9). */
-export function saveMode(mode: Mode, userInitiated = true): void {
-  localStorage.setItem(KEYS.mode, mode);
-  if (userInitiated) localStorage.setItem(KEYS.intendedMode, mode);
-}
-
-export function loadIntendedMode(): Mode {
-  return localStorage.getItem(KEYS.intendedMode) === "full" ? "full" : "compact";
-}
 
 export function loadReduceEffects(): boolean {
   return localStorage.getItem(KEYS.reduceEffects) === "true";
@@ -35,17 +19,6 @@ export function loadReduceEffects(): boolean {
 
 export function saveReduceEffects(enabled: boolean): void {
   localStorage.setItem(KEYS.reduceEffects, String(enabled));
-}
-
-/** §2 height contingency: if 392px Compact overlaps the real game HUD,
- *  compress to ~360px by trimming air only (never drops the score,
- *  verdict chip, or any of the three tablets). Off by default. */
-export function loadCompactCompressed(): boolean {
-  return localStorage.getItem(KEYS.compactCompressed) === "true";
-}
-
-export function saveCompactCompressed(enabled: boolean): void {
-  localStorage.setItem(KEYS.compactCompressed, String(enabled));
 }
 
 /** Drag-to-reposition (placement.ts): a user-dragged window position,
@@ -150,4 +123,79 @@ export function saveSessionStats(stats: SessionStats): void {
 
 export function clearSessionStats(): void {
   localStorage.removeItem(KEYS.sessionStats);
+}
+
+/** One archived farming session, written when the user hits the Session
+ *  "Reset" button (see `archiveSession`) — `count`/`avg`/`best` are only
+ *  ever non-empty at archive time (`summarizeSessionStats` guards that),
+ *  so `best` is never null here even though it can be on the live view. */
+export interface SessionHistoryEntry {
+  endedAt: string; // ISO timestamp, when Reset was pressed
+  count: number;
+  avg: number;
+  best: { name: string; score: number };
+}
+
+const MAX_HISTORY_ENTRIES = 50;
+
+export function loadSessionHistory(): SessionHistoryEntry[] {
+  const raw = localStorage.getItem(KEYS.sessionHistory);
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((e): e is SessionHistoryEntry => {
+      const entry = e as Partial<SessionHistoryEntry> | null;
+      return (
+        typeof entry === "object" &&
+        entry !== null &&
+        typeof entry.endedAt === "string" &&
+        typeof entry.count === "number" &&
+        typeof entry.avg === "number" &&
+        typeof entry.best === "object" &&
+        entry.best !== null &&
+        typeof entry.best.name === "string" &&
+        typeof entry.best.score === "number"
+      );
+    });
+  } catch {
+    return [];
+  }
+}
+
+export function saveSessionHistory(history: SessionHistoryEntry[]): void {
+  try {
+    localStorage.setItem(KEYS.sessionHistory, JSON.stringify(history.slice(-MAX_HISTORY_ENTRIES)));
+  } catch {
+    // History is a convenience, never worth breaking the reset flow over.
+  }
+}
+
+/** Archives the current session into persisted history, then returns the
+ *  updated list — called right before a Reset empties the live counters, so
+ *  Reset moves data into history instead of discarding it. A no-op reset
+ *  (nothing analyzed yet since the last one) doesn't create an empty
+ *  entry. */
+export function archiveSession(stats: SessionStats): SessionHistoryEntry[] {
+  const view = summarizeSessionStats(stats);
+  const history = loadSessionHistory();
+  if (view.count === 0 || view.avg === null || view.best === null) return history;
+  const updated = [...history, { endedAt: new Date().toISOString(), count: view.count, avg: view.avg, best: view.best }].slice(
+    -MAX_HISTORY_ENTRIES,
+  );
+  saveSessionHistory(updated);
+  return updated;
+}
+
+/** CSV for the Session "Export" button — one row per archived session,
+ *  oldest first (spreadsheet-natural chronological order). CRLF line
+ *  endings and quoted text fields for Excel; waystone names can contain
+ *  commas/quotes so they're always quoted. */
+export function exportSessionHistoryCsv(history: SessionHistoryEntry[]): string {
+  const csvField = (s: string) => `"${s.replace(/"/g, '""')}"`;
+  const header = "Date,Waystones,Average Score,Best Waystone,Best Score";
+  const rows = history.map(
+    (e) => `${csvField(new Date(e.endedAt).toLocaleString())},${e.count},${e.avg.toFixed(1)},${csvField(e.best.name)},${e.best.score}`,
+  );
+  return [header, ...rows].join("\r\n");
 }

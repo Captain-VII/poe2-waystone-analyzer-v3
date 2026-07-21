@@ -6,7 +6,7 @@
   display: grid;
   grid-template-columns: 1fr 1fr 1fr; /* equal width (2026-07-12, user request) */
   gap: 0 16px;
-  padding: 14px 18px 16px;
+  padding: 12px 18px 8px;
 }
 
 /* min-height:0 lets a grid item shrink to its track's real size instead of
@@ -32,7 +32,7 @@
 
 .body-full .sec-h {
   padding-bottom: 4px;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
   border-bottom: 1px solid rgba(184, 135, 53, 0.18);
 }
 
@@ -70,9 +70,34 @@
   flex-wrap: nowrap;
   align-items: center;
   gap: 4px 12px;
-  margin: 2px 0 12px;
+  margin: 2px 0 4px;
   position: relative;
 }
+
+/* Tier-label chip ("Juicy"/"Excellent"/...) right under the score — same
+   spot/style as the ported verdict chip below the header badge removal,
+   but shows the tier label, not the Skip/Keep/Run verdict (2026-07-21,
+   user request: the tier label belongs here, not the verdict). Sized for
+   the column's width (Compact's original was centered in a 292px-wide
+   card; this is ~1/3 of 580px). */
+.action-chip {
+  display: block;
+  margin: 0 0 2px;
+  padding: 1px 10px;
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-align: center;
+  border: 1px solid var(--tier);
+  color: var(--tier);
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.25);
+  transition: color 0.3s, border-color 0.3s;
+}
+.action-chip::before { content: "◆"; font-size: 8px; opacity: 0.55; margin-right: 7px; vertical-align: 1px; }
+.action-chip::after { content: "◆"; font-size: 8px; opacity: 0.55; margin-left: 7px; vertical-align: 1px; }
+.tier-god .action-chip { box-shadow: 0 0 10px rgba(255, 211, 106, 0.25); }
 
 .brow {
   display: flex;
@@ -111,7 +136,7 @@
   justify-content: space-between;
   align-items: baseline;
   margin-top: auto;
-  padding-top: 8px;
+  padding-top: 2px;
   border-top: 1px solid rgba(184, 135, 53, 0.35);
   font-family: var(--serif);
   font-weight: 700;
@@ -324,3 +349,37 @@
   cursor: pointer;
 }
 .dl-more:hover { color: var(--gold-hi); }
+
+/* ---- click-to-analyze footer — ported from the removed Compact mode: it
+   used to be the card's only clickable analyze trigger, now spans the full
+   width below the 3 columns instead of the card's narrower footprint. ---- */
+.body-full .p-foot {
+  flex: none;
+  margin: 0 18px 12px;
+  padding: 6px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--sans);
+  font-size: 10.5px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--grey);
+  cursor: pointer;
+  background: rgba(42, 33, 24, 0.35);
+  border: 1px solid rgba(184, 135, 53, 0.25);
+  border-radius: 3px;
+}
+.body-full .p-foot:hover { color: var(--gold-hi); border-color: rgba(240, 184, 74, 0.5); }
+.body-full .p-foot:focus-visible { outline: 2px solid var(--gold-hi); outline-offset: 2px; }
+.body-full .p-foot kbd {
+  font-family: var(--sans);
+  font-size: 10px;
+  padding: 1px 6px;
+  letter-spacing: 0;
+  border: 1px solid rgba(184, 135, 53, 0.35);
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--gold);
+}

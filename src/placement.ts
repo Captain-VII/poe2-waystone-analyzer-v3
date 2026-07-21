@@ -3,24 +3,22 @@
  *  panel (ornament/glow overflow), so the safe-zone pad applies to the panel
  *  edge, not the window edge. */
 
-import type { Mode, EffectiveMode } from "./settings";
+import type { EffectiveMode } from "./settings";
 import { saveCustomPosition } from "./settings";
 
 const PANEL_BLEED = 12;
 
-/** §2 footprints. Full adds 16px clearance for its up-left micro-shift. */
-const COMPACT_FOOTPRINT = { w: 292, h: 392 };
+/** §2 footprint. Full adds 16px clearance for its up-left micro-shift. */
 const FULL_FOOTPRINT = { w: 580 + 16, h: 332 + 16 };
 
-/** §2 fallback cascade: Full fits (with micro-shift)? → Full. Else Compact
- *  fits? → force Compact. Else → Mini Compact. Never returns "full" unless
- *  `intended` asked for it — Mini/forced-Compact don't get promoted back to
- *  Full on their own; the caller keeps `intendedMode` for that restore. */
-export async function computeEffectiveMode(intended: Mode): Promise<EffectiveMode> {
-  if (!("__TAURI_INTERNALS__" in window)) return intended; // plain-browser dev
+/** §2 fallback: Full fits (with micro-shift)? → Full. Else → Mini — the
+ *  emergency fallback for screens too small for Full (Compact mode, the
+ *  former middle rung, was removed). */
+export async function computeEffectiveMode(): Promise<EffectiveMode> {
+  if (!("__TAURI_INTERNALS__" in window)) return "full"; // plain-browser dev
   const { currentMonitor } = await import("@tauri-apps/api/window");
   const mon = await currentMonitor();
-  if (!mon) return intended;
+  if (!mon) return "full";
 
   const scale = mon.scaleFactor;
   const monW = mon.size.width / scale;
@@ -28,11 +26,9 @@ export async function computeEffectiveMode(intended: Mode): Promise<EffectiveMod
   const pad = monW < 1600 || monH < 900 ? 14 : 20;
   const availW = monW - pad * 2;
   const availH = monH - pad * 2;
-  const fits = (fp: { w: number; h: number }) => availW >= fp.w && availH >= fp.h;
+  const fits = availW >= FULL_FOOTPRINT.w && availH >= FULL_FOOTPRINT.h;
 
-  if (intended === "full" && fits(FULL_FOOTPRINT)) return "full";
-  if (fits(COMPACT_FOOTPRINT)) return "compact";
-  return "mini";
+  return fits ? "full" : "mini";
 }
 
 // Set around our own setPosition() calls so the resulting onMoved() firing

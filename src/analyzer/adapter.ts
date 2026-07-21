@@ -126,7 +126,7 @@ function scoreToRating(score: number): Rating {
   return "D";
 }
 
-/** §9 verdict logic: Skip / Run / Garder — purely a function of the Juice
+/** §9 verdict logic: Skip / Keep / Run — purely a function of the Juice
  *  Score (loot potential) and tier. Danger/annoyance mods never factor in
  *  here; they only ever surface via `warning`/`warnings`. Tier is used as
  *  the "high tier" signal for Keep — waystones tier III+ worth keeping
@@ -139,7 +139,7 @@ function classifyVerdict(score: number, tier: number): Verdict {
 
 // 2026-07-10 (user request, revised same day): the tablet row no longer
 // shows its raw fit number/bar — a 3-tier "Run/Why not/Don't run" verdict
-// reads faster at a glance, mirroring the SKIP/RUN/KEEP vocabulary
+// reads faster at a glance, mirroring the SKIP/KEEP/RUN vocabulary
 // already used for the waystone-level verdict above. Originally bucketed
 // on the numeric `fit` (30/55 thresholds); revised the same day to read
 // straight off the tablet's own mechanic's `priorityStatTier` instead —

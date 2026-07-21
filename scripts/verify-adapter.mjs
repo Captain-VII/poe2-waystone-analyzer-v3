@@ -68,7 +68,7 @@ check("waystone.modCount === modifiers.length", result.waystone.modCount === res
 check("tierClass is one of the five valid values",
   ["trash", "low", "good", "splus", "god"].includes(result.heat.tierClass));
 check("verdict is one of the three valid values (§9: Skip/Run/Garder)",
-  ["SKIP", "RUN", "KEEP"].includes(result.heat.verdict));
+  ["SKIP", "KEEP", "RUN"].includes(result.heat.verdict));
 check("score is within 0-100 (§6 Juice Score)", result.heat.score >= 0 && result.heat.score <= 100);
 
 check("insights has at most 3 entries", result.insights.length <= 3);

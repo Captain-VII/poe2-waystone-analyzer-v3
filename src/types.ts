@@ -6,8 +6,8 @@
  *  Excellent/Legendaire. Kept as stable CSS/state hooks; user-facing text
  *  lives in RelicPanel's BADGE_LABEL. */
 export type TierClass = "trash" | "low" | "good" | "splus" | "god";
-/** §9 verdict logic: Skip / Run / Garder. */
-export type Verdict = "SKIP" | "RUN" | "KEEP";
+/** §9 verdict logic: Skip / Keep / Run. */
+export type Verdict = "SKIP" | "KEEP" | "RUN";
 
 /** At-a-glance danger signal, derived ONLY from `warnings` — never from
  *  `score`. Fully independent of the Juice Score: a "high" danger map can
@@ -35,7 +35,7 @@ export type Rating = "S" | "A" | "B" | "C" | "D";
 
 /** 3-tier plain-language read of a tablet's `fit` (0-100), replacing the raw
  *  number/bar on the tablet row itself (2026-07-10, user request — mirrors
- *  the existing SKIP/RUN/KEEP waystone-level verdict vocabulary at the
+ *  the existing SKIP/KEEP/RUN waystone-level verdict vocabulary at the
  *  tablet level, since a raw fit number required cross-referencing a bar to
  *  mean anything at a glance). Computed in adapter.ts (`tabletVerdict`); the
  *  exact number/breakdown is still available via the row's hover title. */

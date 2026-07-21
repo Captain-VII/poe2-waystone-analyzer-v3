@@ -10,17 +10,16 @@ import {
   watchWindowMoves,
 } from "./placement";
 import {
-  loadMode,
-  saveMode,
   loadReduceEffects,
-  loadCompactCompressed,
   loadCustomPosition,
   clearCustomPosition,
   loadSessionStats,
   saveSessionStats,
   clearSessionStats,
   summarizeSessionStats,
-  type Mode,
+  loadSessionHistory,
+  archiveSession,
+  exportSessionHistoryCsv,
 } from "./settings";
 import { registerHotkeys, getHotkeyBase, setHotkeyBase } from "./hotkeys";
 import { getAutostartEnabled, setAutostartEnabled } from "./autostart";
@@ -36,13 +35,14 @@ import { shouldShowChangelog, markChangelogSeen } from "./changelog";
 import type { AnalysisResult, TierClass } from "./types";
 
 let tier: TierClass = "god";
-let mode: Mode = loadMode(); // read before first render — no layout flash (§9); intended mode
 let analyzing = false;
 let lastNotifiedName: string | null = null; // avoid re-notifying on repeat/no-op analyzes
 
 // Session stats (Settings panel): one score per waystone name, persisted —
 // see settings.ts's SessionStats for the dedupe/session semantics.
 const sessionStats = loadSessionStats();
+// Past sessions, archived on each Reset — see settings.ts's archiveSession.
+let sessionHistory = loadSessionHistory();
 
 function recordSessionStat(result: AnalysisResult): void {
   sessionStats.scores[result.waystone.name] = result.heat.score;
@@ -50,11 +50,28 @@ function recordSessionStat(result: AnalysisResult): void {
   overlay.setSessionStats(summarizeSessionStats(sessionStats));
 }
 
-/** Settings' session-stats "Réinitialiser" button — new farming session. */
+/** Settings' session-stats "Reset" button — archives the current session
+ *  into history, then starts a fresh one. */
 function resetSessionStats(): void {
+  sessionHistory = archiveSession(sessionStats);
   sessionStats.scores = {};
   clearSessionStats();
   overlay.setSessionStats(summarizeSessionStats(sessionStats));
+  overlay.setSessionHistory(sessionHistory);
+}
+
+/** Settings' "Export CSV" button — copies the full archived history to the
+ *  clipboard (Tauri only; plain-browser dev has no clipboard-manager
+ *  plugin). Returns success so the button can show brief feedback. */
+async function exportSessionHistory(): Promise<boolean> {
+  if (sessionHistory.length === 0 || !("__TAURI_INTERNALS__" in window)) return false;
+  try {
+    const { writeText } = await import("@tauri-apps/plugin-clipboard-manager");
+    await writeText(exportSessionHistoryCsv(sessionHistory));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // Méta editor (Settings panel): each action re-reads the raw file, rebuilds
@@ -85,12 +102,9 @@ const metaEditor = {
 };
 
 const overlay = mountOverlay(document.getElementById("app")!, MOCK_RESULTS[tier], {
-  mode,
   isReduced: () =>
     loadReduceEffects() || matchMedia("(prefers-reduced-motion: reduce)").matches,
-  compactCompressed: loadCompactCompressed,
   onAnalyze: analyze,
-  onToggleMode: toggleMode,
   onHide: hideOverlay,
   onInteractiveChange: () => void reportRegions(),
   // Rust validates, swaps the three registrations (with rollback on
@@ -103,6 +117,7 @@ const overlay = mountOverlay(document.getElementById("app")!, MOCK_RESULTS[tier]
   onDragStart: "__TAURI_INTERNALS__" in window ? startWindowDrag : undefined,
   onResetPosition: resetPosition,
   onResetStats: resetSessionStats,
+  onExportHistory: exportSessionHistory,
   metaEditor: "__TAURI_INTERNALS__" in window ? metaEditor : undefined,
   // Dev-only: clicking the tier badge cycles the mock fixtures, for UI
   // testing without a real clipboard waystone. Disabled in production
@@ -120,11 +135,11 @@ async function reportRegions(): Promise<void> {
   await reportInteractiveRegions(overlay.interactiveEls());
 }
 
-/** §2: re-evaluates the fallback cascade (Full→Compact→Mini) against current
- *  monitor space and renders it — `mode` (intended) is untouched here, so a
- *  forced fallback is automatically undone the next time space allows it. */
+/** §2: re-evaluates the Full→Mini fallback against current monitor space
+ *  and renders it — Full is always what's asked for, so a forced Mini
+ *  fallback is automatically undone the next time space allows it. */
 async function applyEffectiveMode(): Promise<void> {
-  const effective = await computeEffectiveMode(mode);
+  const effective = await computeEffectiveMode();
   overlay.setMode(effective);
   await reportRegions();
 }
@@ -203,7 +218,7 @@ async function revealOverlay(): Promise<void> {
 /** Settings' "Réinitialiser" position button — drops the saved custom
  *  position and snaps back to the default top-right anchor. No-op in
  *  plain-browser dev (both calls already guard on Tauri presence).
- *  Re-reports interactive regions after, same as toggleMode()'s morph —
+ *  Re-reports interactive regions after, same as applyEffectiveMode()'s morph —
  *  without it, `placeTopRight()`'s own onMoved fires with `repositioning`
  *  set (placement.ts's watchWindowMoves ignores it, by design, so it
  *  never persists a programmatic move as a "user drag") and nothing else
@@ -215,20 +230,12 @@ async function resetPosition(): Promise<void> {
   await reportRegions();
 }
 
-function toggleMode(): void {
-  mode = mode === "compact" ? "full" : "compact";
-  saveMode(mode); // user-initiated — updates intendedMode too (§9)
-  applyEffectiveMode();
-  // re-report regions once the 220ms morph settles
-  setTimeout(reportRegions, 260);
-}
-
 let handlingDisplayChange = false;
 
 /** §2/M1: display/DPI/resolution/monitor-space changed — re-anchor top-right,
- *  re-evaluate the Full→Compact→Mini fallback against the new space (this is
- *  also exactly how the intended mode gets restored once space returns: it's
- *  re-derived from `mode`, never overwritten by a prior forced fallback), and
+ *  re-evaluate the Full→Mini fallback against the new space (this is also
+ *  exactly how Full gets restored once space returns: computeEffectiveMode
+ *  always asks for Full first, never sticks with a prior forced Mini), and
  *  re-report the (possibly moved/resized) interactive regions. */
 async function handleDisplayChange(): Promise<void> {
   if (handlingDisplayChange) return; // coalesce bursts of change events
@@ -268,10 +275,14 @@ async function init(): Promise<void> {
   const customPos = loadCustomPosition();
   const restored = customPos ? await restoreCustomPosition(customPos) : false;
   if (!restored) await placeTopRight();
-  await applyEffectiveMode(); // §2 fallback cascade — may render compact/mini instead of intended
+  await applyEffectiveMode(); // §2 fallback — may render Mini if Full doesn't fit
   await sendReport("post-placement");
   await showWhenPainted();
-  await registerHotkeys(analyze, toggleMode, hideOverlay);
+  // Shift+base ("toggle") is still emitted by Rust (lib.rs registers all
+  // three layers unconditionally) but is inert now that Compact mode is
+  // gone — there's nothing left to toggle to. No-op rather than touching
+  // the Rust-side registration for a rarely-pressed dead key.
+  await registerHotkeys(analyze, () => {}, hideOverlay);
   // The overlay mounts (synchronously, above) before the persisted base
   // can be fetched — labels default to Ins, corrected here if remapped.
   overlay.setHotkeyLabel(await getHotkeyBase());
@@ -283,6 +294,7 @@ async function init(): Promise<void> {
   // launching the orphaned old install at every login.
   if (autostartOn) setAutostartEnabled(true).catch(() => {});
   overlay.setSessionStats(summarizeSessionStats(sessionStats)); // persisted stats from previous launches
+  overlay.setSessionHistory(sessionHistory); // persisted history from previous launches
   await prepareWindowDrag(); // caches the window ref so the header's mousedown can start a drag synchronously
   await watchDisplayChanges(() => void handleDisplayChange());
   // Persists a user drag once it settles, then re-reports interactive
