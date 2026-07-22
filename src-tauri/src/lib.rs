@@ -23,7 +23,7 @@ const DEFAULT_META_JSON: &str = include_str!("../default-meta.json");
 /// relative `inner_size()` read, which was observed to occasionally read
 /// back a corrupted size (window collapsed to 16×16) right after a
 /// hide()/show() cycle.
-const WINDOW_LOGICAL_SIZE: (f64, f64) = (620.0, 416.0);
+const WINDOW_LOGICAL_SIZE: (f64, f64) = (620.0, 406.0);
 
 fn seed_meta_json(app: &tauri::AppHandle) {
     let Ok(dir) = app.path().app_config_dir() else {

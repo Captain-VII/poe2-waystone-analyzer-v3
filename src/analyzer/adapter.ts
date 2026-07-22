@@ -107,6 +107,13 @@ export const TABLET_LINKED_MECHANICS = new Set([
   "Temple",
 ]);
 
+/** "General" (Overseer, the generic fallback tablet) and "Irradiated" (a map
+ *  modifier, not a league-encounter mechanic) — real stats/fit still shown
+ *  to the player (RelicPanel.ts's own aside box), but excluded from both the
+ *  waystone-level `recommendedMechanic` (Atlas Master pick) and the main
+ *  Juice Score itself (2026-07-22, user request). */
+export const NON_ENCOUNTER_MECHANICS = new Set(["General", "Irradiated"]);
+
 function classifyTier(score: number): TierClass {
   for (const band of TIER_BANDS) {
     if (score < band.max) return band.tierClass;
@@ -430,7 +437,10 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
   // says is the best pick, the way the old parallel stat-only score could.
   // `ranked` is never empty (`getActiveTablets()` always has at least
   // Overseer), but `Math.max(0, ...)` covers a fully-disabled tablet list.
-  const bestFit = Math.max(0, ...ranked.map((r) => r.fit));
+  // NON_ENCOUNTER_MECHANICS (General/Irradiated) keep their own real fit
+  // shown in the UI but don't feed the headline score (2026-07-22, user
+  // request) — only real league-encounter mechanics do.
+  const bestFit = Math.max(0, ...ranked.filter((r) => !NON_ENCOUNTER_MECHANICS.has(r.mechanic)).map((r) => r.fit));
   const tierClass = classifyTier(bestFit);
   const verdict = classifyVerdict(bestFit, parsed.tier);
 
@@ -450,9 +460,16 @@ export function analyzeWaystoneText(text: string): AnalysisResult | null {
   // fitting one. This gate is deliberately NOT applied to the tablet list
   // below (2026-07-10) — each tablet shows its own honest best fit
   // regardless of whether the waystone as a whole clears any threshold.
+  //
+  // "General" is excluded here (2026-07-22, user request): it's the
+  // Overseer/generic fallback, not a distinct mechanic with its own tablet
+  // story — its own mechanicScore could outrank a real mechanic (e.g.
+  // Abyss) that's clearly on top of the tablet list, producing a
+  // recommendedMechanic (and Atlas Master pick) that didn't match what
+  // the player actually sees as the best tablet.
   const activeMechanics = getActiveMechanics();
   const bestTabletLinked = mechanicScores.find((m) => {
-    if (!TABLET_LINKED_MECHANICS.has(m.mechanic) || m.score <= 0) return false;
+    if (NON_ENCOUNTER_MECHANICS.has(m.mechanic) || !TABLET_LINKED_MECHANICS.has(m.mechanic) || m.score <= 0) return false;
     const def = activeMechanics.find((d) => d.name === m.mechanic);
     return def !== undefined && bestFit >= def.skipIfBelow;
   });

@@ -16,6 +16,7 @@ import { parseChangelog } from "../changelog";
 import { GUIDE_SECTIONS } from "../guide";
 import { ATLAS_MASTER_ICONS } from "../atlas-master-icons";
 import { ATLAS_NOTABLE_ICONS } from "../atlas-notable-icons";
+import { NON_ENCOUNTER_MECHANICS } from "../analyzer/adapter";
 
 export interface OverlayOptions {
   /** OS reduced-motion OR the user's reduceEffects setting (§10). */
@@ -241,15 +242,10 @@ export function mountOverlay(
               <div class="col" data-col-tablets>
                 <div class="sec-h">Recommended Tablets</div>
                 <div data-tablets-full></div>
+                <div class="tablets-aside" data-tablets-aside hidden></div>
                 <div class="atlas-master" data-atlas-master hidden>
                   <img class="atlas-master-icon" data-atlas-master-icon alt="" title="" />
-                  <div class="atlas-master-body">
-                    <div class="atlas-master-lab-row">
-                      <span class="atlas-master-lab">Atlas Master:</span>
-                      <span class="atlas-master-name" data-atlas-master-name></span>
-                    </div>
-                    <div class="atlas-notables" data-atlas-notables></div>
-                  </div>
+                  <div class="atlas-notables" data-atlas-notables></div>
                 </div>
               </div>
               <div class="col" data-col-heat>
@@ -423,9 +419,9 @@ export function mountOverlay(
   const colTablets = q("[data-col-tablets]");
   const colInsights = q("[data-col-insights]");
   const tabletsFullEl = q("[data-tablets-full]");
+  const tabletsAsideEl = q("[data-tablets-aside]");
   const atlasMasterEl = q("[data-atlas-master]");
   const atlasMasterIcon = q("[data-atlas-master-icon]") as HTMLImageElement;
-  const atlasMasterName = q("[data-atlas-master-name]");
   const atlasNotablesEl = q("[data-atlas-notables]");
   const settingsBtn = q("[data-settings]");
   const minimizeBtn = q("[data-minimize]");
@@ -543,7 +539,27 @@ export function mountOverlay(
     // Every active tablet, always, in the fixed alphabetical order
     // rankTablets now returns (2026-07-12, user request) — the column
     // scrolls on overflow instead of truncating.
-    tabletsFullEl.innerHTML = result.tablets.map(tabletRow).join("");
+    //
+    // Overseer (mechanic "General", the generic fallback tablet) and
+    // Irradiated (a map modifier, not a league-encounter mechanic) are
+    // pulled into their own box below the main list (2026-07-22, user
+    // request) — they aren't a real encounter mechanic the way
+    // Breach/Ritual/Delirium/Expedition/Abyss/Temple are, so mixing them
+    // into the same ranked list read as inconsistent with the "Strong X
+    // match" / Atlas Master suggestion above (which already excludes
+    // "General" for the same reason, see adapter.ts).
+    const mainTablets = result.tablets.filter((t) => !NON_ENCOUNTER_MECHANICS.has(t.mechanic));
+    const asideTablets = result.tablets.filter((t) => NON_ENCOUNTER_MECHANICS.has(t.mechanic));
+    tabletsFullEl.innerHTML = mainTablets.map(tabletRow).join("");
+    // Same "dl-group-h" small-caps label style as Insights' MEDIUM/BONUS
+    // group headers (DangerList.ts) — gives the aside box the same visual
+    // grammar as the rest of the panel instead of an unlabeled orphan box
+    // (2026-07-22, user request: "au même niveau... plus jolie").
+    tabletsAsideEl.innerHTML =
+      asideTablets.length > 0
+        ? `<div class="dl-group-h dl-bonus">Other</div>${asideTablets.map(tabletRow).join("")}`
+        : "";
+    tabletsAsideEl.hidden = asideTablets.length === 0;
 
     // Full mode only (§ROADMAP placement) — hidden entirely when the
     // recommended mechanic has no sourced Atlas Master pick yet
@@ -551,12 +567,14 @@ export function mountOverlay(
     // portrait first, then one small icon per notable/keystone to
     // allocate (2026-07-12, user request — mirrors how the real Atlas
     // Tree UI shows a master's active keystones as a row of icons next to
-    // their portrait, not just a name).
+    // their portrait, not just a name). Name-as-text row dropped
+    // (2026-07-22, user request: icons-only so this row lines up with
+    // Total Heat) — the name is still available on hover, via the
+    // portrait's title attribute.
     const masterIcon = result.atlasMaster ? ATLAS_MASTER_ICONS[result.atlasMaster] : undefined;
     if (result.atlasMaster && masterIcon) {
       atlasMasterIcon.src = masterIcon;
       atlasMasterIcon.title = result.atlasMaster;
-      atlasMasterName.textContent = result.atlasMaster;
       atlasNotablesEl.innerHTML = result.atlasMasterNotables
         .map((name) => {
           const icon = ATLAS_NOTABLE_ICONS[name];
@@ -655,7 +673,6 @@ export function mountOverlay(
     retrigger(scoreFull, "pulse");
     retrigger(badge, "flare");
     retrigger(miniBadge, "flare");
-    retrigger(chip, "flare");
     if (!miniWarn.hidden) retrigger(miniWarn, "reveal"); // §7 warning reveal
     if (current.heat.tierClass === "god") spawnSparks();
   }
@@ -1435,7 +1452,7 @@ export function mountOverlay(
     // Full-mode-only click-to-edit: delegated (rows are rebuilt on every
     // setResult, the container isn't). Gated on opts.metaEditor like the
     // rest of the Méta section — nothing to edit without IO.
-    tabletsFullEl.addEventListener("click", (ev) => {
+    colTablets.addEventListener("click", (ev) => {
       const row = (ev.target as HTMLElement).closest<HTMLElement>(".trow[data-mechanic]");
       if (!row) return;
       const mechanic = row.dataset.mechanic;

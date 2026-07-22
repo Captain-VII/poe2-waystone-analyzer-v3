@@ -19,7 +19,7 @@
    * removed; the pre-mode-class fallback (briefly true right after mount,
    * before setMode() applies, always before the window is ever shown). */
   width: 580px;
-  height: 410px;
+  height: 366px;
   /* opacity/transform: 120ms so the Settings opacity/scale sliders feel
    * immediate, not floaty — width/height stay on the slower mode-morph
    * timing, unrelated to user-driven opacity/scale. */
@@ -310,6 +310,20 @@
 .rec-rating-B { color: var(--ivory); opacity: 0.85; }
 .rec-rating-C { color: var(--grey); }
 .rec-rating-D { color: #8a5a4a; }
+
+/* Overseer ("General") + Irradiated tablets — not a real league-encounter
+   mechanic, kept out of the main ranked list (2026-07-22, user request).
+   A thin top border + "Other" label (.dl-group-h, same class Insights uses
+   for its MEDIUM/BONUS sub-groups) reads as its own section without a
+   heavy boxed-in-a-box look — same visual grammar as the rest of the
+   column instead of an unlabeled orphan box. */
+.tablets-aside {
+  flex: none;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(184, 135, 53, 0.25);
+}
+.tablets-aside[hidden] { display: none; }
 
 /* ---- recommended-tablets list: one uniform scan-row per tablet
    (icon · NAME · fit score · fit bar) ---- */

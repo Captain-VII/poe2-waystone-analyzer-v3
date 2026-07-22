@@ -5,6 +5,18 @@ utilisateur (pas de détails internes). La section la plus récente en premier.
 Ce fichier est embarqué dans l'app (panneau "Quoi de neuf" + Réglages) et
 sert de description à la release GitHub — écrire pour les joueurs.
 
+## 0.3.9
+
+- **New: in-app Guide** (the "?" button in the header) explains why each stat matters and how the Juice Score, Mechanic Match Score, and Skip/Keep/Run verdict actually work.
+- **New: session history.** Each session (since your last Stats Reset) is now archived, and Settings → History → Export CSV copies your full history to the clipboard for Excel/Sheets.
+- **Removed: Compact mode.** The overlay is Full-layout only now — the verdict chip and the click-to-analyze footer moved into it.
+- **Fixed: Overseer and Irradiated no longer count toward your Juice Score or the Atlas Master pick.** They're not a real league-encounter mechanic — their own tablet fit still shows, split into a separate "Other" box below the main list, but the headline score and Atlas Master suggestion now only ever come from a real mechanic (Breach, Ritual, Delirium, Expedition, Abyss, Temple).
+- **Fixed: the Atlas Master recommendation could disagree with the top tablet shown** (recommending a master for a mechanic other than the one at the top of your list) — same root cause as above.
+- Verdict wording is now Skip / Keep / Run everywhere (was Skip / Run / Keep).
+- The tier label ("Juicy" etc.) sits next to the score again instead of the header — the header badge was a duplicate of it.
+- Atlas Master's pick is now icons-only (portrait + notables), aligned with Total Heat — hover the portrait for the master's name.
+- The panel is noticeably more compact — Heat Breakdown no longer needs its own scrollbar.
+
 ## 0.3.8
 
 - **New: Ctrl+E always analyzes**, no matter what your hotkey base is remapped to — a fixed second way to trigger an analysis, always on.

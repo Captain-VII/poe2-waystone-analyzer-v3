@@ -145,46 +145,27 @@
    notables/keystones to allocate (2026-07-12, user request — mirrors the
    real Atlas Tree UI's own master-portrait-plus-keystone-icons layout,
    replacing a name-only text line). */
+/* Icons-only row (name dropped, 2026-07-22, see RelicPanel.ts), sized so
+   its total height matches .total-row's — pinned to the column's bottom
+   via margin-top:auto so it always lines up with Total Heat across
+   columns (2026-07-22, user's explicit call: consistent alignment over
+   the empty space a short tablet list leaves above it). */
 .atlas-master {
   flex: none;
   display: flex;
   align-items: center;
   gap: 8px;
   margin-top: auto;
-  padding-top: 8px;
+  padding-top: 6px;
   border-top: 1px solid rgba(184, 135, 53, 0.35);
 }
 .atlas-master[hidden] { display: none; }
 .atlas-master-icon {
   flex: none;
-  width: 28px;
-  height: 28px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   border: 1px solid var(--gold-dim);
-}
-.atlas-master-body {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-.atlas-master-lab-row {
-  display: flex;
-  align-items: baseline;
-  gap: 5px;
-}
-.atlas-master-lab {
-  flex: none;
-  font-size: 10.5px;
-  letter-spacing: 0.4px;
-  color: var(--grey);
-}
-.atlas-master-name {
-  flex: none;
-  font-family: var(--serif);
-  font-weight: 700;
-  font-size: 12px;
-  color: var(--gold-hi);
 }
 .atlas-notables {
   display: flex;
