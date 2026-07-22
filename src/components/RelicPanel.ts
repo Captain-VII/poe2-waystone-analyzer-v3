@@ -258,7 +258,6 @@ export function mountOverlay(
                   <span class="score-wrap" data-hero-full><span class="halo"></span><span class="score-num" data-score-full></span></span>
                   <span class="badge badge-sm" data-minibadge></span>
                 </div>
-                <div class="action-chip" data-action></div>
                 <div data-breakdown></div>
                 <div class="total-row"><span class="t-lab">Total Heat</span><span class="t-right"><span class="t-val" data-total></span><span class="rating-pill" data-rating-full></span></span></div>
               </div>
@@ -419,7 +418,6 @@ export function mountOverlay(
   const miniScore = q("[data-mini-score]");
   const miniWarn = q("[data-mini-warn]");
   const scoreFull = q("[data-score-full]");
-  const chip = q("[data-action]");
   const statusChip = q("[data-status]");
   const footBtn = q("[data-foot]");
   const colTablets = q("[data-col-tablets]");
@@ -493,7 +491,6 @@ export function mountOverlay(
       miniWarn.title = "";
     }
     q("[data-sub]").textContent = `T${waystone.tier} · ${waystone.name}`;
-    chip.textContent = heat.tierLabel;
 
     // Heat Breakdown's composite score/rating (Full mode). Re-enabled
     // 2026-07-1x once the underlying formula was rebuilt around the

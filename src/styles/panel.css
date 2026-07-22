@@ -19,7 +19,7 @@
    * removed; the pre-mode-class fallback (briefly true right after mount,
    * before setMode() applies, always before the window is ever shown). */
   width: 580px;
-  height: 332px;
+  height: 410px;
   /* opacity/transform: 120ms so the Settings opacity/scale sliders feel
    * immediate, not floaty — width/height stay on the slower mode-morph
    * timing, unrelated to user-driven opacity/scale. */
@@ -228,11 +228,14 @@
 
 .mode-mini .bodies { display: none; }
 
-/* Full already shows the same tier label in Heat Breakdown's total row
- * (miniBadge) — the header badge would just duplicate it there, so it's
- * Mini-only now (Mini has no body/breakdown to fall back on, so it stays
- * the one place the tier label is shown). */
-.mode-full .badge { display: none; }
+/* Full shows the tier label as a small gold pill right beside the score
+ * (score-row's [data-minibadge]) instead of the header badge — the header
+ * badge would just duplicate it, so it's Mini-only now (Mini has no
+ * body/breakdown to fall back on, so it stays the one place the tier
+ * label is shown there). Scoped to [data-badge] specifically, not the
+ * .badge class, so [data-minibadge] (also .badge, for shared pill
+ * styling) stays visible in Full. */
+.mode-full [data-badge] { display: none; }
 
 .badge {
   flex: none;
