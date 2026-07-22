@@ -349,7 +349,11 @@ const EXTRA_HOTKEYS: &[(&str, &str)] = &[("Control+KeyE", "analyze")];
 /// given time.
 fn all_accels(base: &str) -> Vec<(String, &'static str)> {
     let mut accels = hotkey_accels(base);
-    accels.extend(EXTRA_HOTKEYS.iter().map(|(a, action)| (a.to_string(), *action)));
+    accels.extend(
+        EXTRA_HOTKEYS
+            .iter()
+            .map(|(a, action)| (a.to_string(), *action)),
+    );
     accels
 }
 
@@ -552,10 +556,7 @@ fn register_hotkeys(app: &tauri::AppHandle, base: &str) {
             // don't resurrect accelerators for a base the user replaced.
             // EXTRA_HOTKEYS is always live regardless of base.
             let current = handle.state::<HotkeyBase>().0.lock().unwrap().clone();
-            let live: Vec<String> = all_accels(&current)
-                .into_iter()
-                .map(|(a, _)| a)
-                .collect();
+            let live: Vec<String> = all_accels(&current).into_iter().map(|(a, _)| a).collect();
             pending.retain(|a| live.contains(a));
             pending.retain(
                 |accel| match handle.global_shortcut().register(accel.as_str()) {
